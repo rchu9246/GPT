@@ -1,0 +1,49 @@
+name: Update Taiwan Market Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: "股票代號，以逗號分隔"
+        required: false
+        default: "2330,2454,2382"
+      lookback_days:
+        description: "重新抓取日曆天數"
+        required: false
+        default: "220"
+  schedule:
+    - cron: "37 18 * * 1-5"
+      timezone: "Asia/Taipei"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-taiwan-market
+  cancel-in-progress: false
+
+jobs:
+  update-market:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements-automation.txt
+
+      - name: Fetch, calculate, and upload
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          STOCK_SYMBOLS: ${{ inputs.symbols || '2330,2454,2382' }}
+          LOOKBACK_DAYS: ${{ inputs.lookback_days || '220' }}
+        run: python automation/update_market.py
