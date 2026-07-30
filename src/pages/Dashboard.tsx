@@ -31,7 +31,7 @@ type MarketSummary = {
   bullishRatio: number;
 };
 
-const STRATEGY_VERSION = "V2.5-AUTO";
+const STRATEGY_VERSION = "V3.1-MULTI";
 
 export default function Dashboard() {
   const [signals, setSignals] = useState<Signal[]>([]);
