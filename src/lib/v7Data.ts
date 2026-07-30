@@ -8,20 +8,28 @@ type StockRelation =
 
 type DatabaseSignalRow = {
   id?: number;
-  stock_id?: number;
+  stock_id?: number | string | null;
   trade_date: string;
-  strategy_version: string;
-  total_score?: number | null;
-  trend_score?: number | null;
-  momentum_score?: number | null;
-  volume_score?: number | null;
-  risk_score?: number | null;
+  strategy_version?: string | null;
+  total_score?: number | string | null;
+  score?: number | string | null;
+  trend_score?: number | string | null;
+  momentum_score?: number | string | null;
+  volume_score?: number | string | null;
+  risk_score?: number | string | null;
   signal?: string | null;
-  confidence?: number | null;
+  confidence?: number | string | null;
   stocks?: StockRelation;
 };
 
-function firstStock(relation: StockRelation) {
+type DatabaseStockRow = {
+  id: number | string;
+  symbol?: string | null;
+  name?: string | null;
+  industry?: string | null;
+};
+
+function firstStock(relation: StockRelation | undefined) {
   return Array.isArray(relation) ? relation[0] ?? null : relation ?? null;
 }
 
@@ -34,23 +42,36 @@ function clamp(value: number, min = 0, max = 100): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function mapSignal(row: DatabaseSignalRow): SignalRow {
-  const stock = firstStock(row.stocks);
-  const totalScore = numeric(row.total_score);
+function stockKey(value: unknown): string {
+  return value == null ? "" : String(value);
+}
+
+function mapSignal(
+  row: DatabaseSignalRow,
+  stocksById: Map<string, DatabaseStockRow>,
+): SignalRow {
+  const stock =
+    stocksById.get(stockKey(row.stock_id)) ?? firstStock(row.stocks);
+
+  const totalScore = numeric(row.total_score ?? row.score);
   const trendScore = numeric(row.trend_score);
   const momentumScore = numeric(row.momentum_score);
   const volumeScore = numeric(row.volume_score);
   const riskScore = numeric(row.risk_score);
   const confidence = numeric(row.confidence);
+
   const derivedValueScore = clamp(
-    totalScore * 0.45 + trendScore * 0.2 + momentumScore * 0.2 + volumeScore * 0.15,
+    totalScore * 0.45 +
+      trendScore * 0.2 +
+      momentumScore * 0.2 +
+      volumeScore * 0.15,
   );
 
   return {
-    symbol: stock?.symbol ?? String(row.stock_id ?? ""),
-    name: stock?.name ?? null,
+    symbol: stock?.symbol?.trim() || stockKey(row.stock_id),
+    name: stock?.name?.trim() || null,
     trade_date: row.trade_date,
-    strategy_version: row.strategy_version,
+    strategy_version: row.strategy_version ?? "UNKNOWN",
     score: totalScore,
     trend_score: trendScore,
     momentum_score: momentumScore,
@@ -64,23 +85,39 @@ function mapSignal(row: DatabaseSignalRow): SignalRow {
 export async function loadLatestSignals(): Promise<SignalRow[]> {
   if (!supabase) return [];
 
-  const { data, error } = await supabase
-    .from("signals")
-    .select(
-      "id,stock_id,trade_date,strategy_version,total_score,trend_score,momentum_score,volume_score,risk_score,signal,confidence,stocks(symbol,name,industry)",
-    )
-    .order("trade_date", { ascending: false })
-    .order("total_score", { ascending: false })
-    .limit(100);
+  const [signalResult, stockResult] = await Promise.all([
+    supabase
+      .from("signals")
+      .select(
+        "id,stock_id,trade_date,strategy_version,total_score,trend_score,momentum_score,volume_score,risk_score,signal,confidence",
+      )
+      .order("trade_date", { ascending: false })
+      .order("total_score", { ascending: false })
+      .limit(200),
+    supabase
+      .from("stocks")
+      .select("id,symbol,name,industry")
+      .limit(5000),
+  ]);
 
-  if (error) throw error;
+  if (signalResult.error) throw signalResult.error;
+  if (stockResult.error) throw stockResult.error;
 
-  const rows = (data ?? []) as unknown as DatabaseSignalRow[];
-  const latestDate = rows[0]?.trade_date;
+  const signalRows =
+    (signalResult.data ?? []) as unknown as DatabaseSignalRow[];
+  const stockRows =
+    (stockResult.data ?? []) as unknown as DatabaseStockRow[];
 
-  return rows
+  const stocksById = new Map<string, DatabaseStockRow>();
+  for (const stock of stockRows) {
+    stocksById.set(stockKey(stock.id), stock);
+  }
+
+  const latestDate = signalRows[0]?.trade_date;
+
+  return signalRows
     .filter((row) => !latestDate || row.trade_date === latestDate)
-    .map(mapSignal)
+    .map((row) => mapSignal(row, stocksById))
     .sort((a, b) => numeric(b.score) - numeric(a.score));
 }
 
@@ -132,11 +169,16 @@ export async function loadBacktestRuns(): Promise<BacktestRun[]> {
     id: String(row.id),
     strategy_version: String(row.strategy_version ?? "UNKNOWN"),
     created_at: row.created_at == null ? null : String(row.created_at),
-    total_return: row.total_return == null ? null : Number(row.total_return),
-    annual_return: row.annual_return == null ? null : Number(row.annual_return),
-    max_drawdown: row.max_drawdown == null ? null : Number(row.max_drawdown),
-    sharpe_ratio: row.sharpe_ratio == null ? null : Number(row.sharpe_ratio),
-    win_rate: row.win_rate == null ? null : Number(row.win_rate),
+    total_return:
+      row.total_return == null ? null : Number(row.total_return),
+    annual_return:
+      row.annual_return == null ? null : Number(row.annual_return),
+    max_drawdown:
+      row.max_drawdown == null ? null : Number(row.max_drawdown),
+    sharpe_ratio:
+      row.sharpe_ratio == null ? null : Number(row.sharpe_ratio),
+    win_rate:
+      row.win_rate == null ? null : Number(row.win_rate),
     trade_count:
       row.total_trades != null
         ? Number(row.total_trades)
@@ -146,14 +188,22 @@ export async function loadBacktestRuns(): Promise<BacktestRun[]> {
   }));
 }
 
-export function formatPct(value?: number | null, digits = 1): string {
+export function formatPct(
+  value?: number | null,
+  digits = 1,
+): string {
   if (value == null || Number.isNaN(Number(value))) return "—";
+
   const number = Number(value);
   const normalized = Math.abs(number) <= 2 ? number * 100 : number;
+
   return `${normalized.toFixed(digits)}%`;
 }
 
-export function formatNum(value?: number | null, digits = 1): string {
+export function formatNum(
+  value?: number | null,
+  digits = 1,
+): string {
   if (value == null || Number.isNaN(Number(value))) return "—";
   return Number(value).toFixed(digits);
 }
