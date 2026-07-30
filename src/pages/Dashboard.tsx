@@ -2,24 +2,56 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { Signal } from "../types/quant";
 
-type ConnectionState = "loading" | "connected" | "empty" | "error" | "not-configured";
+type LoadState =
+  | "loading"
+  | "connected"
+  | "empty"
+  | "error"
+  | "not-configured";
+
+type FeatureRow = {
+  stock_id: number;
+  trade_date: string;
+  close: number | null;
+  return_1d: number | null;
+  return_5d: number | null;
+  return_20d: number | null;
+  ma20: number | null;
+  ma60: number | null;
+  rsi14: number | null;
+  volatility_20d: number | null;
+};
+
+type MarketSummary = {
+  label: string;
+  detail: string;
+  healthScore: number;
+  averageScore: number;
+  averageReturn20d: number;
+  bullishRatio: number;
+};
+
+const STRATEGY_VERSION = "V2.5-AUTO";
 
 export default function Dashboard() {
   const [signals, setSignals] = useState<Signal[]>([]);
-  const [connectionState, setConnectionState] =
-    useState<ConnectionState>("loading");
+  const [features, setFeatures] = useState<FeatureRow[]>([]);
+  const [state, setState] = useState<LoadState>("loading");
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     let active = true;
 
-    async function loadSignals() {
+    async function loadDashboard() {
       if (!supabase) {
-        if (active) setConnectionState("not-configured");
+        if (active) setState("not-configured");
         return;
       }
 
-      const { data, error } = await supabase
+      setState("loading");
+      setErrorMessage("");
+
+      const signalResult = await supabase
         .from("signals")
         .select(`
           *,
@@ -29,28 +61,75 @@ export default function Dashboard() {
             industry
           )
         `)
+        .eq("strategy_version", STRATEGY_VERSION)
+        .order("trade_date", { ascending: false })
         .order("total_score", { ascending: false })
-        .limit(10);
+        .limit(200);
 
       if (!active) return;
 
-      if (error) {
-        console.error("Supabase signals query failed:", error);
-        setErrorMessage(error.message);
-        setConnectionState("error");
+      if (signalResult.error) {
+        console.error("Dashboard signal query failed:", signalResult.error);
+        setErrorMessage(signalResult.error.message);
+        setState("error");
         return;
       }
 
-      setSignals((data ?? []) as unknown as Signal[]);
-      setConnectionState(data?.length ? "connected" : "empty");
+      const loadedSignals =
+        (signalResult.data ?? []) as unknown as Signal[];
+
+      if (loadedSignals.length === 0) {
+        setSignals([]);
+        setFeatures([]);
+        setState("empty");
+        return;
+      }
+
+      const latestDate = loadedSignals[0].trade_date;
+      const latestSignals = loadedSignals.filter(
+        (signal) => signal.trade_date === latestDate,
+      );
+      const stockIds = latestSignals.map((signal) => signal.stock_id);
+
+      const featureResult = await supabase
+        .from("features")
+        .select(`
+          stock_id,
+          trade_date,
+          close,
+          return_1d,
+          return_5d,
+          return_20d,
+          ma20,
+          ma60,
+          rsi14,
+          volatility_20d
+        `)
+        .eq("trade_date", latestDate)
+        .in("stock_id", stockIds);
+
+      if (!active) return;
+
+      if (featureResult.error) {
+        console.warn(
+          "Dashboard feature query failed:",
+          featureResult.error,
+        );
+      }
+
+      setSignals(latestSignals);
+      setFeatures((featureResult.data ?? []) as FeatureRow[]);
+      setState("connected");
     }
 
-    loadSignals();
+    loadDashboard();
 
     return () => {
       active = false;
     };
   }, []);
+
+  const latestDate = signals[0]?.trade_date ?? null;
 
   const candidateCount = useMemo(
     () => signals.filter((signal) => signal.total_score >= 70).length,
@@ -62,33 +141,125 @@ export default function Dashboard() {
     [signals],
   );
 
+  const riskCount = useMemo(
+    () =>
+      signals.filter(
+        (signal) =>
+          signal.risk_score < 45 ||
+          signal.total_score < 40,
+      ).length,
+    [signals],
+  );
+
+  const marketSummary = useMemo<MarketSummary>(() => {
+    if (signals.length === 0) {
+      return {
+        label: "等待資料",
+        detail: "尚無可計算訊號",
+        healthScore: 0,
+        averageScore: 0,
+        averageReturn20d: 0,
+        bullishRatio: 0,
+      };
+    }
+
+    const averageScore =
+      signals.reduce(
+        (sum, signal) => sum + Number(signal.total_score || 0),
+        0,
+      ) / signals.length;
+
+    const bullishSignals = signals.filter(
+      (signal) =>
+        signal.total_score >= 60 &&
+        signal.trend_score >= 50,
+    ).length;
+
+    const bullishRatio = bullishSignals / signals.length;
+
+    const validReturns = features
+      .map((feature) => Number(feature.return_20d))
+      .filter((value) => Number.isFinite(value));
+
+    const averageReturn20d =
+      validReturns.length > 0
+        ? validReturns.reduce((sum, value) => sum + value, 0) /
+          validReturns.length
+        : 0;
+
+    const averageRisk =
+      signals.reduce(
+        (sum, signal) => sum + Number(signal.risk_score || 0),
+        0,
+      ) / signals.length;
+
+    const healthScore = clamp(
+      averageScore * 0.5 +
+        averageRisk * 0.25 +
+        bullishRatio * 100 * 0.25,
+    );
+
+    let label = "空頭";
+    if (averageScore >= 70 && bullishRatio >= 0.6) {
+      label = "強勢多頭";
+    } else if (averageScore >= 55 && bullishRatio >= 0.5) {
+      label = "偏多";
+    } else if (averageScore >= 45) {
+      label = "中性整理";
+    } else if (averageScore >= 35) {
+      label = "偏空";
+    }
+
+    return {
+      label,
+      detail: `平均分數 ${averageScore.toFixed(1)} · 20日平均報酬 ${formatPercent(
+        averageReturn20d,
+      )}`,
+      healthScore: Math.round(healthScore),
+      averageScore,
+      averageReturn20d,
+      bullishRatio,
+    };
+  }, [signals, features]);
+
   const statusText = {
-    loading: "正在連線 Supabase…",
-    connected: `Supabase 已連線，目前載入 ${signals.length} 筆訊號`,
-    empty: "Supabase 已連線，但 signals 資料表目前沒有資料",
+    loading: "正在讀取 Supabase 最新量化資料…",
+    connected: `Supabase 已連線 · 策略 ${STRATEGY_VERSION} · 最新訊號日 ${
+      latestDate ?? "—"
+    } · ${signals.length} 檔`,
+    empty: `Supabase 已連線，但目前沒有 ${STRATEGY_VERSION} 訊號`,
     error: `Supabase 查詢失敗：${errorMessage}`,
     "not-configured":
-      "找不到 Supabase 環境變數，請檢查 GitHub Actions Secrets 並重新部署",
-  }[connectionState];
+      "找不到 Supabase 環境變數，請檢查 GitHub Actions Secrets",
+  }[state];
 
   return (
     <section>
       <div className="hero">
         <div>
-          <div className="eyebrow">QUANT TRADING CENTER</div>
+          <div className="eyebrow">
+            GPT QUANT V3 · LIVE DATA
+          </div>
           <h1>今日策略總覽</h1>
           <p>{statusText}</p>
         </div>
 
         <div className="health">
           <span>策略健康度</span>
-          <strong>84</strong>
-          <small> / 100 · 🟢 HEALTHY</small>
+          <strong>{marketSummary.healthScore}</strong>
+          <small>
+            {" "}
+            / 100 · {healthLabel(marketSummary.healthScore)}
+          </small>
         </div>
       </div>
 
       <div className="cards">
-        <Metric title="市場狀態" value="🟢 偏多" sub="TAIEX / SOX / Nasdaq" />
+        <Metric
+          title="市場狀態"
+          value={marketSummary.label}
+          sub={marketSummary.detail}
+        />
         <Metric
           title="今日候選"
           value={String(candidateCount)}
@@ -99,28 +270,34 @@ export default function Dashboard() {
           value={String(strongBuyCount)}
           sub="Score ≥ 90"
         />
-        <Metric title="風險警示" value="0" sub="需人工檢視" />
+        <Metric
+          title="風險警示"
+          value={String(riskCount)}
+          sub="Risk < 45 或 Score < 40"
+        />
       </div>
 
       <div className="grid2">
         <div className="panel">
-          <div className="panel-title">🚀 今日 TOP 訊號</div>
+          <div className="panel-title">
+            🚀 最新自動量化訊號
+          </div>
 
-          {connectionState === "loading" && <p>載入中…</p>}
+          {state === "loading" && <p>載入中…</p>}
 
-          {connectionState === "error" && (
+          {state === "empty" && (
             <p>
-              無法讀取 Supabase。請檢查 RLS Policy、資料表名稱與 GitHub
-              Secrets。
+              尚無自動訊號。請執行 GitHub Actions 的
+              「Update Taiwan Market Data」。
             </p>
           )}
 
-          {connectionState === "not-configured" && (
-            <p>目前沒有載入 Demo 資料，以避免誤判為真實訊號。</p>
+          {state === "error" && (
+            <p>無法讀取資料：{errorMessage}</p>
           )}
 
-          {connectionState === "empty" && (
-            <p>目前尚無訊號。請先在 Supabase 的 signals 表新增資料。</p>
+          {state === "not-configured" && (
+            <p>尚未設定 Supabase 連線。</p>
           )}
 
           {signals.length > 0 && (
@@ -131,49 +308,158 @@ export default function Dashboard() {
                     <th>排名</th>
                     <th>股票</th>
                     <th>Score</th>
+                    <th>趨勢</th>
+                    <th>動能</th>
+                    <th>風險</th>
                     <th>訊號</th>
-                    <th>Confidence</th>
+                    <th>信心</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {signals.map((signal, index) => (
-                    <tr
-                      key={signal.id}
-                      onClick={() => {
-                        const symbol = signal.stocks?.symbol;
-                        if (symbol) location.hash = `#/stock/${symbol}`;
-                      }}
-                      className="clickable"
-                    >
-                      <td>{index + 1}</td>
-                      <td>
-                        <b>{signal.stocks?.symbol ?? "—"}</b>{" "}
-                        {signal.stocks?.name ?? "未知股票"}
-                      </td>
-                      <td>
-                        <strong>{signal.total_score}</strong>
-                      </td>
-                      <td>{signal.signal}</td>
-                      <td>{signal.confidence}%</td>
-                    </tr>
-                  ))}
+                  {signals
+                    .slice()
+                    .sort(
+                      (a, b) =>
+                        Number(b.total_score) -
+                        Number(a.total_score),
+                    )
+                    .slice(0, 20)
+                    .map((signal, index) => (
+                      <tr
+                        key={signal.id}
+                        className="clickable"
+                        onClick={() => {
+                          const symbol =
+                            signal.stocks?.symbol;
+                          if (symbol) {
+                            location.hash = `#/stock/${symbol}`;
+                          }
+                        }}
+                      >
+                        <td>{index + 1}</td>
+                        <td>
+                          <b>
+                            {signal.stocks?.symbol ?? "—"}
+                          </b>{" "}
+                          {signal.stocks?.name ?? "未知股票"}
+                        </td>
+                        <td>
+                          <strong>
+                            {formatNumber(
+                              signal.total_score,
+                            )}
+                          </strong>
+                        </td>
+                        <td>
+                          {formatNumber(signal.trend_score)}
+                        </td>
+                        <td>
+                          {formatNumber(
+                            signal.momentum_score,
+                          )}
+                        </td>
+                        <td>
+                          {formatNumber(signal.risk_score)}
+                        </td>
+                        <td>{signal.signal}</td>
+                        <td>
+                          {formatNumber(signal.confidence)}%
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
           )}
         </div>
 
-        <div className="panel">
-          <div className="panel-title">🌎 Market Regime</div>
-          <Regime name="TAIEX" state="🟢 多頭" />
-          <Regime name="SOX" state="🟢 多頭" />
-          <Regime name="Nasdaq" state="🟢 多頭" />
-          <Regime name="USD/TWD" state="🟡 中性" />
-          <Regime name="Strategy" state="🟢 Healthy" />
+        <div>
+          <div className="panel">
+            <div className="panel-title">
+              🌎 真實市場摘要
+            </div>
+            <Regime
+              name="市場狀態"
+              state={marketSummary.label}
+            />
+            <Regime
+              name="平均 Score"
+              state={marketSummary.averageScore.toFixed(1)}
+            />
+            <Regime
+              name="多頭比例"
+              state={formatPercent(
+                marketSummary.bullishRatio * 100,
+              )}
+            />
+            <Regime
+              name="20日平均報酬"
+              state={formatPercent(
+                marketSummary.averageReturn20d,
+              )}
+            />
+            <Regime
+              name="最新交易日"
+              state={latestDate ?? "—"}
+            />
+          </div>
+
+          <div className="panel">
+            <div className="panel-title">
+              ⚙️ 資料品質
+            </div>
+            <Regime
+              name="策略版本"
+              state={STRATEGY_VERSION}
+            />
+            <Regime
+              name="訊號筆數"
+              state={String(signals.length)}
+            />
+            <Regime
+              name="特徵筆數"
+              state={String(features.length)}
+            />
+            <Regime
+              name="資料狀態"
+              state={
+                signals.length > 0 &&
+                features.length === signals.length
+                  ? "完整"
+                  : "部分缺漏"
+              }
+            />
+          </div>
         </div>
       </div>
     </section>
   );
+}
+
+function clamp(
+  value: number,
+  minimum = 0,
+  maximum = 100,
+) {
+  return Math.max(minimum, Math.min(maximum, value));
+}
+
+function formatNumber(value: number | null | undefined) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(1) : "—";
+}
+
+function formatPercent(value: number | null | undefined) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "—";
+  return `${number >= 0 ? "+" : ""}${number.toFixed(1)}%`;
+}
+
+function healthLabel(score: number) {
+  if (score >= 80) return "🟢 HEALTHY";
+  if (score >= 60) return "🟡 WATCH";
+  if (score >= 40) return "🟠 WEAK";
+  return "🔴 RISK";
 }
 
 function Metric({
@@ -194,7 +480,13 @@ function Metric({
   );
 }
 
-function Regime({ name, state }: { name: string; state: string }) {
+function Regime({
+  name,
+  state,
+}: {
+  name: string;
+  state: string;
+}) {
   return (
     <div className="regime">
       <span>{name}</span>
