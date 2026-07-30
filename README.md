@@ -1,13 +1,15 @@
-# GPT Quant V6 Professional
+# GPT Quant V7 Professional
 
-完整量化研究平台：
+Taiwan stock quantitative research platform powered by React, Vite, Supabase, FinMind and GitHub Actions.
 
-- Supabase 即時資料
-- FinMind 自動行情更新
-- V3.1 多因子訊號
-- V4 回測與策略排行榜
-- V5 每日研究報告與投資組合
-- V6 完整前端樣式與整包部署
+## V7
 
-網站：
-https://rchu9246.github.io/GPT/
+- Decision Intelligence dashboard
+- Stock intelligence detail page
+- Daily research report
+- Portfolio risk allocation
+- Backtest analytics
+- Screener
+- GitHub Pages automated deployment
+
+Website: https://rchu9246.github.io/GPT/

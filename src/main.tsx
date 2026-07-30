@@ -4,7 +4,5 @@ import App from "./app/App";
 import "./styles/dashboard.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
+  <React.StrictMode><App /></React.StrictMode>,
 );
