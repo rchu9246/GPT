@@ -21,7 +21,7 @@ def required_env(name: str) -> str:
     return value
 
 
-FINMIND_TOKEN = required_env("FINMIND_TOKEN")
+FINMIND_TOKEN = "".join(required_env("FINMIND_TOKEN").split())
 SUPABASE_URL = required_env("SUPABASE_URL").rstrip("/")
 SERVICE_KEY = required_env("SUPABASE_SERVICE_ROLE_KEY")
 SYMBOLS = [
@@ -99,9 +99,17 @@ def fetch_finmind(dataset: str, symbol: str, start_date: str) -> list[dict[str, 
         "dataset": dataset,
         "data_id": symbol,
         "start_date": start_date,
-        "token": FINMIND_TOKEN,
     }
-    response = requests.get(FINMIND_URL, params=params, timeout=TIMEOUT)
+    headers = {
+        "Authorization": f"Bearer {FINMIND_TOKEN}",
+        "User-Agent": "GPT-Quant-Automation/1.1",
+    }
+    response = requests.get(
+        FINMIND_URL,
+        params=params,
+        headers=headers,
+        timeout=TIMEOUT,
+    )
     check_response(response, f"FinMind {dataset} {symbol}")
     payload = response.json()
 
@@ -464,6 +472,10 @@ def main() -> int:
     print(
         f"Updating {len(SYMBOLS)} symbols from {start_date}; "
         f"Supabase={SUPABASE_URL}"
+    )
+    print(
+        f"FinMind token loaded: length={len(FINMIND_TOKEN)}, "
+        f"tail=...{FINMIND_TOKEN[-6:] if len(FINMIND_TOKEN) >= 6 else 'short'}"
     )
 
     failures: list[str] = []
