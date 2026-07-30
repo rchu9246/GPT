@@ -1,16 +1,20 @@
 import { useEffect, useState } from "react";
 import Dashboard from "../pages/Dashboard";
 import Screener from "../pages/Screener";
+import DataPipeline from "../pages/DataPipeline";
 import Backtest from "../pages/Backtest";
 import StrategyLeaderboard from "../pages/StrategyLeaderboard";
+import DailyReportPage from "../pages/DailyReportPage";
+import PortfolioPage from "../pages/PortfolioPage";
 import WalkForward from "../pages/WalkForward";
 import PaperTrading from "../pages/PaperTrading";
 import StockDetail from "../pages/StockDetail";
-import DataPipeline from "../pages/DataPipeline";
 
 type Page =
   | "dashboard"
   | "screener"
+  | "report"
+  | "portfolio"
   | "pipeline"
   | "backtest"
   | "leaderboard"
@@ -31,6 +35,8 @@ export default function App() {
         [
           "dashboard",
           "screener",
+          "report",
+          "portfolio",
           "pipeline",
           "backtest",
           "leaderboard",
@@ -58,11 +64,13 @@ export default function App() {
   }
 
   const items: Array<[Page, string]> = [
-    ["dashboard", "儀表板"],
+    ["dashboard", "總覽"],
     ["screener", "選股"],
-    ["pipeline", "資料管線"],
+    ["report", "每日報告"],
+    ["portfolio", "投資組合"],
     ["backtest", "回測"],
     ["leaderboard", "策略排行"],
+    ["pipeline", "資料管線"],
     ["walkforward", "Walk-forward"],
     ["paper", "紙上交易"],
   ];
@@ -71,9 +79,9 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <div className="brand">GPT QUANT V4</div>
+          <div className="brand">GPT QUANT V5 PROFESSIONAL</div>
           <div className="subtitle">
-            Signals → Backtest → Leaderboard → Decision Intelligence
+            Data → Signals → Risk → Portfolio → Backtest → Decision Intelligence
           </div>
         </div>
         <nav>
@@ -92,6 +100,8 @@ export default function App() {
       <main className="content">
         {page === "dashboard" && <Dashboard />}
         {page === "screener" && <Screener />}
+        {page === "report" && <DailyReportPage />}
+        {page === "portfolio" && <PortfolioPage />}
         {page === "pipeline" && <DataPipeline />}
         {page === "backtest" && <Backtest />}
         {page === "leaderboard" && <StrategyLeaderboard />}
@@ -100,7 +110,7 @@ export default function App() {
       </main>
 
       <footer>
-        GPT Quant V4 · 歷史回測不代表未來績效，資料與模型僅供研究
+        GPT Quant V5 Professional · 模型與歷史績效僅供研究，不構成投資建議
       </footer>
     </div>
   );
