@@ -108,3 +108,86 @@ export type StrategyLeaderboardRow = {
   avg_total_trades: number;
   best_total_return: number;
 };
+
+
+export type Portfolio = {
+  id: string;
+  name: string;
+  description: string | null;
+  initial_capital: number;
+  cash_balance: number;
+  is_active: boolean;
+  created_at: string;
+};
+
+export type PortfolioPosition = {
+  id: number;
+  portfolio_id: string;
+  stock_id: number;
+  quantity: number;
+  average_cost: number;
+  current_price: number | null;
+  market_value: number | null;
+  unrealized_pnl: number | null;
+  unrealized_return: number | null;
+  weight: number | null;
+  opened_at: string;
+  stocks?: StockRef;
+};
+
+export type PortfolioSnapshot = {
+  id: number;
+  portfolio_id: string;
+  snapshot_date: string;
+  cash_balance: number;
+  market_value: number;
+  total_equity: number;
+  daily_return: number | null;
+  cumulative_return: number | null;
+  max_drawdown: number | null;
+  volatility_20d: number | null;
+  var_95: number | null;
+};
+
+export type DailyReport = {
+  id: number;
+  report_date: string;
+  market_state: string;
+  market_score: number;
+  strategy_health: number;
+  top_signals: Array<{
+    symbol: string;
+    name: string;
+    score: number;
+    signal: string;
+    confidence: number;
+    entry_low: number | null;
+    entry_high: number | null;
+    stop_loss: number | null;
+    target_1: number | null;
+    reasons: string[];
+  }>;
+  risk_flags: Array<{
+    symbol: string;
+    name: string;
+    score: number;
+    risk_score: number;
+    message: string;
+  }>;
+  summary: string;
+  action_plan: string;
+  generated_by: string;
+  created_at: string;
+};
+
+export type RiskSnapshot = {
+  id: number;
+  snapshot_date: string;
+  average_score: number;
+  bullish_ratio: number;
+  average_volatility: number;
+  average_drawdown: number | null;
+  risk_level: string;
+  var_95: number | null;
+  concentration_risk: number | null;
+};
