@@ -1,0 +1,42 @@
+name: Generate Professional Daily Report
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy:
+        description: "策略版本"
+        required: false
+        default: "V3.1-MULTI"
+  schedule:
+    - cron: "20 11 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: professional-daily-report
+  cancel-in-progress: true
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements-automation.txt
+
+      - name: Generate report and risk snapshot
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          REPORT_STRATEGY: ${{ inputs.strategy || 'V3.1-MULTI' }}
+        run: python automation/generate_daily_report.py
