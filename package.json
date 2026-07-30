@@ -1,25 +1,23 @@
 {
-  "name": "gpt-quant-v3",
+  "name": "gpt-quant-v6-professional",
   "private": true,
-  "version": "3.0.0",
+  "version": "6.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview",
-    "check": "node scripts/check-project.mjs"
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.53.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "recharts": "^3.1.0"
+    "@supabase/supabase-js": "^2.57.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@types/react": "^19.1.8",
-    "@types/react-dom": "^19.1.6",
-    "@vitejs/plugin-react": "^4.7.0",
-    "typescript": "^5.8.3",
-    "vite": "^7.0.6"
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7"
   }
 }
