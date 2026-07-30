@@ -18,7 +18,7 @@ export default function StockDetailV7({ symbol, onBack }: { symbol: string; onBa
   }, [symbol]);
 
   const closes = prices.map((p) => Number(p.close)).filter(Number.isFinite);
-  const latest = closes.at(-1);
+  const latest = closes.length ? closes[closes.length - 1] : undefined;
   const prev20 = closes.length > 20 ? closes.at(-21) : closes[0];
   const return20 = latest != null && prev20 ? latest / prev20 - 1 : null;
   const high60 = closes.length ? Math.max(...closes.slice(-60)) : null;
