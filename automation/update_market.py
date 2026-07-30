@@ -165,6 +165,42 @@ def ema_series(values: list[float], period: int) -> list[float]:
     return result
 
 
+
+def stochastic_kd(rows: list[dict[str, Any]], period: int = 9, smooth: int = 3):
+    if len(rows) < period + smooth:
+        return None, None
+    raw = []
+    for i in range(period - 1, len(rows)):
+        window = rows[i-period+1:i+1]
+        highest = max(fnum(r["high"]) for r in window)
+        lowest = min(fnum(r["low"]) for r in window)
+        close = fnum(rows[i]["close"])
+        raw.append(50.0 if highest == lowest else (close-lowest)/(highest-lowest)*100)
+    k = sum(raw[-smooth:]) / smooth
+    k_series = [sum(raw[i-smooth+1:i+1])/smooth for i in range(smooth-1, len(raw))]
+    d = sum(k_series[-smooth:]) / smooth if len(k_series) >= smooth else k_series[-1]
+    return k, d
+
+
+def obv_series(closes: list[float], volumes: list[float]) -> list[float]:
+    result = [0.0]
+    for i in range(1, len(closes)):
+        if closes[i] > closes[i-1]:
+            result.append(result[-1] + volumes[i])
+        elif closes[i] < closes[i-1]:
+            result.append(result[-1] - volumes[i])
+        else:
+            result.append(result[-1])
+    return result
+
+
+def slope_percent(values: list[float], periods: int) -> float | None:
+    if len(values) <= periods:
+        return None
+    start, end = values[-periods-1], values[-1]
+    return (end-start) / (abs(start) if abs(start) > 1e-9 else 1.0) * 100
+
+
 def rsi(values: list[float], period: int = 14) -> float | None:
     if len(values) <= period:
         return None
@@ -198,178 +234,92 @@ def clamp(value: float, lower: float = 0.0, upper: float = 100.0) -> float:
 
 
 def calculate_latest_feature(price_rows: list[dict[str, Any]]) -> dict[str, Any]:
-    closes = [fnum(row["close"]) for row in price_rows]
-    volumes = [fnum(row["volume"]) for row in price_rows]
+    closes = [fnum(r["close"]) for r in price_rows]
+    volumes = [fnum(r["volume"]) for r in price_rows]
     current = price_rows[-1]
-    current_close = closes[-1]
-
-    ma5 = sma(closes, 5)
-    ma20 = sma(closes, 20)
-    ma60 = sma(closes, 60)
-    ma120 = sma(closes, 120)
-
-    ema12 = ema_series(closes, 12)
-    ema26 = ema_series(closes, 26)
-    macd_values = [a - b for a, b in zip(ema12, ema26)]
-    signal_values = ema_series(macd_values, 9)
-    macd = macd_values[-1] if macd_values else None
-    macd_signal = signal_values[-1] if signal_values else None
-    macd_hist = (
-        macd - macd_signal
-        if macd is not None and macd_signal is not None
-        else None
-    )
-
-    high20 = max(closes[-20:]) if len(closes) >= 20 else max(closes)
-    high60 = max(closes[-60:]) if len(closes) >= 60 else max(closes)
-    vol5 = sma(volumes, 5)
-    vol20 = sma(volumes, 20)
-
-    daily_returns = []
-    for i in range(1, len(closes)):
-        if closes[i - 1] != 0:
-            daily_returns.append((closes[i] / closes[i - 1] - 1.0) * 100)
-
-    volatility20 = (
-        statistics.pstdev(daily_returns[-20:])
-        if len(daily_returns) >= 2
-        else 0.0
-    )
-
-    ma20_prev = (
-        sum(closes[-25:-5]) / 20 if len(closes) >= 25 else ma20
-    )
-    ma60_prev = (
-        sum(closes[-65:-5]) / 60 if len(closes) >= 65 else ma60
-    )
-
+    close = closes[-1]
+    ma5, ma20, ma60, ma120 = sma(closes,5), sma(closes,20), sma(closes,60), sma(closes,120)
+    ema20s, ema60s, ema120s = ema_series(closes,20), ema_series(closes,60), ema_series(closes,120)
+    ema20, ema60, ema120 = ema20s[-1], ema60s[-1], ema120s[-1]
+    ema12, ema26 = ema_series(closes,12), ema_series(closes,26)
+    macd_vals = [a-b for a,b in zip(ema12,ema26)]
+    macd_sig_vals = ema_series(macd_vals,9)
+    macd, macd_signal = macd_vals[-1], macd_sig_vals[-1]
+    macd_hist = macd - macd_signal
+    k, d = stochastic_kd(price_rows)
+    obv = obv_series(closes, volumes)
+    high20, high60 = max(closes[-20:]), max(closes[-60:])
+    vol5, vol20 = sma(volumes,5), sma(volumes,20)
+    daily_returns = [(closes[i]/closes[i-1]-1)*100 for i in range(1,len(closes)) if closes[i-1] != 0]
+    volatility20 = statistics.pstdev(daily_returns[-20:]) if len(daily_returns) >= 2 else 0.0
+    ma20_prev = sum(closes[-25:-5])/20 if len(closes)>=25 else ma20
+    ma60_prev = sum(closes[-65:-5])/60 if len(closes)>=65 else ma60
     return {
-        "trade_date": current["trade_date"],
-        "close": round(current_close, 4),
-        "return_1d": pct_change(closes, 1),
-        "return_5d": pct_change(closes, 5),
-        "return_20d": pct_change(closes, 20),
-        "ma5": ma5,
-        "ma20": ma20,
-        "ma60": ma60,
-        "ma120": ma120,
-        "ma20_slope": (
-            ((ma20 / ma20_prev) - 1) * 100
-            if ma20 and ma20_prev
-            else None
-        ),
-        "ma60_slope": (
-            ((ma60 / ma60_prev) - 1) * 100
-            if ma60 and ma60_prev
-            else None
-        ),
-        "rsi14": rsi(closes, 14),
-        "macd": macd,
-        "macd_signal": macd_signal,
-        "macd_hist": macd_hist,
-        "atr14": atr(price_rows, 14),
-        "volume_ratio_5d": (
-            volumes[-1] / vol5 if vol5 and vol5 > 0 else None
-        ),
-        "volume_ratio_20d": (
-            volumes[-1] / vol20 if vol20 and vol20 > 0 else None
-        ),
+        "trade_date": current["trade_date"], "close": round(close,4),
+        "return_1d": pct_change(closes,1), "return_5d": pct_change(closes,5),
+        "return_20d": pct_change(closes,20), "roc20": pct_change(closes,20),
+        "ma5": ma5, "ma20": ma20, "ma60": ma60, "ma120": ma120,
+        "ema20": ema20, "ema60": ema60, "ema120": ema120,
+        "ma20_slope": ((ma20/ma20_prev)-1)*100 if ma20 and ma20_prev else None,
+        "ma60_slope": ((ma60/ma60_prev)-1)*100 if ma60 and ma60_prev else None,
+        "rsi14": rsi(closes,14), "stoch_k": k, "stoch_d": d,
+        "macd": macd, "macd_signal": macd_signal, "macd_hist": macd_hist,
+        "atr14": atr(price_rows,14),
+        "volume_ratio_5d": volumes[-1]/vol5 if vol5 else None,
+        "volume_ratio_20d": volumes[-1]/vol20 if vol20 else None,
+        "obv_slope_20d": slope_percent(obv,20),
         "volatility_20d": volatility20,
-        "high_20d": high20,
-        "high_60d": high60,
-        "distance_high_20d": (
-            (current_close / high20 - 1) * 100 if high20 else None
-        ),
-        "distance_high_60d": (
-            (current_close / high60 - 1) * 100 if high60 else None
-        ),
-        "foreign_net_5d": 0,
-        "foreign_net_20d": 0,
-        "trust_net_5d": 0,
-        "trust_net_20d": 0,
+        "high_20d": high20, "high_60d": high60,
+        "distance_high_20d": (close/high20-1)*100 if high20 else None,
+        "distance_high_60d": (close/high60-1)*100 if high60 else None,
+        "foreign_net_5d": 0, "foreign_net_20d": 0,
+        "trust_net_5d": 0, "trust_net_20d": 0,
     }
-
 
 def score_feature(feature: dict[str, Any]) -> dict[str, Any]:
     close = fnum(feature["close"])
-    ma5 = fnum(feature["ma5"])
-    ma20 = fnum(feature["ma20"])
-    ma60 = fnum(feature["ma60"])
-    ma120 = fnum(feature["ma120"])
-    rsi14 = fnum(feature["rsi14"], 50)
-    macd_hist = fnum(feature["macd_hist"])
-    volume_ratio = fnum(feature["volume_ratio_20d"], 1)
-    return20 = fnum(feature["return_20d"])
-    distance_high = fnum(feature["distance_high_20d"], -20)
-    volatility = fnum(feature["volatility_20d"])
-
-    trend_points = 0
-    trend_points += 25 if close > ma5 > 0 else 0
-    trend_points += 25 if ma5 > ma20 > 0 else 0
-    trend_points += 25 if ma20 > ma60 > 0 else 0
-    trend_points += 25 if ma60 > ma120 > 0 else 0
-    trend_score = clamp(trend_points)
-
-    if 50 <= rsi14 <= 70:
-        rsi_points = 80 + (rsi14 - 50)
-    elif 40 <= rsi14 < 50:
-        rsi_points = 50 + (rsi14 - 40) * 3
-    elif 70 < rsi14 <= 80:
-        rsi_points = 90 - (rsi14 - 70) * 4
-    else:
-        rsi_points = 30
-    momentum_score = clamp(
-        rsi_points * 0.6
-        + clamp(50 + macd_hist * 20) * 0.2
-        + clamp(50 + return20 * 3) * 0.2
-    )
-
-    volume_score = clamp(40 + (volume_ratio - 1) * 50)
-    breakout_score = clamp(100 + distance_high * 8)
-    relative_strength_score = clamp(50 + return20 * 3)
-    institutional_score = 50.0
-    market_score = 70.0
-    risk_score = clamp(100 - volatility * 15)
-
-    total = (
-        trend_score * 0.20
-        + momentum_score * 0.15
-        + volume_score * 0.15
-        + institutional_score * 0.15
-        + breakout_score * 0.10
-        + relative_strength_score * 0.10
-        + market_score * 0.10
-        + risk_score * 0.05
-    )
-
-    if total >= 90:
-        signal = "S級強多"
-    elif total >= 80:
-        signal = "A級多頭"
-    elif total >= 70:
-        signal = "B級觀察"
-    elif total >= 60:
-        signal = "C級中性"
-    else:
-        signal = "D級避開"
-
-    confidence = clamp(50 + abs(total - 50) * 0.8)
-
+    ema20, ema60, ema120 = fnum(feature.get("ema20")), fnum(feature.get("ema60")), fnum(feature.get("ema120"))
+    rsi14 = fnum(feature.get("rsi14"),50)
+    k, d = fnum(feature.get("stoch_k"),50), fnum(feature.get("stoch_d"),50)
+    macd_hist = fnum(feature.get("macd_hist"))
+    volume_ratio = fnum(feature.get("volume_ratio_20d"),1)
+    obv_slope = fnum(feature.get("obv_slope_20d"))
+    roc20 = fnum(feature.get("roc20"))
+    dist20, dist60 = fnum(feature.get("distance_high_20d"),-20), fnum(feature.get("distance_high_60d"),-30)
+    volatility, atr14 = fnum(feature.get("volatility_20d")), fnum(feature.get("atr14"))
+    reasons = []
+    trend = 0
+    if close > ema20 > 0: trend += 30; reasons.append("收盤站上 EMA20")
+    if ema20 > ema60 > 0: trend += 35; reasons.append("EMA20 高於 EMA60")
+    if ema60 > ema120 > 0: trend += 35; reasons.append("中長期均線多頭排列")
+    trend = clamp(trend)
+    momentum = clamp((100-abs(rsi14-60)*3)*0.35 + clamp(55+(k-d)*2)*0.2 + clamp(50+macd_hist*25)*0.25 + clamp(50+roc20*2.5)*0.2)
+    if macd_hist > 0: reasons.append("MACD 柱狀體為正")
+    if k > d and k < 85: reasons.append("KD 呈多方交叉")
+    volume = clamp(clamp(45+(volume_ratio-1)*45)*0.7 + clamp(50+obv_slope*3)*0.3)
+    if volume_ratio >= 1.3: reasons.append(f"量能放大至20日均量 {volume_ratio:.1f} 倍")
+    breakout = clamp(clamp(100+dist20*10)*0.65 + clamp(100+dist60*6)*0.35)
+    if dist20 >= -2: reasons.append("接近或突破20日高點")
+    relative = clamp(50+roc20*2.5)
+    institutional, market = 50.0, 60.0
+    atr_pct = atr14/close*100 if close else 0
+    risk = clamp(100-volatility*11-max(atr_pct-2,0)*8-max(rsi14-78,0)*2)
+    total = trend*0.24 + momentum*0.20 + volume*0.14 + institutional*0.08 + breakout*0.14 + relative*0.08 + market*0.05 + risk*0.07
+    signal = "S級強多" if total>=85 else "A級多頭" if total>=75 else "B級觀察" if total>=65 else "C級中性" if total>=50 else "D級避開"
+    confidence = clamp(45+abs(total-50)*0.8+min(len(reasons),6)*2)
     return {
-        "strategy_version": "V2.5-AUTO",
-        "total_score": round(total, 2),
-        "trend_score": round(trend_score, 2),
-        "momentum_score": round(momentum_score, 2),
-        "volume_score": round(volume_score, 2),
-        "institutional_score": round(institutional_score, 2),
-        "breakout_score": round(breakout_score, 2),
-        "relative_strength_score": round(relative_strength_score, 2),
-        "market_score": round(market_score, 2),
-        "risk_score": round(risk_score, 2),
-        "signal": signal,
-        "confidence": round(confidence, 2),
+        "strategy_version":"V3.1-MULTI",
+        "total_score":round(total,2), "trend_score":round(trend,2),
+        "momentum_score":round(momentum,2), "volume_score":round(volume,2),
+        "institutional_score":institutional, "breakout_score":round(breakout,2),
+        "relative_strength_score":round(relative,2), "market_score":market,
+        "risk_score":round(risk,2), "signal":signal, "confidence":round(confidence,2),
+        "analysis_reasons":reasons[:8],
+        "entry_low":round(close*0.985,2), "entry_high":round(close*1.015,2),
+        "stop_loss_price":round(max(close-max(atr14*2,close*0.05),0.01),2),
+        "target_price_1":round(close+max(atr14*2.5,close*0.08),2),
+        "target_price_2":round(close+max(atr14*4,close*0.13),2),
     }
-
 
 def normalize_prices(raw_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     normalized: dict[str, dict[str, Any]] = {}
