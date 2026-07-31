@@ -1,7 +1,7 @@
 {
-  "name": "gpt-quant-v14-5-execution-console",
+  "name": "gpt-quant-v15-enterprise-auto-portfolio",
   "private": true,
-  "version": "14.5.0",
+  "version": "15.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
