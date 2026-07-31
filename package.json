@@ -1,7 +1,7 @@
 {
-  "name": "gpt-quant-v16-enterprise-trading-engine",
+  "name": "gpt-quant-v17-enterprise-portfolio-os",
   "private": true,
-  "version": "16.0.0",
+  "version": "17.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

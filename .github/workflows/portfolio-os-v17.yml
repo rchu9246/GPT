@@ -1,0 +1,30 @@
+name: V17 Portfolio OS
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 6 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v17-portfolio-os
+  cancel-in-progress: false
+
+jobs:
+  portfolio-os:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-autotrader-v13.txt
+      - name: Run V17 Portfolio OS
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AUTOTRADER_ACCOUNT: paper-main
+        run: python automation/portfolio_os_v17.py

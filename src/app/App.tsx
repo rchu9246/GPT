@@ -19,19 +19,24 @@ import RiskAnalyticsV12 from "../pages/RiskAnalyticsV12";
 import MultiStrategyV10 from "../pages/MultiStrategyV10";
 import StrategyLabV9 from "../pages/StrategyLabV9";
 import SystemOpsV9 from "../pages/SystemOpsV9";
+import PortfolioOSV17 from "../pages/PortfolioOSV17";
 
-type Page = "engine" | "autoportfolio" | "execution" | "operations" | "autotrader" | "ledger" | "agents" | "assistant" | "heatmap" | "watchlist" | "markets" | "research" | "sentiment" | "screener" | "portfolio" | "risk" | "multistrategy" | "strategy" | "system";
+type Page = "portfolioos" | "engine" | "autoportfolio" | "execution" | "operations" | "autotrader" | "ledger" | "agents" | "assistant" | "heatmap" | "watchlist" | "markets" | "research" | "sentiment" | "screener" | "portfolio" | "risk" | "multistrategy" | "strategy" | "system";
 
 const nav: Array<[Page, string]> = [
+  ["portfolioos", "Portfolio OS"],
   ["engine", "交易引擎"], ["autoportfolio", "自動投組"], ["execution", "執行控制"], ["operations", "交易營運"], ["autotrader", "本機模擬"], ["ledger", "持倉帳本"], ["agents", "Agent 議會"], ["assistant", "AI 助理"], ["heatmap", "熱力圖"], ["watchlist", "AI 自選"], ["markets", "全球市場"], ["research", "研究中心"], ["sentiment", "事件情緒"], ["screener", "AI 選股"], ["portfolio", "Portfolio OS"], ["risk", "進階風險"], ["multistrategy", "多策略"], ["strategy", "策略實驗室"], ["system", "系統管線"],
 ];
 
 export default function App() {
-  const [page, setPage] = useState<Page>("engine");
+  const [page, setPage] = useState<Page>("portfolioos");
+  // previous default preserved below
+  // engine");
   const [symbol, setSymbol] = useState<string | null>(null);
   const go = (next: Page) => { setPage(next); setSymbol(null); };
   let content;
   if (symbol) content = <StockIntelligenceV9 symbol={symbol} onBack={() => setSymbol(null)} />;
+  else if (page === "portfolioos") content = <PortfolioOSV17 />;
   else if (page === "engine") content = <TradingEngineV16 />;
   else if (page === "autoportfolio") content = <AutoPortfolioV15 />;
   else if (page === "execution") content = <ExecutionConsoleV145 />;
@@ -51,5 +56,5 @@ export default function App() {
   else if (page === "multistrategy") content = <MultiStrategyV10 />;
   else if (page === "strategy") content = <StrategyLabV9 />;
   else content = <SystemOpsV9 />;
-  return <div className="app-shell"><header className="topbar"><div><div className="brand">GPT QUANT V16 ENTERPRISE TRADING ENGINE</div><div className="subtitle">Data → AI Signals → Risk Engine → Paper Execution → Portfolio Analytics</div></div><nav>{nav.map(([key,label]) => <button key={key} className={`nav ${!symbol && page===key ? "active" : ""}`} onClick={() => go(key)}>{label}</button>)}</nav></header><main className="content">{content}</main><footer>GPT Quant V14 Enterprise AI Trading Platform · 伺服器端模擬交易與營運監控</footer></div>;
+  return <div className="app-shell"><header className="topbar"><div><div className="brand">GPT QUANT V17 ENTERPRISE PORTFOLIO OS</div><div className="subtitle">Data → AI Signals → Risk Engine → Paper Execution → Portfolio Analytics</div></div><nav>{nav.map(([key,label]) => <button key={key} className={`nav ${!symbol && page===key ? "active" : ""}`} onClick={() => go(key)}>{label}</button>)}</nav></header><main className="content">{content}</main><footer>GPT Quant V14 Enterprise AI Trading Platform · 伺服器端模擬交易與營運監控</footer></div>;
 }
