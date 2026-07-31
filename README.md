@@ -1,14 +1,14 @@
-# GPT Quant V20 Institutional Edition
+# GPT Quant V21 Multi-Agent Investment Council
 
-V20 consolidates the existing quantitative platform into one institutional
-operating dashboard and one master daily workflow.
+V21 adds an auditable investment committee:
 
-New capabilities:
-- unified institutional dashboard
-- system health score
-- daily action items
-- one-click V16 → V17 → V18 → V19 → V20 cycle
-- transparent performance attribution
-- integrated data, signal, execution, portfolio, risk and strategy status
+- Technical Analyst
+- Momentum Analyst
+- Signal Quality Analyst
+- Liquidity Analyst
+- Chief Risk Officer with veto power
+- CIO consensus synthesis
 
-The platform remains PAPER-only.
+The engine records every opinion, vote, confidence, rationale, veto, consensus,
+dispersion, final decision and CIO memo. It may create PROPOSED PAPER orders,
+but approval and fill remain manual safety controls.

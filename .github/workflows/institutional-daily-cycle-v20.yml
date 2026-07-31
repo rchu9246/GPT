@@ -53,6 +53,13 @@ jobs:
           AUTOTRADER_ACCOUNT: paper-main
         run: python automation/hedge_fund_manager_v19.py
 
+      - name: Run Multi-Agent Council
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AUTOTRADER_ACCOUNT: paper-main
+        run: python automation/multi_agent_council_v21.py
+
       - name: Generate Institutional Report
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

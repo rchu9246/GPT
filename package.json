@@ -1,7 +1,7 @@
 {
-  "name": "gpt-quant-v20-institutional-edition",
+  "name": "gpt-quant-v21-multi-agent-investment-council",
   "private": true,
-  "version": "20.0.0",
+  "version": "21.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

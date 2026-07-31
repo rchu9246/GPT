@@ -460,3 +460,15 @@ code { font-size: .78rem; word-break: break-all; }
     grid-template-columns: 1fr;
   }
 }
+
+
+/* V21 Multi-Agent Investment Council */
+.selected-row {
+  background: rgba(125, 211, 252, .08);
+}
+tbody tr {
+  cursor: default;
+}
+tbody tr.selected-row {
+  cursor: pointer;
+}

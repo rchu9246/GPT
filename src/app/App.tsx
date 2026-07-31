@@ -1,4 +1,5 @@
 import { useState } from "react";
+import MultiAgentCouncilV21 from "../pages/MultiAgentCouncilV21";
 import InstitutionalDashboardV20 from "../pages/InstitutionalDashboardV20";
 import HedgeFundV19 from "../pages/HedgeFundV19";
 import AIFundManagerV18 from "../pages/AIFundManagerV18";
@@ -25,6 +26,7 @@ import StrategyLabV9 from "../pages/StrategyLabV9";
 import SystemOpsV9 from "../pages/SystemOpsV9";
 
 type Page =
+  | "council21"
   | "institutional"
   | "hedgefund"
   | "fundmanager"
@@ -50,6 +52,7 @@ type Page =
   | "system";
 
 const nav: Array<[Page, string]> = [
+  ["council21", "V21 委員會"],
   ["institutional", "機構總控"],
   ["hedgefund", "避險基金"],
   ["fundmanager", "AI 基金經理"],
@@ -76,7 +79,7 @@ const nav: Array<[Page, string]> = [
 ];
 
 export default function App() {
-  const [page, setPage] = useState<Page>("institutional");
+  const [page, setPage] = useState<Page>("council21");
   const [symbol, setSymbol] = useState<string | null>(null);
 
   const go = (next: Page) => {
@@ -93,6 +96,8 @@ export default function App() {
         onBack={() => setSymbol(null)}
       />
     );
+  } else if (page === "council21") {
+    content = <MultiAgentCouncilV21 />;
   } else if (page === "institutional") {
     content = <InstitutionalDashboardV20 />;
   } else if (page === "hedgefund") {
@@ -145,9 +150,9 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <div className="brand">GPT QUANT V20 INSTITUTIONAL EDITION</div>
+          <div className="brand">GPT QUANT V21 MULTI-AGENT INVESTMENT COUNCIL</div>
           <div className="subtitle">
-            Data → Signals → Execution → Portfolio → Risk → Attribution → CIO
+            Independent Agents → Consensus → Veto → CIO Decision → PAPER Execution
           </div>
         </div>
         <nav>
@@ -164,7 +169,7 @@ export default function App() {
       </header>
       <main className="content">{content}</main>
       <footer>
-        GPT Quant V20 Institutional Edition · Unified PAPER investment operating platform
+        GPT Quant V21 Multi-Agent Investment Council · Auditable PAPER decision platform
       </footer>
     </div>
   );

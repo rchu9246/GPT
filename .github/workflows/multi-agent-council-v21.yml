@@ -1,0 +1,30 @@
+name: V21 Multi-Agent Investment Council
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "35 6 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v21-multi-agent-council
+  cancel-in-progress: false
+
+jobs:
+  council:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-autotrader-v13.txt
+      - name: Run V21 multi-agent investment council
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AUTOTRADER_ACCOUNT: paper-main
+        run: python automation/multi_agent_council_v21.py
