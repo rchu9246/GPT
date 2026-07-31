@@ -180,3 +180,35 @@ export function percentV14(value?: number | null): string {
   const normalized = Math.abs(number) <= 2 ? number * 100 : number;
   return `${normalized.toFixed(2)}%`;
 }
+
+
+export function maxDrawdownV145(values: number[]): number {
+  if (!values.length) return 0;
+  let peak = values[0];
+  let result = 0;
+  for (const value of values) {
+    peak = Math.max(peak, value);
+    if (peak > 0) result = Math.min(result, value / peak - 1);
+  }
+  return result;
+}
+
+export function tradeStatsV145(
+  fills: import("../types/v14").PaperFillV14[],
+) {
+  const exits = fills.filter((fill) => fill.side === "SELL");
+  const wins = exits.filter((fill) => fill.realized_pnl > 0);
+  const losses = exits.filter((fill) => fill.realized_pnl < 0);
+  const grossProfit = wins.reduce((sum, fill) => sum + fill.realized_pnl, 0);
+  const grossLoss = Math.abs(
+    losses.reduce((sum, fill) => sum + fill.realized_pnl, 0),
+  );
+  return {
+    closedTrades: exits.length,
+    wins: wins.length,
+    losses: losses.length,
+    winRate: exits.length ? wins.length / exits.length : 0,
+    profitFactor:
+      grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? 99 : 0,
+  };
+}

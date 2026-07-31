@@ -1,7 +1,7 @@
 {
-  "name": "gpt-quant-v14-enterprise-ai-trading-platform",
+  "name": "gpt-quant-v14-5-execution-console",
   "private": true,
-  "version": "14.0.0",
+  "version": "14.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

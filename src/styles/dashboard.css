@@ -404,3 +404,34 @@ tr.clickable:hover { background: rgba(125, 211, 252, .06); }
 /* V14 Trading Operations */
 .page-title > button.nav { align-self: flex-start; }
 .run-item:not(button) { cursor: default; }
+
+
+/* V14.5 Execution Console */
+.execution-step {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 12px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  padding: 12px 0;
+}
+.execution-step b {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(125, 211, 252, .12);
+  border: 1px solid var(--line);
+}
+.order-status {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+.status-proposed { background: rgba(247, 204, 99, .10); }
+.status-approved { background: rgba(125, 211, 252, .10); }
+.status-filled { background: rgba(101, 230, 180, .10); }
+.status-rejected, .status-failed { background: rgba(255, 114, 133, .10); }
+code { font-size: .78rem; word-break: break-all; }

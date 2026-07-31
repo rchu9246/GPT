@@ -1,0 +1,35 @@
+name: V14.5 Review Paper Order
+
+on:
+  workflow_dispatch:
+    inputs:
+      order_id:
+        description: "Full trade_orders_v13 Order ID"
+        required: true
+        type: string
+      action:
+        description: "Approve or reject"
+        required: true
+        default: "APPROVE"
+        type: choice
+        options: [APPROVE, REJECT]
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-autotrader-v13.txt
+      - name: Review paper order
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ORDER_ID: ${{ inputs.order_id }}
+          ORDER_ACTION: ${{ inputs.action }}
+        run: python automation/review_paper_order_v14_5.py
