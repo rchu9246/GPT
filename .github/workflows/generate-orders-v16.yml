@@ -1,0 +1,27 @@
+name: V16 Generate Explainable Orders
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "5 6 * * 1-5"
+permissions:
+  contents: read
+concurrency:
+  group: v16-order-generator
+  cancel-in-progress: false
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-autotrader-v13.txt
+      - name: Generate explainable proposed orders
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AUTOTRADER_ACCOUNT: paper-main
+        run: python automation/generate_orders_v16.py

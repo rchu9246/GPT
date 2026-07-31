@@ -438,3 +438,5 @@ code { font-size: .78rem; word-break: break-all; }
 
 /* V15 Auto Portfolio */
 .v15-funnel{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}.v15-funnel-step{position:relative;display:grid;place-items:center;min-height:110px;border:1px solid var(--line);border-radius:14px;background:rgba(8,20,35,.68)}.v15-funnel-step b{font-size:1.7rem}.v15-funnel-step span{color:var(--muted)}.v15-funnel-step i{position:absolute;right:-13px;font-style:normal;color:var(--muted);z-index:2}@media(max-width:900px){.v15-funnel{grid-template-columns:1fr}.v15-funnel-step i{display:none}}
+
+.decision{display:inline-flex;padding:4px 8px;border:1px solid var(--line);border-radius:999px}.decision-accepted{background:rgba(101,230,180,.12)}.decision-rejected{background:rgba(255,114,133,.12)}.decision-skipped{background:rgba(247,204,99,.12)}

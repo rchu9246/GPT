@@ -1,7 +1,7 @@
 {
-  "name": "gpt-quant-v15-enterprise-auto-portfolio",
+  "name": "gpt-quant-v16-enterprise-trading-engine",
   "private": true,
-  "version": "15.0.0",
+  "version": "16.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
