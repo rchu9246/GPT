@@ -1,7 +1,7 @@
 {
-  "name": "gpt-quant-v8-professional",
+  "name": "gpt-quant-v8-1-professional",
   "private": true,
-  "version": "8.0.0",
+  "version": "8.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

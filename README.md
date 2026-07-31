@@ -1,15 +1,13 @@
-# GPT Quant V7 Professional
+# GPT Quant V8.1 Professional
 
-Taiwan stock quantitative research platform powered by React, Vite, Supabase, FinMind and GitHub Actions.
+Clean GitHub Pages project for the Taiwan stock quantitative dashboard.
 
-## V7
+## Highlights
 
-- Decision Intelligence dashboard
-- Stock intelligence detail page
-- Daily research report
-- Portfolio risk allocation
-- Backtest analytics
-- Screener
-- GitHub Pages automated deployment
-
-Website: https://rchu9246.github.io/GPT/
+- Supabase-compatible `total_score` signal mapping
+- Per-symbol signal deduplication
+- AI-style ratings
+- Technical snapshot: MA20, MA60, RSI14, volatility
+- Portfolio allocation and backtest dashboard
+- GitHub Pages deployment
+- ES2020 compatible; no `Array.at()` usage

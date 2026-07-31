@@ -1,0 +1,20 @@
+GPT Quant V8.1 Professional verification
+
+- Header: GPT QUANT V8 PROFESSIONAL (application UI)
+- Package version: 8.1.0
+- Only V8 page files are present under src/pages
+- No Array.at() calls exist under src
+- Supabase mapping uses total_score and stock_id
+- Signals are deduplicated by symbol
+- GitHub Pages base path is /GPT/
+
+Note: local npm dependency installation could not be completed in the artifact environment because its internal npm mirror did not contain @supabase/supabase-js. GitHub Actions uses npm install from its runner and remains the final build check.
+
+Pages:
+BacktestV8.tsx
+DailyReportV8.tsx
+DashboardV8.tsx
+PortfolioV8.tsx
+ScreenerV8.tsx
+SimpleV8.tsx
+StockDetailV8.tsx
