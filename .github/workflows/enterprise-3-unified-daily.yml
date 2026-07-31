@@ -1,9 +1,7 @@
-name: Enterprise 3.0 Unified Daily Investment Cycle
+name: Legacy Enterprise 3.0 RC Cycle (Manual Only)
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 7 * * 1-5"
 
 permissions:
   contents: read

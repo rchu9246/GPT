@@ -1,7 +1,7 @@
 {
-  "name": "gpt-quant-enterprise-3-release-candidate",
+  "name": "gpt-quant-enterprise-3-stable",
   "private": true,
-  "version": "3.0.0-rc.1",
+  "version": "3.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

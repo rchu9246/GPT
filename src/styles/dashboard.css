@@ -634,3 +634,35 @@ tbody tr.selected-row {
     align-items: flex-start;
   }
 }
+
+
+/* Enterprise 3.0 Stable */
+.stable30-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+}
+.stable30-status {
+  font-size: clamp(3rem, 8vw, 7rem);
+  font-weight: 800;
+}
+.stable30-badge {
+  min-width: 220px;
+  text-align: center;
+}
+.stable30-badge span,
+.stable30-badge small {
+  display: block;
+  opacity: .75;
+}
+.stable30-badge strong {
+  display: block;
+  font-size: 3rem;
+}
+@media (max-width: 760px) {
+  .stable30-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

@@ -1,0 +1,37 @@
+name: Enterprise 3.0 Stable Daily Cycle
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "5 7 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: enterprise-3-stable-daily
+  cancel-in-progress: false
+
+jobs:
+  stable-cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements-autotrader-v13.txt
+
+      - name: Run Enterprise 3.0 Stable
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AUTOTRADER_ACCOUNT: paper-main
+          PYTHONUNBUFFERED: "1"
+        run: python automation/enterprise3_stable.py

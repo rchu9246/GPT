@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Enterprise30Stable from "../pages/Enterprise30Stable";
 import Enterprise30Release from "../pages/Enterprise30Release";
 import Enterprise30Dashboard from "../pages/Enterprise30Dashboard";
 import Enterprise21Operational from "../pages/Enterprise21Operational";
@@ -31,6 +32,7 @@ import StrategyLabV9 from "../pages/StrategyLabV9";
 import SystemOpsV9 from "../pages/SystemOpsV9";
 
 type Page =
+  | "stable30"
   | "release30"
   | "enterprise30"
   | "enterprise21"
@@ -62,6 +64,7 @@ type Page =
   | "system";
 
 const nav: Array<[Page, string]> = [
+  ["stable30", "3.0 Stable"],
   ["release30", "3.0 Command"],
   ["enterprise30", "3.0 Research"],
   ["enterprise21", "Enterprise 2.1"],
@@ -94,7 +97,7 @@ const nav: Array<[Page, string]> = [
 ];
 
 export default function App() {
-  const [page, setPage] = useState<Page>("release30");
+  const [page, setPage] = useState<Page>("stable30");
   const [symbol, setSymbol] = useState<string | null>(null);
 
   const go = (next: Page) => {
@@ -111,6 +114,8 @@ export default function App() {
         onBack={() => setSymbol(null)}
       />
     );
+  } else if (page === "stable30") {
+    content = <Enterprise30Stable />;
   } else if (page === "release30") {
     content = <Enterprise30Release />;
   } else if (page === "enterprise30") {
@@ -175,9 +180,9 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <div className="brand">GPT QUANT ENTERPRISE 3.0 RELEASE CANDIDATE</div>
+          <div className="brand">GPT QUANT ENTERPRISE 3.0 STABLE</div>
           <div className="subtitle">
-            Unified Daily Cycle → Research → Portfolio → Risk → Explainability → PAPER Execution
+            Schema Gate → Stable Pipeline → Data Quality → Governance → PAPER Operations
           </div>
         </div>
         <nav>
@@ -194,7 +199,7 @@ export default function App() {
       </header>
       <main className="content">{content}</main>
       <footer>
-        GPT Quant Enterprise 3.0 RC · Daily AI PAPER investment operating system
+        GPT Quant Enterprise 3.0 Stable · Governed AI PAPER investment platform
       </footer>
     </div>
   );

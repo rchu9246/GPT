@@ -1,14 +1,12 @@
-# GPT Quant Enterprise 3.0 Release Candidate
+# GPT Quant Enterprise 3.0 Stable
 
-This release candidate consolidates the platform into a daily operating product:
+Stable release goals:
+- one official daily workflow
+- fail-closed schema validation
+- isolated pipeline stages
+- release run tracking
+- data-quality checks
+- stable dashboard
+- paper-only execution lock
 
-- unified daily workflow
-- Research Intelligence
-- explainable portfolio recommendations
-- target weights
-- stop-loss and take-profit guidance
-- research outcome tracking
-- release readiness monitoring
-- CEO and command dashboards
-
-The system remains PAPER-only. Live trading is intentionally disabled.
+Live trading remains disabled by design.
