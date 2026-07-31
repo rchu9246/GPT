@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: pip install -r requirements-autotrader-v13.txt
+      - run: pip install -r requirements.txt
 
       - name: Generate explainable orders
         env:

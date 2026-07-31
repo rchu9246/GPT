@@ -1,4 +1,4 @@
-# GPT Quant Enterprise 3.0 Stable
+# GPT Quant Enterprise 3.0 Stable Hotfix 3.0.1
 
 Stable release goals:
 - one official daily workflow
