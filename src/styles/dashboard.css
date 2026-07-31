@@ -302,3 +302,84 @@ tr.clickable:hover { background: rgba(125, 211, 252, .06); }
   .chat-form { grid-template-columns: 1fr; }
   .chat-form button { min-height: 42px; }
 }
+
+/* GPT Quant V12 Enterprise AI Agents */
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: 10px;
+}
+.heatmap-cell {
+  min-height: 132px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.heatmap-cell strong { font-size: 1.15rem; }
+.heatmap-cell span, .heatmap-cell small { color: var(--muted); }
+.heatmap-cell b { margin-top: auto; font-size: 1.45rem; }
+.heat-level-1 { background: rgba(255, 114, 133, .08); }
+.heat-level-2 { background: rgba(247, 204, 99, .08); }
+.heat-level-3 { background: rgba(125, 211, 252, .08); }
+.heat-level-4 { background: rgba(101, 230, 180, .10); }
+.heat-level-5 { background: rgba(101, 230, 180, .19); }
+.risk-level-1 { background: rgba(101, 230, 180, .16); }
+.risk-level-2 { background: rgba(101, 230, 180, .08); }
+.risk-level-3 { background: rgba(247, 204, 99, .08); }
+.risk-level-4 { background: rgba(255, 114, 133, .10); }
+.risk-level-5 { background: rgba(255, 114, 133, .20); }
+
+.watchlist-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.watchlist-chip {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: var(--text);
+  background: rgba(8, 20, 35, .72);
+  font: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  min-width: 135px;
+  text-align: left;
+}
+.watchlist-chip span, .watchlist-chip small { color: var(--muted); }
+.watchlist-chip.selected {
+  border-color: rgba(101, 230, 180, .7);
+  background: rgba(101, 230, 180, .10);
+}
+
+.alert-row {
+  width: 100%;
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+  color: var(--text);
+  background: rgba(8, 20, 35, .64);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.alert-row span { color: var(--muted); }
+.severity-info { border-left: 4px solid #7dd3fc; }
+.severity-warning { border-left: 4px solid #f7cc63; }
+.severity-critical { border-left: 4px solid #ff7285; }
+
+@media (max-width: 680px) {
+  .heatmap-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .heatmap-cell { min-height: 120px; }
+}

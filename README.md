@@ -1,18 +1,17 @@
-# GPT Quant V11 Enterprise AI
+# GPT Quant V12 Enterprise AI Agents
 
-An explainable AI quantitative research platform for Taiwan equities.
+Explainable multi-agent quantitative research for Taiwan equities.
 
-Core modules:
-- AI Command Center
-- Explainable GPT-style Research Assistant
-- Global Risk Proxy Console
-- Event & Sentiment Intelligence
-- AI Research Center
+Modules:
+- Multi-Agent Decision Council
+- Explainable AI Assistant
+- Market Heatmap
+- AI Watchlist
+- Global Risk Proxies
+- Research & Sentiment
 - AI Screener
 - Portfolio OS
-- Risk Center
+- Advanced Risk Analytics
 - Multi-Strategy Comparison
 - Strategy Lab
 - System Pipeline
-
-The browser application does not contain private AI or market-data API keys.
