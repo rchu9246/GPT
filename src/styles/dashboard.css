@@ -472,3 +472,37 @@ tbody tr {
 tbody tr.selected-row {
   cursor: pointer;
 }
+
+
+/* V22 Autonomous Trading Director */
+.director-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 32px;
+  align-items: center;
+}
+.director-command {
+  font-size: clamp(3rem, 8vw, 7rem);
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: .05em;
+}
+.director-confidence {
+  min-width: 180px;
+  text-align: center;
+}
+.director-confidence span,
+.director-confidence small {
+  display: block;
+  opacity: .75;
+}
+.director-confidence strong {
+  display: inline-block;
+  font-size: 4rem;
+}
+@media (max-width: 760px) {
+  .director-hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

@@ -1,0 +1,30 @@
+name: V22 Autonomous Trading Director
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "40 6 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v22-autonomous-trading-director
+  cancel-in-progress: false
+
+jobs:
+  director:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-autotrader-v13.txt
+      - name: Run V22 Autonomous Trading Director
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AUTOTRADER_ACCOUNT: paper-main
+        run: python automation/trading_director_v22.py

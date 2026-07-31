@@ -1,7 +1,7 @@
 {
-  "name": "gpt-quant-v21-multi-agent-investment-council",
+  "name": "gpt-quant-v22-autonomous-trading-director",
   "private": true,
-  "version": "21.0.0",
+  "version": "22.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

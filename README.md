@@ -1,14 +1,20 @@
-# GPT Quant V21 Multi-Agent Investment Council
+# GPT Quant V22 Autonomous Trading Director
 
-V21 adds an auditable investment committee:
+V22 creates one auditable daily top-level directive from the existing
+institutional stack:
 
-- Technical Analyst
-- Momentum Analyst
-- Signal Quality Analyst
-- Liquidity Analyst
-- Chief Risk Officer with veto power
-- CIO consensus synthesis
+- market state
+- V21 investment council
+- V19 risk manager
+- V18 fund manager
+- V20 institutional health
+- portfolio drawdown
 
-The engine records every opinion, vote, confidence, rationale, veto, consensus,
-dispersion, final decision and CIO memo. It may create PROPOSED PAPER orders,
-but approval and fill remain manual safety controls.
+Possible directives:
+- BUY
+- HOLD
+- REDUCE
+- EXIT
+- CASH
+
+V22 never approves, fills, or submits live broker orders.

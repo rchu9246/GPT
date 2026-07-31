@@ -1,4 +1,5 @@
 import { useState } from "react";
+import TradingDirectorV22 from "../pages/TradingDirectorV22";
 import MultiAgentCouncilV21 from "../pages/MultiAgentCouncilV21";
 import InstitutionalDashboardV20 from "../pages/InstitutionalDashboardV20";
 import HedgeFundV19 from "../pages/HedgeFundV19";
@@ -26,6 +27,7 @@ import StrategyLabV9 from "../pages/StrategyLabV9";
 import SystemOpsV9 from "../pages/SystemOpsV9";
 
 type Page =
+  | "director22"
   | "council21"
   | "institutional"
   | "hedgefund"
@@ -52,6 +54,7 @@ type Page =
   | "system";
 
 const nav: Array<[Page, string]> = [
+  ["director22", "交易總指揮"],
   ["council21", "V21 委員會"],
   ["institutional", "機構總控"],
   ["hedgefund", "避險基金"],
@@ -79,7 +82,7 @@ const nav: Array<[Page, string]> = [
 ];
 
 export default function App() {
-  const [page, setPage] = useState<Page>("council21");
+  const [page, setPage] = useState<Page>("director22");
   const [symbol, setSymbol] = useState<string | null>(null);
 
   const go = (next: Page) => {
@@ -96,6 +99,8 @@ export default function App() {
         onBack={() => setSymbol(null)}
       />
     );
+  } else if (page === "director22") {
+    content = <TradingDirectorV22 />;
   } else if (page === "council21") {
     content = <MultiAgentCouncilV21 />;
   } else if (page === "institutional") {
@@ -150,9 +155,9 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <div className="brand">GPT QUANT V21 MULTI-AGENT INVESTMENT COUNCIL</div>
+          <div className="brand">GPT QUANT V22 AUTONOMOUS TRADING DIRECTOR</div>
           <div className="subtitle">
-            Independent Agents → Consensus → Veto → CIO Decision → PAPER Execution
+            Market State → Council → Risk Gate → Director → PAPER Governance
           </div>
         </div>
         <nav>
@@ -169,7 +174,7 @@ export default function App() {
       </header>
       <main className="content">{content}</main>
       <footer>
-        GPT Quant V21 Multi-Agent Investment Council · Auditable PAPER decision platform
+        GPT Quant V22 Autonomous Trading Director · Governed PAPER decision platform
       </footer>
     </div>
   );
