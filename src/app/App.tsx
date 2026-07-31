@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Enterprise21Operational from "../pages/Enterprise21Operational";
 import Enterprise2Dashboard from "../pages/Enterprise2Dashboard";
 import TradingDirectorV22 from "../pages/TradingDirectorV22";
 import MultiAgentCouncilV21 from "../pages/MultiAgentCouncilV21";
@@ -28,6 +29,7 @@ import StrategyLabV9 from "../pages/StrategyLabV9";
 import SystemOpsV9 from "../pages/SystemOpsV9";
 
 type Page =
+  | "enterprise21"
   | "enterprise2"
   | "director22"
   | "council21"
@@ -56,6 +58,7 @@ type Page =
   | "system";
 
 const nav: Array<[Page, string]> = [
+  ["enterprise21", "Enterprise 2.1"],
   ["enterprise2", "Enterprise 2.0"],
   ["director22", "Legacy Director"],
   ["council21", "V21 委員會"],
@@ -85,7 +88,7 @@ const nav: Array<[Page, string]> = [
 ];
 
 export default function App() {
-  const [page, setPage] = useState<Page>("enterprise2");
+  const [page, setPage] = useState<Page>("enterprise21");
   const [symbol, setSymbol] = useState<string | null>(null);
 
   const go = (next: Page) => {
@@ -102,6 +105,8 @@ export default function App() {
         onBack={() => setSymbol(null)}
       />
     );
+  } else if (page === "enterprise21") {
+    content = <Enterprise21Operational />;
   } else if (page === "enterprise2") {
     content = <Enterprise2Dashboard />;
   } else if (page === "director22") {
@@ -160,9 +165,9 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <div className="brand">GPT QUANT ENTERPRISE 2.0 FOUNDATION</div>
+          <div className="brand">GPT QUANT ENTERPRISE 2.1 OPERATIONAL PLATFORM</div>
           <div className="subtitle">
-            Stable Core Model → Modular Engines → Unified Decisions → Audit Trail
+            Daily Operations → Central Risk → Executive Brief → Unified Governance
           </div>
         </div>
         <nav>
@@ -179,7 +184,7 @@ export default function App() {
       </header>
       <main className="content">{content}</main>
       <footer>
-        GPT Quant Enterprise 2.0 · Stable modular PAPER investment operating platform
+        GPT Quant Enterprise 2.1 · Operational PAPER investment management platform
       </footer>
     </div>
   );

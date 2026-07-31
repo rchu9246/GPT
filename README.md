@@ -1,16 +1,14 @@
-# GPT Quant Enterprise 2.0 Foundation
+# GPT Quant Enterprise 2.1 Operational Platform
 
-Enterprise 2.0 is a controlled migration away from version-suffixed tables.
+Enterprise 2.1 turns the Enterprise 2.0 foundation into a daily operating layer:
 
-This foundation release introduces:
-- stable core schema
-- modular engine SDK
-- one master workflow
-- unified decisions
-- unified positions and portfolio snapshots
-- unified reports and audit logs
-- system health monitoring
-- compatibility bridges for V13-V22
+- operational status
+- data and signal freshness
+- centralized order counts
+- portfolio status
+- centralized risk limits and events
+- CEO daily brief
+- operational daily report
+- one scheduled master workflow
 
-Existing production engines remain available during migration.
-No live broker orders are sent.
+The platform remains PAPER-only.

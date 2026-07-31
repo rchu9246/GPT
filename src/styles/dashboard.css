@@ -538,3 +538,34 @@ tbody tr.selected-row {
     flex-direction: column;
   }
 }
+
+
+/* Enterprise 2.1 */
+.enterprise21-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+}
+.enterprise21-status {
+  font-size: clamp(2.8rem, 7vw, 6rem);
+  font-weight: 800;
+}
+.enterprise21-score {
+  min-width: 200px;
+  text-align: center;
+}
+.enterprise21-score span,
+.enterprise21-score small {
+  display: block;
+  opacity: .75;
+}
+.enterprise21-score strong {
+  font-size: 4rem;
+}
+@media (max-width: 760px) {
+  .enterprise21-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
