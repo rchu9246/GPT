@@ -1,0 +1,30 @@
+name: V19 Hedge Fund Manager
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "25 6 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v19-hedge-fund-manager
+  cancel-in-progress: false
+
+jobs:
+  hedge-fund:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-autotrader-v13.txt
+      - name: Run V19 hedge fund allocator
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AUTOTRADER_ACCOUNT: paper-main
+        run: python automation/hedge_fund_manager_v19.py

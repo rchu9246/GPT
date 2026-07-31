@@ -1,7 +1,7 @@
 {
-  "name": "gpt-quant-v18-ai-fund-manager",
+  "name": "gpt-quant-v19-hedge-fund-edition",
   "private": true,
-  "version": "18.0.0",
+  "version": "19.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

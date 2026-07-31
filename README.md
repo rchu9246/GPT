@@ -1,16 +1,16 @@
-# GPT Quant V18 AI Fund Manager
+# GPT Quant V19 Hedge Fund Edition
 
-V18 adds a deterministic multi-agent investment committee on top of the
-existing explainable paper-trading and Portfolio OS stack.
+V19 adds institutional portfolio construction and risk analytics:
 
-Capabilities:
-- Trend, Momentum, Quality, Risk and Liquidity agent votes
-- committee score and conviction
-- dynamic position sizing
-- adaptive target cash allocation
-- explainable proposed PAPER orders
-- daily CIO report
-- investment memo dashboard
+- market regime classification
+- multi-strategy allocation
+- inverse-volatility risk parity
+- Kelly-fraction cap
+- 95% and 99% parametric VaR
+- expected shortfall
+- max drawdown
+- 20-day volatility and Sharpe
+- gross/net exposure recommendations
+- Portfolio Manager and Chief Risk Officer reports
 
-No external LLM is required for the trading decision. The engine uses existing
-Supabase quantitative data and remains PAPER-only.
+The platform remains PAPER-only.

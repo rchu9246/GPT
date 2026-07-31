@@ -1,4 +1,5 @@
 import { useState } from "react";
+import HedgeFundV19 from "../pages/HedgeFundV19";
 import AIFundManagerV18 from "../pages/AIFundManagerV18";
 import PortfolioOSV17 from "../pages/PortfolioOSV17";
 import TradingEngineV16 from "../pages/TradingEngineV16";
@@ -23,6 +24,7 @@ import StrategyLabV9 from "../pages/StrategyLabV9";
 import SystemOpsV9 from "../pages/SystemOpsV9";
 
 type Page =
+  | "hedgefund"
   | "fundmanager"
   | "portfolioos"
   | "engine"
@@ -46,6 +48,7 @@ type Page =
   | "system";
 
 const nav: Array<[Page, string]> = [
+  ["hedgefund", "避險基金"],
   ["fundmanager", "AI 基金經理"],
   ["portfolioos", "Portfolio OS"],
   ["engine", "交易引擎"],
@@ -70,7 +73,7 @@ const nav: Array<[Page, string]> = [
 ];
 
 export default function App() {
-  const [page, setPage] = useState<Page>("fundmanager");
+  const [page, setPage] = useState<Page>("hedgefund");
   const [symbol, setSymbol] = useState<string | null>(null);
 
   const go = (next: Page) => {
@@ -87,6 +90,8 @@ export default function App() {
         onBack={() => setSymbol(null)}
       />
     );
+  } else if (page === "hedgefund") {
+    content = <HedgeFundV19 />;
   } else if (page === "fundmanager") {
     content = <AIFundManagerV18 />;
   } else if (page === "portfolioos") {
@@ -135,9 +140,9 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <div className="brand">GPT QUANT V18 AI FUND MANAGER</div>
+          <div className="brand">GPT QUANT V19 HEDGE FUND EDITION</div>
           <div className="subtitle">
-            Multi-Agent Committee → Dynamic Allocation → Paper Execution → Portfolio OS
+            Regime → Risk Parity → VaR → Multi-Strategy Allocation → Portfolio OS
           </div>
         </div>
         <nav>
@@ -154,7 +159,7 @@ export default function App() {
       </header>
       <main className="content">{content}</main>
       <footer>
-        GPT Quant V18 AI Fund Manager · Deterministic multi-agent paper trading research platform
+        GPT Quant V19 Hedge Fund Edition · Multi-strategy PAPER portfolio and enterprise risk platform
       </footer>
     </div>
   );
