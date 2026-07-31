@@ -447,3 +447,16 @@ code { font-size: .78rem; word-break: break-all; }
   margin: 12px 0;
   font-size: clamp(1.25rem, 2vw, 2rem);
 }
+
+
+/* V20 Institutional Edition */
+.institutional-status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 18px;
+}
+@media (max-width: 760px) {
+  .institutional-status-grid {
+    grid-template-columns: 1fr;
+  }
+}

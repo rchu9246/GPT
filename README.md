@@ -1,16 +1,14 @@
-# GPT Quant V19 Hedge Fund Edition
+# GPT Quant V20 Institutional Edition
 
-V19 adds institutional portfolio construction and risk analytics:
+V20 consolidates the existing quantitative platform into one institutional
+operating dashboard and one master daily workflow.
 
-- market regime classification
-- multi-strategy allocation
-- inverse-volatility risk parity
-- Kelly-fraction cap
-- 95% and 99% parametric VaR
-- expected shortfall
-- max drawdown
-- 20-day volatility and Sharpe
-- gross/net exposure recommendations
-- Portfolio Manager and Chief Risk Officer reports
+New capabilities:
+- unified institutional dashboard
+- system health score
+- daily action items
+- one-click V16 → V17 → V18 → V19 → V20 cycle
+- transparent performance attribution
+- integrated data, signal, execution, portfolio, risk and strategy status
 
 The platform remains PAPER-only.

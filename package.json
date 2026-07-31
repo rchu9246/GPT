@@ -1,7 +1,7 @@
 {
-  "name": "gpt-quant-v19-hedge-fund-edition",
+  "name": "gpt-quant-v20-institutional-edition",
   "private": true,
-  "version": "19.0.0",
+  "version": "20.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

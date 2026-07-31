@@ -1,4 +1,5 @@
 import { useState } from "react";
+import InstitutionalDashboardV20 from "../pages/InstitutionalDashboardV20";
 import HedgeFundV19 from "../pages/HedgeFundV19";
 import AIFundManagerV18 from "../pages/AIFundManagerV18";
 import PortfolioOSV17 from "../pages/PortfolioOSV17";
@@ -24,6 +25,7 @@ import StrategyLabV9 from "../pages/StrategyLabV9";
 import SystemOpsV9 from "../pages/SystemOpsV9";
 
 type Page =
+  | "institutional"
   | "hedgefund"
   | "fundmanager"
   | "portfolioos"
@@ -48,6 +50,7 @@ type Page =
   | "system";
 
 const nav: Array<[Page, string]> = [
+  ["institutional", "機構總控"],
   ["hedgefund", "避險基金"],
   ["fundmanager", "AI 基金經理"],
   ["portfolioos", "Portfolio OS"],
@@ -73,7 +76,7 @@ const nav: Array<[Page, string]> = [
 ];
 
 export default function App() {
-  const [page, setPage] = useState<Page>("hedgefund");
+  const [page, setPage] = useState<Page>("institutional");
   const [symbol, setSymbol] = useState<string | null>(null);
 
   const go = (next: Page) => {
@@ -90,6 +93,8 @@ export default function App() {
         onBack={() => setSymbol(null)}
       />
     );
+  } else if (page === "institutional") {
+    content = <InstitutionalDashboardV20 />;
   } else if (page === "hedgefund") {
     content = <HedgeFundV19 />;
   } else if (page === "fundmanager") {
@@ -140,9 +145,9 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <div className="brand">GPT QUANT V19 HEDGE FUND EDITION</div>
+          <div className="brand">GPT QUANT V20 INSTITUTIONAL EDITION</div>
           <div className="subtitle">
-            Regime → Risk Parity → VaR → Multi-Strategy Allocation → Portfolio OS
+            Data → Signals → Execution → Portfolio → Risk → Attribution → CIO
           </div>
         </div>
         <nav>
@@ -159,7 +164,7 @@ export default function App() {
       </header>
       <main className="content">{content}</main>
       <footer>
-        GPT Quant V19 Hedge Fund Edition · Multi-strategy PAPER portfolio and enterprise risk platform
+        GPT Quant V20 Institutional Edition · Unified PAPER investment operating platform
       </footer>
     </div>
   );
