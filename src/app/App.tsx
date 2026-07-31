@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Enterprise2Dashboard from "../pages/Enterprise2Dashboard";
 import TradingDirectorV22 from "../pages/TradingDirectorV22";
 import MultiAgentCouncilV21 from "../pages/MultiAgentCouncilV21";
 import InstitutionalDashboardV20 from "../pages/InstitutionalDashboardV20";
@@ -27,6 +28,7 @@ import StrategyLabV9 from "../pages/StrategyLabV9";
 import SystemOpsV9 from "../pages/SystemOpsV9";
 
 type Page =
+  | "enterprise2"
   | "director22"
   | "council21"
   | "institutional"
@@ -54,7 +56,8 @@ type Page =
   | "system";
 
 const nav: Array<[Page, string]> = [
-  ["director22", "交易總指揮"],
+  ["enterprise2", "Enterprise 2.0"],
+  ["director22", "Legacy Director"],
   ["council21", "V21 委員會"],
   ["institutional", "機構總控"],
   ["hedgefund", "避險基金"],
@@ -82,7 +85,7 @@ const nav: Array<[Page, string]> = [
 ];
 
 export default function App() {
-  const [page, setPage] = useState<Page>("director22");
+  const [page, setPage] = useState<Page>("enterprise2");
   const [symbol, setSymbol] = useState<string | null>(null);
 
   const go = (next: Page) => {
@@ -99,6 +102,8 @@ export default function App() {
         onBack={() => setSymbol(null)}
       />
     );
+  } else if (page === "enterprise2") {
+    content = <Enterprise2Dashboard />;
   } else if (page === "director22") {
     content = <TradingDirectorV22 />;
   } else if (page === "council21") {
@@ -155,9 +160,9 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <div className="brand">GPT QUANT V22 AUTONOMOUS TRADING DIRECTOR</div>
+          <div className="brand">GPT QUANT ENTERPRISE 2.0 FOUNDATION</div>
           <div className="subtitle">
-            Market State → Council → Risk Gate → Director → PAPER Governance
+            Stable Core Model → Modular Engines → Unified Decisions → Audit Trail
           </div>
         </div>
         <nav>
@@ -174,7 +179,7 @@ export default function App() {
       </header>
       <main className="content">{content}</main>
       <footer>
-        GPT Quant V22 Autonomous Trading Director · Governed PAPER decision platform
+        GPT Quant Enterprise 2.0 · Stable modular PAPER investment operating platform
       </footer>
     </div>
   );

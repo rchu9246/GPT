@@ -1,20 +1,16 @@
-# GPT Quant V22 Autonomous Trading Director
+# GPT Quant Enterprise 2.0 Foundation
 
-V22 creates one auditable daily top-level directive from the existing
-institutional stack:
+Enterprise 2.0 is a controlled migration away from version-suffixed tables.
 
-- market state
-- V21 investment council
-- V19 risk manager
-- V18 fund manager
-- V20 institutional health
-- portfolio drawdown
+This foundation release introduces:
+- stable core schema
+- modular engine SDK
+- one master workflow
+- unified decisions
+- unified positions and portfolio snapshots
+- unified reports and audit logs
+- system health monitoring
+- compatibility bridges for V13-V22
 
-Possible directives:
-- BUY
-- HOLD
-- REDUCE
-- EXIT
-- CASH
-
-V22 never approves, fills, or submits live broker orders.
+Existing production engines remain available during migration.
+No live broker orders are sent.

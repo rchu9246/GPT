@@ -1,7 +1,7 @@
 {
-  "name": "gpt-quant-v22-autonomous-trading-director",
+  "name": "gpt-quant-enterprise-2-foundation",
   "private": true,
-  "version": "22.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

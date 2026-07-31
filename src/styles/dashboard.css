@@ -506,3 +506,35 @@ tbody tr.selected-row {
     flex-direction: column;
   }
 }
+
+
+/* Enterprise 2.0 */
+.enterprise2-command {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+}
+.enterprise2-action {
+  font-size: clamp(2.8rem, 7vw, 6rem);
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+.enterprise2-health {
+  min-width: 200px;
+  text-align: center;
+}
+.enterprise2-health span,
+.enterprise2-health small {
+  display: block;
+  opacity: .75;
+}
+.enterprise2-health strong {
+  font-size: 4rem;
+}
+@media (max-width: 760px) {
+  .enterprise2-command {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
