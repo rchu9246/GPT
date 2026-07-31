@@ -1,15 +1,16 @@
-# GPT Quant V17 Enterprise Portfolio OS
+# GPT Quant V18 AI Fund Manager
 
-V17 extends the explainable order engine into a complete portfolio lifecycle:
+V18 adds a deterministic multi-agent investment committee on top of the
+existing explainable paper-trading and Portfolio OS stack.
 
-- mark-to-market
-- stop loss
-- take profit
-- trailing stop
-- weak-score exit
-- maximum holding period exit
-- explainable portfolio decisions
-- daily NAV updates
-- proposed paper sell orders
+Capabilities:
+- Trend, Momentum, Quality, Risk and Liquidity agent votes
+- committee score and conviction
+- dynamic position sizing
+- adaptive target cash allocation
+- explainable proposed PAPER orders
+- daily CIO report
+- investment memo dashboard
 
-The system remains PAPER-only and never sends broker orders.
+No external LLM is required for the trading decision. The engine uses existing
+Supabase quantitative data and remains PAPER-only.

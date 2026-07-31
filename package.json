@@ -1,7 +1,7 @@
 {
-  "name": "gpt-quant-v17-enterprise-portfolio-os",
+  "name": "gpt-quant-v18-ai-fund-manager",
   "private": true,
-  "version": "17.0.0",
+  "version": "18.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
