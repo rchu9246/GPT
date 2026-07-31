@@ -1,17 +1,10 @@
-# GPT Quant V12 Enterprise AI Agents
+# GPT Quant V13 Enterprise AutoTrader
 
-Explainable multi-agent quantitative research for Taiwan equities.
+Safe automatic-investment architecture for Taiwan equities.
 
-Modules:
-- Multi-Agent Decision Council
-- Explainable AI Assistant
-- Market Heatmap
-- AI Watchlist
-- Global Risk Proxies
-- Research & Sentiment
-- AI Screener
-- Portfolio OS
-- Advanced Risk Analytics
-- Multi-Strategy Comparison
-- Strategy Lab
-- System Pipeline
+- Paper Trading by default
+- Human approval queue
+- Risk gates and Kill Switch
+- Paper positions and trade ledger
+- Optional server-side scheduled paper-order generator
+- Live broker gateway intentionally locked until securely configured

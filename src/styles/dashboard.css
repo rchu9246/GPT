@@ -383,3 +383,20 @@ tr.clickable:hover { background: rgba(125, 211, 252, .06); }
   .heatmap-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .heatmap-cell { min-height: 120px; }
 }
+
+/* GPT Quant V13 AutoTrader */
+.trading-mode { display:inline-flex; padding:8px 12px; border:1px solid var(--line); border-radius:999px; font-weight:800; }
+.mode-paper { color:#65e6b4; background:rgba(101,230,180,.08); }
+.mode-approval { color:#f7cc63; background:rgba(247,204,99,.08); }
+.mode-live_locked { color:#ff7285; background:rgba(255,114,133,.08); }
+.mode-switcher,.trade-actions,.inline-actions { display:flex; flex-wrap:wrap; gap:10px; }
+.kill-switch { width:100%; margin-top:18px; min-height:52px; border:1px solid rgba(255,114,133,.55); border-radius:12px; background:rgba(255,114,133,.08); color:#ff9aaa; font-weight:900; cursor:pointer; }
+.kill-switch.armed { background:rgba(255,114,133,.25); color:white; }
+.primary-action,.trade-actions button,.inline-actions button { border:1px solid var(--line); border-radius:10px; padding:10px 14px; background:rgba(125,211,252,.1); color:var(--text); font-weight:700; cursor:pointer; }
+.primary-action:disabled { opacity:.45; cursor:not-allowed; }
+.status-pass { color:#65e6b4; }.status-block { color:#ff7285; }
+.order-status { display:inline-flex; border-radius:999px; padding:4px 8px; font-size:.75rem; font-weight:800; }
+.status-proposed { color:#f7cc63; background:rgba(247,204,99,.1); }
+.status-approved { color:#7dd3fc; background:rgba(125,211,252,.1); }
+.status-filled { color:#65e6b4; background:rgba(101,230,180,.1); }
+.status-rejected,.status-cancelled { color:#ff7285; background:rgba(255,114,133,.1); }
