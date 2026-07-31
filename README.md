@@ -1,13 +1,12 @@
-# GPT Quant V8.1 Professional
+# GPT Quant V9 Enterprise
 
-Clean GitHub Pages project for the Taiwan stock quantitative dashboard.
+台股企業級量化決策平台，整合 Supabase、FinMind、GitHub Actions 與 GitHub Pages。
 
-## Highlights
-
-- Supabase-compatible `total_score` signal mapping
-- Per-symbol signal deduplication
-- AI-style ratings
-- Technical snapshot: MA20, MA60, RSI14, volatility
-- Portfolio allocation and backtest dashboard
-- GitHub Pages deployment
-- ES2020 compatible; no `Array.at()` usage
+## V9
+- Enterprise Command Center
+- 多因子選股
+- 每日決策簡報
+- 投資組合最佳化
+- 壓力測試與風險中心
+- 策略實驗室
+- 個股情報終端

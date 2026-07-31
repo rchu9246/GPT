@@ -1,46 +1,26 @@
 import { useState } from "react";
-import DashboardV8 from "../pages/DashboardV8";
-import ScreenerV8 from "../pages/ScreenerV8";
-import DailyReportV8 from "../pages/DailyReportV8";
-import PortfolioV8 from "../pages/PortfolioV8";
-import BacktestV8 from "../pages/BacktestV8";
-import StockDetailV8 from "../pages/StockDetailV8";
-import SimpleV8 from "../pages/SimpleV8";
+import CommandCenterV9 from "../pages/CommandCenterV9";
+import DailyBriefV9 from "../pages/DailyBriefV9";
+import PortfolioV9 from "../pages/PortfolioV9";
+import RiskCenterV9 from "../pages/RiskCenterV9";
+import ScreenerV9 from "../pages/ScreenerV9";
+import StockIntelligenceV9 from "../pages/StockIntelligenceV9";
+import StrategyLabV9 from "../pages/StrategyLabV9";
+import SystemOpsV9 from "../pages/SystemOpsV9";
 
-type Page = "dashboard" | "screener" | "report" | "portfolio" | "backtest" | "ranking" | "pipeline" | "walkforward" | "paper";
-
-const nav: Array<[Page, string]> = [
-  ["dashboard", "總覽"], ["screener", "選股"], ["report", "每日報告"],
-  ["portfolio", "投資組合"], ["backtest", "回測"], ["ranking", "策略排行"],
-  ["pipeline", "資料管線"], ["walkforward", "Walk-forward"], ["paper", "紙上交易"],
-];
-
+type Page = "command" | "screener" | "brief" | "portfolio" | "risk" | "strategy" | "system";
+const nav: Array<[Page, string]> = [["command","指揮中心"],["screener","選股"],["brief","每日簡報"],["portfolio","投資組合"],["risk","風險中心"],["strategy","策略實驗室"],["system","系統管線"]];
 export default function App() {
-  const [page, setPage] = useState<Page>("dashboard");
-  const [symbol, setSymbol] = useState<string | null>(null);
-
+  const [page, setPage] = useState<Page>("command"); const [symbol, setSymbol] = useState<string | null>(null);
   const go = (next: Page) => { setPage(next); setSymbol(null); };
-
   let content;
-  if (symbol) content = <StockDetailV8 symbol={symbol} onBack={() => setSymbol(null)} />;
-  else if (page === "dashboard") content = <DashboardV8 onOpenStock={setSymbol} />;
-  else if (page === "screener") content = <ScreenerV8 onOpenStock={setSymbol} />;
-  else if (page === "report") content = <DailyReportV8 />;
-  else if (page === "portfolio") content = <PortfolioV8 />;
-  else if (page === "backtest") content = <BacktestV8 />;
-  else if (page === "ranking") content = <SimpleV8 title="策略排行" subtitle="比較多策略績效與穩定度。" items={["總報酬排行", "Sharpe 排行", "最大回撤排行"]} />;
-  else if (page === "pipeline") content = <SimpleV8 title="資料管線" subtitle="追蹤 FinMind、Supabase 與訊號產製狀態。" items={["行情下載", "特徵計算", "訊號生成", "報告發布"]} />;
-  else if (page === "walkforward") content = <SimpleV8 title="Walk-forward" subtitle="檢驗樣本外績效與參數穩定性。" items={["訓練視窗", "測試視窗", "參數漂移", "樣本外績效"]} />;
-  else content = <SimpleV8 title="紙上交易" subtitle="用模擬部位驗證策略執行效果。" items={["模擬下單", "持倉管理", "損益追蹤", "風險限制"]} />;
-
-  return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div><div className="brand">GPT QUANT V8 PROFESSIONAL</div><div className="subtitle">AI Ratings → Technicals → Portfolio → Backtest → Decision Intelligence</div></div>
-        <nav>{nav.map(([key, label]) => <button key={key} className={`nav ${!symbol && page === key ? "active" : ""}`} onClick={() => go(key)}>{label}</button>)}</nav>
-      </header>
-      <main className="content">{content}</main>
-      <footer>GPT Quant V8 Professional · 模型與歷史績效僅供研究，不構成投資建議</footer>
-    </div>
-  );
+  if (symbol) content = <StockIntelligenceV9 symbol={symbol} onBack={() => setSymbol(null)} />;
+  else if (page === "command") content = <CommandCenterV9 onOpenStock={setSymbol} />;
+  else if (page === "screener") content = <ScreenerV9 onOpenStock={setSymbol} />;
+  else if (page === "brief") content = <DailyBriefV9 />;
+  else if (page === "portfolio") content = <PortfolioV9 />;
+  else if (page === "risk") content = <RiskCenterV9 />;
+  else if (page === "strategy") content = <StrategyLabV9 />;
+  else content = <SystemOpsV9 />;
+  return <div className="app-shell"><header className="topbar"><div><div className="brand">GPT QUANT V9 ENTERPRISE</div><div className="subtitle">Market Intelligence → Portfolio OS → Risk Control → Strategy Research</div></div><nav>{nav.map(([key,label]) => <button key={key} className={`nav ${!symbol && page === key ? "active" : ""}`} onClick={() => go(key)}>{label}</button>)}</nav></header><main className="content">{content}</main><footer>GPT Quant V9 Enterprise · 模型與歷史績效僅供研究，不構成投資建議</footer></div>;
 }
