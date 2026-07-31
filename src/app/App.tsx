@@ -1,36 +1,110 @@
 import { useState } from "react";
 import CommandCenterV9 from "../pages/CommandCenterV9";
-import DailyBriefV9 from "../pages/DailyBriefV9";
-import PortfolioV9 from "../pages/PortfolioV9";
-import RiskCenterV9 from "../pages/RiskCenterV9";
 import ScreenerV9 from "../pages/ScreenerV9";
 import StockIntelligenceV9 from "../pages/StockIntelligenceV9";
-import StrategyLabV9 from "../pages/StrategyLabV9";
-import SystemOpsV9 from "../pages/SystemOpsV9";
-import WatchlistV91 from "../pages/WatchlistV91";
-import CompareV91 from "../pages/CompareV91";
-import AlertsV91 from "../pages/AlertsV91";
-import AIAssistantV10 from "../pages/AIAssistantV10";
-import SectorRotationV10 from "../pages/SectorRotationV10";
+import AIAdvisorV11 from "../pages/AIAdvisorV11";
+import GlobalMarketsV11 from "../pages/GlobalMarketsV11";
+import NewsSentimentV11 from "../pages/NewsSentimentV11";
+import ResearchCenterV11 from "../pages/ResearchCenterV11";
+import PortfolioOSV11 from "../pages/PortfolioOSV11";
 import MultiStrategyV10 from "../pages/MultiStrategyV10";
-import ExecutionPlanV10 from "../pages/ExecutionPlanV10";
+import StrategyLabV9 from "../pages/StrategyLabV9";
+import RiskCenterV9 from "../pages/RiskCenterV9";
+import SystemOpsV9 from "../pages/SystemOpsV9";
 
-type Page = "command" | "assistant" | "screener" | "sectors" | "watchlist" | "compare" | "alerts" | "brief" | "execution" | "portfolio" | "risk" | "multistrategy" | "strategy" | "system";
-const nav: Array<[Page,string]> = [["command","指揮中心"],["assistant","AI 助理"],["screener","選股"],["sectors","產業輪動"],["watchlist","自選"],["compare","比較"],["alerts","警示"],["brief","每日簡報"],["execution","執行計畫"],["portfolio","投資組合"],["risk","風險中心"],["multistrategy","多策略"],["strategy","策略實驗室"],["system","系統管線"]];
-export default function App(){ const [page,setPage]=useState<Page>("command"); const [symbol,setSymbol]=useState<string|null>(null); const go=(next:Page)=>{setPage(next);setSymbol(null);}; let content;
- if(symbol) content=<StockIntelligenceV9 symbol={symbol} onBack={()=>setSymbol(null)}/>;
- else if(page==="command") content=<CommandCenterV9 onOpenStock={setSymbol}/>;
- else if(page==="assistant") content=<AIAssistantV10/>;
- else if(page==="screener") content=<ScreenerV9 onOpenStock={setSymbol}/>;
- else if(page==="sectors") content=<SectorRotationV10/>;
- else if(page==="watchlist") content=<WatchlistV91 onOpenStock={setSymbol}/>;
- else if(page==="compare") content=<CompareV91 onOpenStock={setSymbol}/>;
- else if(page==="alerts") content=<AlertsV91 onOpenStock={setSymbol}/>;
- else if(page==="brief") content=<DailyBriefV9/>;
- else if(page==="execution") content=<ExecutionPlanV10/>;
- else if(page==="portfolio") content=<PortfolioV9/>;
- else if(page==="risk") content=<RiskCenterV9/>;
- else if(page==="multistrategy") content=<MultiStrategyV10/>;
- else if(page==="strategy") content=<StrategyLabV9/>;
- else content=<SystemOpsV9/>;
- return <div className="app-shell"><header className="topbar"><div><div className="brand">GPT QUANT V10 ENTERPRISE</div><div className="subtitle">AI Copilot → Sector Rotation → Execution OS → Portfolio Risk → Multi-Strategy Research</div></div><nav>{nav.map(([key,label])=><button key={key} className={`nav ${!symbol&&page===key?"active":""}`} onClick={()=>go(key)}>{label}</button>)}</nav></header><main className="content">{content}</main><footer>GPT Quant V10 Enterprise · 模型與歷史績效僅供研究，不構成投資建議</footer></div>; }
+type Page =
+  | "command"
+  | "assistant"
+  | "markets"
+  | "research"
+  | "sentiment"
+  | "screener"
+  | "portfolio"
+  | "risk"
+  | "multistrategy"
+  | "strategy"
+  | "system";
+
+const nav: Array<[Page, string]> = [
+  ["command", "AI 指揮中心"],
+  ["assistant", "GPT 助理"],
+  ["markets", "全球市場"],
+  ["research", "研究中心"],
+  ["sentiment", "事件情緒"],
+  ["screener", "AI 選股"],
+  ["portfolio", "Portfolio OS"],
+  ["risk", "風險中心"],
+  ["multistrategy", "多策略"],
+  ["strategy", "策略實驗室"],
+  ["system", "系統管線"],
+];
+
+export default function App() {
+  const [page, setPage] = useState<Page>("command");
+  const [symbol, setSymbol] = useState<string | null>(null);
+
+  const go = (next: Page) => {
+    setPage(next);
+    setSymbol(null);
+  };
+
+  let content;
+  if (symbol) {
+    content = (
+      <StockIntelligenceV9
+        symbol={symbol}
+        onBack={() => setSymbol(null)}
+      />
+    );
+  } else if (page === "command") {
+    content = <CommandCenterV9 onOpenStock={setSymbol} />;
+  } else if (page === "assistant") {
+    content = <AIAdvisorV11 onOpenStock={setSymbol} />;
+  } else if (page === "markets") {
+    content = <GlobalMarketsV11 />;
+  } else if (page === "research") {
+    content = <ResearchCenterV11 onOpenStock={setSymbol} />;
+  } else if (page === "sentiment") {
+    content = <NewsSentimentV11 onOpenStock={setSymbol} />;
+  } else if (page === "screener") {
+    content = <ScreenerV9 onOpenStock={setSymbol} />;
+  } else if (page === "portfolio") {
+    content = <PortfolioOSV11 />;
+  } else if (page === "risk") {
+    content = <RiskCenterV9 />;
+  } else if (page === "multistrategy") {
+    content = <MultiStrategyV10 />;
+  } else if (page === "strategy") {
+    content = <StrategyLabV9 />;
+  } else {
+    content = <SystemOpsV9 />;
+  }
+
+  return (
+    <div className="app-shell">
+      <header className="topbar">
+        <div>
+          <div className="brand">GPT QUANT V11 ENTERPRISE AI</div>
+          <div className="subtitle">
+            Explainable AI → Global Risk → Research → Portfolio OS → Strategy Intelligence
+          </div>
+        </div>
+        <nav>
+          {nav.map(([key, label]) => (
+            <button
+              key={key}
+              className={`nav ${!symbol && page === key ? "active" : ""}`}
+              onClick={() => go(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      </header>
+      <main className="content">{content}</main>
+      <footer>
+        GPT Quant V11 Enterprise AI · 模型、代理指標與歷史績效僅供研究，不構成投資建議
+      </footer>
+    </div>
+  );
+}

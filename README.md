@@ -1,7 +1,18 @@
-# GPT Quant V10 Enterprise
+# GPT Quant V11 Enterprise AI
 
-Supabase 相容的台股量化決策平台。
+An explainable AI quantitative research platform for Taiwan equities.
 
-V10 新增：AI 投資助理、產業輪動、多策略比較、交易執行計畫。
+Core modules:
+- AI Command Center
+- Explainable GPT-style Research Assistant
+- Global Risk Proxy Console
+- Event & Sentiment Intelligence
+- AI Research Center
+- AI Screener
+- Portfolio OS
+- Risk Center
+- Multi-Strategy Comparison
+- Strategy Lab
+- System Pipeline
 
-部署：刪除舊 `src` 後，將本專案完整內容覆蓋到 GitHub Repository，Commit 並 Push。
+The browser application does not contain private AI or market-data API keys.
