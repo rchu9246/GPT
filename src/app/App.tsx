@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Enterprise30Status from "../pages/Enterprise30Status";
 import Enterprise30Stable from "../pages/Enterprise30Stable";
 import Enterprise30Release from "../pages/Enterprise30Release";
 import Enterprise30Dashboard from "../pages/Enterprise30Dashboard";
@@ -32,6 +33,7 @@ import StrategyLabV9 from "../pages/StrategyLabV9";
 import SystemOpsV9 from "../pages/SystemOpsV9";
 
 type Page =
+  | "status30"
   | "stable30"
   | "release30"
   | "enterprise30"
@@ -64,6 +66,7 @@ type Page =
   | "system";
 
 const nav: Array<[Page, string]> = [
+  ["status30", "3.0 Status"],
   ["stable30", "3.0 Stable"],
   ["release30", "3.0 Command"],
   ["enterprise30", "3.0 Research"],
@@ -114,6 +117,8 @@ export default function App() {
         onBack={() => setSymbol(null)}
       />
     );
+  } else if (page === "status30") {
+    content = <Enterprise30Status />;
   } else if (page === "stable30") {
     content = <Enterprise30Stable />;
   } else if (page === "release30") {
@@ -180,7 +185,7 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <div className="brand">GPT QUANT ENTERPRISE 3.0 STABLE</div>
+          <div className="brand">GPT QUANT ENTERPRISE 3.0.3 STABLE</div>
           <div className="subtitle">
             Schema Gate → Stable Pipeline → Data Quality → Governance → PAPER Operations
           </div>
