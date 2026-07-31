@@ -254,3 +254,49 @@ export function buildDecisionAlerts(signals: SignalRow[]): DecisionAlert[] {
 export function compareScore(a: SignalRow, b: SignalRow): number {
   return (a.score - a.risk_score * 0.35 + a.confidence * 0.2) - (b.score - b.risk_score * 0.35 + b.confidence * 0.2);
 }
+
+
+export function sectorRotation(signals: SignalRow[]): import("../types/v9").SectorSnapshot[] {
+  const groups = new Map<string, SignalRow[]>();
+  for (const row of signals) {
+    const industry = row.industry?.trim() || "未分類";
+    const current = groups.get(industry) ?? [];
+    current.push(row);
+    groups.set(industry, current);
+  }
+  return Array.from(groups.entries()).map(([industry, rows]) => ({
+    industry,
+    count: rows.length,
+    averageScore: rows.reduce((sum, row) => sum + row.score, 0) / rows.length,
+    averageRisk: rows.reduce((sum, row) => sum + row.risk_score, 0) / rows.length,
+    bullishRatio: rows.filter((row) => row.rating === "STRONG_BUY" || row.rating === "BUY").length / rows.length,
+  })).sort((a, b) => (b.averageScore - b.averageRisk * 0.25) - (a.averageScore - a.averageRisk * 0.25));
+}
+
+export function strategyScorecards(runs: BacktestRun[]): import("../types/v9").StrategyScorecard[] {
+  return runs.map((run) => {
+    const totalReturn = Number(run.total_return ?? 0);
+    const drawdown = Math.abs(Number(run.max_drawdown ?? 0));
+    const sharpe = Number(run.sharpe_ratio ?? 0);
+    const winRate = Number(run.win_rate ?? 0);
+    const compositeScore = clamp(50 + totalReturn * 35 + sharpe * 12 + winRate * 15 - drawdown * 30);
+    const stabilityLabel = compositeScore >= 70 ? "穩健" : compositeScore >= 50 ? "中性" : "待改善";
+    return { ...run, compositeScore, stabilityLabel };
+  }).sort((a, b) => b.compositeScore - a.compositeScore);
+}
+
+export function buildAssistantInsights(signals: SignalRow[]): import("../types/v9").AssistantInsight[] {
+  const market = marketIntelligence(signals);
+  const sectors = sectorRotation(signals);
+  const top = signals[0];
+  const insights: import("../types/v9").AssistantInsight[] = [
+    {
+      title: "市場判讀",
+      message: market.regime === "RISK_ON" ? "風險偏好回升，可提高高分低風險標的的研究優先級。" : market.regime === "NEUTRAL" ? "市場處於中性盤整，應採選股不選市並控制總曝險。" : "市場風險偏高，建議提高現金與停損紀律。",
+      tone: market.regime === "RISK_ON" ? "POSITIVE" : market.regime === "NEUTRAL" ? "NEUTRAL" : "CAUTION",
+    },
+  ];
+  if (top) insights.push({ title: "首選標的", message: `${top.symbol} ${top.name ?? ""} 目前 Score ${top.score.toFixed(1)}、風險 ${top.risk_score.toFixed(1)}，為去重後優先觀察標的。`, tone: top.risk_score < 50 ? "POSITIVE" : "NEUTRAL" });
+  if (sectors[0]) insights.push({ title: "產業輪動", message: `${sectors[0].industry} 目前產業綜合排名領先，平均 Score ${sectors[0].averageScore.toFixed(1)}。`, tone: "NEUTRAL" });
+  return insights;
+}

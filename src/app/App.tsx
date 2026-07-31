@@ -10,15 +10,27 @@ import SystemOpsV9 from "../pages/SystemOpsV9";
 import WatchlistV91 from "../pages/WatchlistV91";
 import CompareV91 from "../pages/CompareV91";
 import AlertsV91 from "../pages/AlertsV91";
+import AIAssistantV10 from "../pages/AIAssistantV10";
+import SectorRotationV10 from "../pages/SectorRotationV10";
+import MultiStrategyV10 from "../pages/MultiStrategyV10";
+import ExecutionPlanV10 from "../pages/ExecutionPlanV10";
 
-type Page = "command" | "screener" | "watchlist" | "compare" | "alerts" | "brief" | "portfolio" | "risk" | "strategy" | "system";
-const nav: Array<[Page,string]> = [["command","指揮中心"],["screener","選股"],["watchlist","自選"],["compare","比較"],["alerts","警示"],["brief","每日簡報"],["portfolio","投資組合"],["risk","風險中心"],["strategy","策略實驗室"],["system","系統管線"]];
+type Page = "command" | "assistant" | "screener" | "sectors" | "watchlist" | "compare" | "alerts" | "brief" | "execution" | "portfolio" | "risk" | "multistrategy" | "strategy" | "system";
+const nav: Array<[Page,string]> = [["command","指揮中心"],["assistant","AI 助理"],["screener","選股"],["sectors","產業輪動"],["watchlist","自選"],["compare","比較"],["alerts","警示"],["brief","每日簡報"],["execution","執行計畫"],["portfolio","投資組合"],["risk","風險中心"],["multistrategy","多策略"],["strategy","策略實驗室"],["system","系統管線"]];
 export default function App(){ const [page,setPage]=useState<Page>("command"); const [symbol,setSymbol]=useState<string|null>(null); const go=(next:Page)=>{setPage(next);setSymbol(null);}; let content;
  if(symbol) content=<StockIntelligenceV9 symbol={symbol} onBack={()=>setSymbol(null)}/>;
  else if(page==="command") content=<CommandCenterV9 onOpenStock={setSymbol}/>;
+ else if(page==="assistant") content=<AIAssistantV10/>;
  else if(page==="screener") content=<ScreenerV9 onOpenStock={setSymbol}/>;
+ else if(page==="sectors") content=<SectorRotationV10/>;
  else if(page==="watchlist") content=<WatchlistV91 onOpenStock={setSymbol}/>;
  else if(page==="compare") content=<CompareV91 onOpenStock={setSymbol}/>;
  else if(page==="alerts") content=<AlertsV91 onOpenStock={setSymbol}/>;
- else if(page==="brief") content=<DailyBriefV9/>; else if(page==="portfolio") content=<PortfolioV9/>; else if(page==="risk") content=<RiskCenterV9/>; else if(page==="strategy") content=<StrategyLabV9/>; else content=<SystemOpsV9/>;
- return <div className="app-shell"><header className="topbar"><div><div className="brand">GPT QUANT V9.1 ENTERPRISE PLUS</div><div className="subtitle">Market Intelligence → Watchlist → Alerts → Portfolio OS → Strategy Research</div></div><nav>{nav.map(([key,label])=><button key={key} className={`nav ${!symbol&&page===key?"active":""}`} onClick={()=>go(key)}>{label}</button>)}</nav></header><main className="content">{content}</main><footer>GPT Quant V9.1 Enterprise Plus · 模型與歷史績效僅供研究，不構成投資建議</footer></div>; }
+ else if(page==="brief") content=<DailyBriefV9/>;
+ else if(page==="execution") content=<ExecutionPlanV10/>;
+ else if(page==="portfolio") content=<PortfolioV9/>;
+ else if(page==="risk") content=<RiskCenterV9/>;
+ else if(page==="multistrategy") content=<MultiStrategyV10/>;
+ else if(page==="strategy") content=<StrategyLabV9/>;
+ else content=<SystemOpsV9/>;
+ return <div className="app-shell"><header className="topbar"><div><div className="brand">GPT QUANT V10 ENTERPRISE</div><div className="subtitle">AI Copilot → Sector Rotation → Execution OS → Portfolio Risk → Multi-Strategy Research</div></div><nav>{nav.map(([key,label])=><button key={key} className={`nav ${!symbol&&page===key?"active":""}`} onClick={()=>go(key)}>{label}</button>)}</nav></header><main className="content">{content}</main><footer>GPT Quant V10 Enterprise · 模型與歷史績效僅供研究，不構成投資建議</footer></div>; }

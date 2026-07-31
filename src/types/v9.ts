@@ -79,3 +79,23 @@ export type DecisionAlert = {
   message: string;
   severity: AlertSeverity;
 };
+
+
+export type SectorSnapshot = {
+  industry: string;
+  count: number;
+  averageScore: number;
+  averageRisk: number;
+  bullishRatio: number;
+};
+
+export type StrategyScorecard = BacktestRun & {
+  compositeScore: number;
+  stabilityLabel: string;
+};
+
+export type AssistantInsight = {
+  title: string;
+  message: string;
+  tone: "POSITIVE" | "NEUTRAL" | "CAUTION";
+};
