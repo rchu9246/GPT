@@ -1,209 +1,50 @@
 import { supabase } from "./supabase";
 import type { BacktestRun, PriceRow, SignalRow } from "../types/v7";
 
-type StockRelation =
-  | { symbol?: string | null; name?: string | null; industry?: string | null }
-  | Array<{ symbol?: string | null; name?: string | null; industry?: string | null }>
-  | null;
-
-type DatabaseSignalRow = {
-  id?: number;
-  stock_id?: number | string | null;
-  trade_date: string;
-  strategy_version?: string | null;
-  total_score?: number | string | null;
-  score?: number | string | null;
-  trend_score?: number | string | null;
-  momentum_score?: number | string | null;
-  volume_score?: number | string | null;
-  risk_score?: number | string | null;
-  signal?: string | null;
-  confidence?: number | string | null;
-  stocks?: StockRelation;
-};
-
-type DatabaseStockRow = {
-  id: number | string;
-  symbol?: string | null;
-  name?: string | null;
-  industry?: string | null;
-};
-
-function firstStock(relation: StockRelation | undefined) {
-  return Array.isArray(relation) ? relation[0] ?? null : relation ?? null;
-}
-
-function numeric(value: unknown, fallback = 0): number {
-  const result = Number(value);
-  return Number.isFinite(result) ? result : fallback;
-}
-
-function clamp(value: number, min = 0, max = 100): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-function stockKey(value: unknown): string {
-  return value == null ? "" : String(value);
-}
-
-function mapSignal(
-  row: DatabaseSignalRow,
-  stocksById: Map<string, DatabaseStockRow>,
-): SignalRow {
-  const stock =
-    stocksById.get(stockKey(row.stock_id)) ?? firstStock(row.stocks);
-
-  const totalScore = numeric(row.total_score ?? row.score);
-  const trendScore = numeric(row.trend_score);
-  const momentumScore = numeric(row.momentum_score);
-  const volumeScore = numeric(row.volume_score);
-  const riskScore = numeric(row.risk_score);
-  const confidence = numeric(row.confidence);
-
-  const derivedValueScore = clamp(
-    totalScore * 0.45 +
-      trendScore * 0.2 +
-      momentumScore * 0.2 +
-      volumeScore * 0.15,
-  );
-
-  return {
-    symbol: stock?.symbol?.trim() || stockKey(row.stock_id),
-    name: stock?.name?.trim() || null,
-    trade_date: row.trade_date,
-    strategy_version: row.strategy_version ?? "UNKNOWN",
-    score: totalScore,
-    trend_score: trendScore,
-    momentum_score: momentumScore,
-    value_score: derivedValueScore,
-    risk_score: riskScore,
-    confidence,
-    signal: row.signal ?? null,
-  };
-}
-
 export async function loadLatestSignals(): Promise<SignalRow[]> {
   if (!supabase) return [];
-
-  const [signalResult, stockResult] = await Promise.all([
-    supabase
-      .from("signals")
-      .select(
-        "id,stock_id,trade_date,strategy_version,total_score,trend_score,momentum_score,volume_score,risk_score,signal,confidence",
-      )
-      .order("trade_date", { ascending: false })
-      .order("total_score", { ascending: false })
-      .limit(200),
-    supabase
-      .from("stocks")
-      .select("id,symbol,name,industry")
-      .limit(5000),
-  ]);
-
-  if (signalResult.error) throw signalResult.error;
-  if (stockResult.error) throw stockResult.error;
-
-  const signalRows =
-    (signalResult.data ?? []) as unknown as DatabaseSignalRow[];
-  const stockRows =
-    (stockResult.data ?? []) as unknown as DatabaseStockRow[];
-
-  const stocksById = new Map<string, DatabaseStockRow>();
-  for (const stock of stockRows) {
-    stocksById.set(stockKey(stock.id), stock);
-  }
-
-  const latestDate = signalRows[0]?.trade_date;
-
-  return signalRows
-    .filter((row) => !latestDate || row.trade_date === latestDate)
-    .map((row) => mapSignal(row, stocksById))
-    .sort((a, b) => numeric(b.score) - numeric(a.score));
+  const { data, error } = await supabase
+    .from("signals")
+    .select("*")
+    .order("trade_date", { ascending: false })
+    .order("score", { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  const rows = (data ?? []) as SignalRow[];
+  const latest = rows[0]?.trade_date;
+  return latest ? rows.filter((row) => row.trade_date === latest) : rows;
 }
 
 export async function loadPriceHistory(symbol: string): Promise<PriceRow[]> {
   if (!supabase) return [];
-
-  const { data: stock, error: stockError } = await supabase
-    .from("stocks")
-    .select("id,symbol")
-    .eq("symbol", symbol)
-    .limit(1)
-    .maybeSingle();
-
-  if (stockError) throw stockError;
-  if (!stock?.id) return [];
-
   const { data, error } = await supabase
     .from("daily_prices")
-    .select("stock_id,trade_date,open,high,low,close,volume")
-    .eq("stock_id", stock.id)
+    .select("symbol,trade_date,open,high,low,close,volume")
+    .eq("symbol", symbol)
     .order("trade_date", { ascending: true })
     .limit(260);
-
   if (error) throw error;
-
-  return (data ?? []).map((row) => ({
-    symbol,
-    trade_date: String(row.trade_date),
-    open: row.open == null ? null : Number(row.open),
-    high: row.high == null ? null : Number(row.high),
-    low: row.low == null ? null : Number(row.low),
-    close: row.close == null ? null : Number(row.close),
-    volume: row.volume == null ? null : Number(row.volume),
-  }));
+  return (data ?? []) as PriceRow[];
 }
 
 export async function loadBacktestRuns(): Promise<BacktestRun[]> {
   if (!supabase) return [];
-
   const { data, error } = await supabase
     .from("backtest_runs")
     .select("*")
     .order("created_at", { ascending: false })
     .limit(30);
-
   if (error) throw error;
-
-  return (data ?? []).map((row) => ({
-    id: String(row.id),
-    strategy_version: String(row.strategy_version ?? "UNKNOWN"),
-    created_at: row.created_at == null ? null : String(row.created_at),
-    total_return:
-      row.total_return == null ? null : Number(row.total_return),
-    annual_return:
-      row.annual_return == null ? null : Number(row.annual_return),
-    max_drawdown:
-      row.max_drawdown == null ? null : Number(row.max_drawdown),
-    sharpe_ratio:
-      row.sharpe_ratio == null ? null : Number(row.sharpe_ratio),
-    win_rate:
-      row.win_rate == null ? null : Number(row.win_rate),
-    trade_count:
-      row.total_trades != null
-        ? Number(row.total_trades)
-        : row.trade_count != null
-          ? Number(row.trade_count)
-          : null,
-  }));
+  return (data ?? []) as BacktestRun[];
 }
 
-export function formatPct(
-  value?: number | null,
-  digits = 1,
-): string {
-  if (value == null || Number.isNaN(Number(value))) return "—";
-
-  const number = Number(value);
-  const normalized = Math.abs(number) <= 2 ? number * 100 : number;
-
+export function formatPct(value?: number | null, digits = 1): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  const normalized = Math.abs(value) <= 2 ? value * 100 : value;
   return `${normalized.toFixed(digits)}%`;
 }
 
-export function formatNum(
-  value?: number | null,
-  digits = 1,
-): string {
-  if (value == null || Number.isNaN(Number(value))) return "—";
+export function formatNum(value?: number | null, digits = 1): string {
+  if (value == null || Number.isNaN(value)) return "—";
   return Number(value).toFixed(digits);
 }

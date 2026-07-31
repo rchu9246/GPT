@@ -200,3 +200,38 @@ tr.clickable:hover { background: rgba(125, 211, 252, .06); }
   .allocation-row b { text-align: left; }
   .filter-panel { flex-direction: column; align-items: stretch; }
 }
+
+/* GPT Quant V8 */
+.rating {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: .78rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+.rating-strong_buy, .rating-buy { color: #65e6b4; background: rgba(101,230,180,.08); }
+.rating-watch { color: #f7cc63; background: rgba(247,204,99,.08); }
+.rating-reduce, .rating-avoid { color: #ff7285; background: rgba(255,114,133,.08); }
+.page-title > .rating { margin-top: 12px; font-size: .9rem; }
+.health-bar, .allocation-bar { height: 7px; background: rgba(143,169,196,.18); border-radius: 999px; overflow: hidden; }
+.health-bar { margin-top: 12px; }
+.health-bar i, .allocation-bar i { display: block; height: 100%; background: linear-gradient(90deg,#65e6b4,#7dd3fc); }
+.sparkline-shell { color: var(--accent); }
+.sparkline { width: 100%; display: block; }
+.chart-label, .chart-range { color: var(--muted); }
+.chart-range { display: flex; justify-content: space-between; font-size: .78rem; }
+.empty-chart { display: grid; place-items: center; height: 220px; color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; }
+.allocation-list { display: grid; gap: 14px; }
+.allocation-row { display: grid; grid-template-columns: minmax(130px,.7fr) minmax(220px,2fr) 70px; gap: 16px; align-items: center; }
+.allocation-row div:first-child { display: flex; gap: 8px; align-items: baseline; }
+.allocation-row small { color: var(--muted); }
+.filter-panel { display: flex; gap: 20px; align-items: center; }
+.filter-panel input { width: min(520px,100%); accent-color: #7dd3fc; }
+
+@media (max-width: 720px) {
+  .allocation-row { grid-template-columns: 1fr; }
+  .filter-panel { flex-direction: column; align-items: stretch; }
+}
