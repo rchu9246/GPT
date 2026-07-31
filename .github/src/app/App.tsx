@@ -43,5 +43,5 @@ export default function App() {
   else if (page === "multistrategy") content = <MultiStrategyV10 />;
   else if (page === "strategy") content = <StrategyLabV9 />;
   else content = <SystemOpsV9 />;
-  return <div className="app-shell"><header className="topbar"><div><div className="brand">GPT QUANT V13 ENTERPRISE AUTOTRADER</div><div className="subtitle">Signals → Risk Gates → Approval Queue → Paper Execution → Broker Gateway</div></div><nav>{nav.map(([key,label]) => <button key={key} className={`nav ${!symbol && page===key ? "active" : ""}`} onClick={() => go(key)}>{label}</button>)}</nav></header><main className="content">{content}</main><footer>GPT Quant V13 Enterprise AutoTrader · 預設模擬交易；正式下單須經安全券商閘門</footer></div>;
+  return <div className="app-shell"><header className="topbar"><div><div className="brand">GPT QUANT V13.1 OPERATIONAL PAPER ENGINE</div><div className="subtitle">Signals → Risk Gates → Approval Queue → Paper Execution → Broker Gateway</div></div><nav>{nav.map(([key,label]) => <button key={key} className={`nav ${!symbol && page===key ? "active" : ""}`} onClick={() => go(key)}>{label}</button>)}</nav></header><main className="content">{content}</main><footer>GPT Quant V13.1 Operational Paper Engine · 預設模擬交易；正式下單須經安全券商閘門</footer></div>;
 }

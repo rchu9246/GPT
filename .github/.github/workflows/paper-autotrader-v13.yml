@@ -1,0 +1,13 @@
+name: Legacy V13 Paper Trader (Manual Only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  legacy-note:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Use paper-trading-engine-v13-1.yml for the operational engine."

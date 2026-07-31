@@ -1,0 +1,3 @@
+Expected brand: GPT QUANT V11 ENTERPRISE AI
+No Array.at usage
+Supabase mapping remains total_score -> score and stock_id -> stocks.id

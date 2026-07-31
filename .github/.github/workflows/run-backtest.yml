@@ -1,0 +1,62 @@
+name: Run Quant Backtest
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy:
+        description: "策略版本"
+        required: false
+        default: "V3.1-MULTI"
+      score_threshold:
+        description: "最低分數"
+        required: false
+        default: "65"
+      take_profit:
+        description: "停利，例如 0.10"
+        required: false
+        default: "0.10"
+      stop_loss:
+        description: "停損，例如 0.05"
+        required: false
+        default: "0.05"
+      max_holding_days:
+        description: "最長持有交易日"
+        required: false
+        default: "10"
+  schedule:
+    - cron: "5 11 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quant-backtest
+  cancel-in-progress: false
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements-automation.txt
+
+      - name: Run historical backtest
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BACKTEST_STRATEGY: ${{ inputs.strategy || 'V3.1-MULTI' }}
+          BACKTEST_SCORE_THRESHOLD: ${{ inputs.score_threshold || '65' }}
+          BACKTEST_TAKE_PROFIT: ${{ inputs.take_profit || '0.10' }}
+          BACKTEST_STOP_LOSS: ${{ inputs.stop_loss || '0.05' }}
+          BACKTEST_MAX_HOLDING_DAYS: ${{ inputs.max_holding_days || '10' }}
+        run: python automation/run_backtest.py
