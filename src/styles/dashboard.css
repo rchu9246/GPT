@@ -601,3 +601,36 @@ tbody tr.selected-row {
     align-items: flex-start;
   }
 }
+
+
+/* Enterprise 3.0 Release Candidate */
+.release30-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+}
+.release30-score {
+  font-size: clamp(3rem, 8vw, 7rem);
+  font-weight: 800;
+}
+.release30-badge {
+  min-width: 220px;
+  text-align: center;
+}
+.release30-badge span,
+.release30-badge strong {
+  display: block;
+}
+.release30-badge span {
+  opacity: .75;
+}
+.release30-badge strong {
+  font-size: 2rem;
+}
+@media (max-width: 760px) {
+  .release30-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

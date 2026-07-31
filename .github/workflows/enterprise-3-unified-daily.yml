@@ -1,0 +1,63 @@
+name: Enterprise 3.0 Unified Daily Investment Cycle
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 7 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: enterprise-3-unified-daily
+  cancel-in-progress: false
+
+jobs:
+  daily-investment-cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements-autotrader-v13.txt
+
+      - name: Run production decision stack
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AUTOTRADER_ACCOUNT: paper-main
+        run: |
+          python automation/generate_orders_v16.py
+          python automation/portfolio_os_v17.py
+          python automation/ai_fund_manager_v18.py
+          python automation/hedge_fund_manager_v19.py
+          python automation/institutional_report_v20.py
+          python automation/multi_agent_council_v21.py
+          python automation/trading_director_v22.py
+
+      - name: Consolidate Enterprise core
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AUTOTRADER_ACCOUNT: paper-main
+        run: |
+          python automation/enterprise2_master.py
+          python automation/enterprise2_operational.py
+
+      - name: Generate Research Intelligence
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AUTOTRADER_ACCOUNT: paper-main
+        run: |
+          python automation/enterprise3_research_alpha1.py
+          python automation/enterprise3_portfolio_recommendations.py
+          python automation/enterprise3_research_outcomes.py
+          python automation/enterprise3_ceo_snapshot_alpha1.py
+          python automation/enterprise3_release_readiness.py

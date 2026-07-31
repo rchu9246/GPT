@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Enterprise30Release from "../pages/Enterprise30Release";
 import Enterprise30Dashboard from "../pages/Enterprise30Dashboard";
 import Enterprise21Operational from "../pages/Enterprise21Operational";
 import Enterprise2Dashboard from "../pages/Enterprise2Dashboard";
@@ -30,6 +31,7 @@ import StrategyLabV9 from "../pages/StrategyLabV9";
 import SystemOpsV9 from "../pages/SystemOpsV9";
 
 type Page =
+  | "release30"
   | "enterprise30"
   | "enterprise21"
   | "enterprise2"
@@ -60,7 +62,8 @@ type Page =
   | "system";
 
 const nav: Array<[Page, string]> = [
-  ["enterprise30", "Enterprise 3.0"],
+  ["release30", "3.0 Command"],
+  ["enterprise30", "3.0 Research"],
   ["enterprise21", "Enterprise 2.1"],
   ["enterprise2", "Enterprise 2.0"],
   ["director22", "Legacy Director"],
@@ -91,7 +94,7 @@ const nav: Array<[Page, string]> = [
 ];
 
 export default function App() {
-  const [page, setPage] = useState<Page>("enterprise30");
+  const [page, setPage] = useState<Page>("release30");
   const [symbol, setSymbol] = useState<string | null>(null);
 
   const go = (next: Page) => {
@@ -108,6 +111,8 @@ export default function App() {
         onBack={() => setSymbol(null)}
       />
     );
+  } else if (page === "release30") {
+    content = <Enterprise30Release />;
   } else if (page === "enterprise30") {
     content = <Enterprise30Dashboard />;
   } else if (page === "enterprise21") {
@@ -170,9 +175,9 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <div className="brand">GPT QUANT ENTERPRISE 3.0 ALPHA 1</div>
+          <div className="brand">GPT QUANT ENTERPRISE 3.0 RELEASE CANDIDATE</div>
           <div className="subtitle">
-            Research Intelligence → Strategy Marketplace → CEO Command → PAPER Operations
+            Unified Daily Cycle → Research → Portfolio → Risk → Explainability → PAPER Execution
           </div>
         </div>
         <nav>
@@ -189,7 +194,7 @@ export default function App() {
       </header>
       <main className="content">{content}</main>
       <footer>
-        GPT Quant Enterprise 3.0 Alpha 1 · AI PAPER investment operating system
+        GPT Quant Enterprise 3.0 RC · Daily AI PAPER investment operating system
       </footer>
     </div>
   );

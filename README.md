@@ -1,15 +1,14 @@
-# GPT Quant Enterprise 3.0 Alpha 1
+# GPT Quant Enterprise 3.0 Release Candidate
 
-Alpha 1 introduces the first Investment Operating System layer:
+This release candidate consolidates the platform into a daily operating product:
 
-- internal Research Intelligence
-- research reports with evidence
-- quantitative event intelligence
-- Strategy Marketplace
-- CEO Dashboard snapshot
-- Research Cycle workflow
-- Enterprise 2.1 compatibility
+- unified daily workflow
+- Research Intelligence
+- explainable portfolio recommendations
+- target weights
+- stop-loss and take-profit guidance
+- research outcome tracking
+- release readiness monitoring
+- CEO and command dashboards
 
-Important: Alpha 1 does not fabricate external news or financial-statement
-facts. Research is built from existing internal quantitative evidence until
-verified external connectors are added.
+The system remains PAPER-only. Live trading is intentionally disabled.
