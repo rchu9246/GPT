@@ -1,0 +1,41 @@
+name: Enterprise 3.0 Alpha 1 Research Cycle
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "55 6 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: enterprise-3-alpha1-research
+  cancel-in-progress: false
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements-autotrader-v13.txt
+
+      - name: Generate internal research intelligence
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AUTOTRADER_ACCOUNT: paper-main
+        run: python automation/enterprise3_research_alpha1.py
+
+      - name: Generate CEO dashboard snapshot
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AUTOTRADER_ACCOUNT: paper-main
+        run: python automation/enterprise3_ceo_snapshot_alpha1.py

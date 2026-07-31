@@ -1,14 +1,15 @@
-# GPT Quant Enterprise 2.1 Operational Platform
+# GPT Quant Enterprise 3.0 Alpha 1
 
-Enterprise 2.1 turns the Enterprise 2.0 foundation into a daily operating layer:
+Alpha 1 introduces the first Investment Operating System layer:
 
-- operational status
-- data and signal freshness
-- centralized order counts
-- portfolio status
-- centralized risk limits and events
-- CEO daily brief
-- operational daily report
-- one scheduled master workflow
+- internal Research Intelligence
+- research reports with evidence
+- quantitative event intelligence
+- Strategy Marketplace
+- CEO Dashboard snapshot
+- Research Cycle workflow
+- Enterprise 2.1 compatibility
 
-The platform remains PAPER-only.
+Important: Alpha 1 does not fabricate external news or financial-statement
+facts. Research is built from existing internal quantitative evidence until
+verified external connectors are added.

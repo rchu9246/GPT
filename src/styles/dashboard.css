@@ -569,3 +569,35 @@ tbody tr.selected-row {
     align-items: flex-start;
   }
 }
+
+
+/* Enterprise 3.0 Alpha 1 */
+.enterprise30-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+}
+.enterprise30-action {
+  font-size: clamp(3rem, 8vw, 7rem);
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+.enterprise30-confidence {
+  min-width: 210px;
+  text-align: center;
+}
+.enterprise30-confidence span,
+.enterprise30-confidence small {
+  display: block;
+  opacity: .75;
+}
+.enterprise30-confidence strong {
+  font-size: 4rem;
+}
+@media (max-width: 760px) {
+  .enterprise30-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

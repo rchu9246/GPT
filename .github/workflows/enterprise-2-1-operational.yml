@@ -53,3 +53,17 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           AUTOTRADER_ACCOUNT: paper-main
         run: python automation/enterprise2_operational.py
+
+- name: Generate Enterprise 3.0 Alpha 1 research
+  env:
+    SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+    SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    AUTOTRADER_ACCOUNT: paper-main
+  run: python automation/enterprise3_research_alpha1.py
+
+- name: Generate Enterprise 3.0 CEO snapshot
+  env:
+    SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+    SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    AUTOTRADER_ACCOUNT: paper-main
+  run: python automation/enterprise3_ceo_snapshot_alpha1.py

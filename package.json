@@ -1,7 +1,7 @@
 {
-  "name": "gpt-quant-enterprise-2-1-operational-platform",
+  "name": "gpt-quant-enterprise-3-alpha1",
   "private": true,
-  "version": "2.1.0",
+  "version": "3.0.0-alpha.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
