@@ -7,6 +7,7 @@ import type {
   Rating,
   SignalRow,
   TechnicalSnapshot,
+  DecisionAlert,
 } from "../types/v9";
 
 type DbSignal = {
@@ -233,4 +234,23 @@ export function ratingLabel(rating: Rating): string {
 
 export function regimeLabel(regime: MarketIntelligence["regime"]): string {
   return regime === "RISK_ON" ? "風險偏好" : regime === "NEUTRAL" ? "中性盤整" : "風險趨避";
+}
+
+
+export function buildDecisionAlerts(signals: SignalRow[]): DecisionAlert[] {
+  const alerts: DecisionAlert[] = [];
+  for (const row of signals) {
+    if (row.risk_score >= 65) {
+      alerts.push({ id: `risk-${row.symbol}`, symbol: row.symbol, title: `${row.symbol} 高風險`, message: `風險分數 ${row.risk_score.toFixed(1)}，建議降低單股權重。`, severity: "CRITICAL" });
+    } else if (row.score >= 60 && row.confidence >= 60) {
+      alerts.push({ id: `opportunity-${row.symbol}`, symbol: row.symbol, title: `${row.symbol} 訊號轉強`, message: `Score ${row.score.toFixed(1)}、信心 ${row.confidence.toFixed(1)}，可列入優先觀察。`, severity: "INFO" });
+    } else if (row.score < 35) {
+      alerts.push({ id: `weak-${row.symbol}`, symbol: row.symbol, title: `${row.symbol} 結構偏弱`, message: `Score ${row.score.toFixed(1)}，避免追價並檢查停損。`, severity: "WARNING" });
+    }
+  }
+  return alerts.slice(0, 12);
+}
+
+export function compareScore(a: SignalRow, b: SignalRow): number {
+  return (a.score - a.risk_score * 0.35 + a.confidence * 0.2) - (b.score - b.risk_score * 0.35 + b.confidence * 0.2);
 }

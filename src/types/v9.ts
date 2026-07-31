@@ -68,3 +68,14 @@ export type MarketIntelligence = {
   bullishCount: number;
   warningCount: number;
 };
+
+
+export type AlertSeverity = "INFO" | "WARNING" | "CRITICAL";
+
+export type DecisionAlert = {
+  id: string;
+  symbol?: string;
+  title: string;
+  message: string;
+  severity: AlertSeverity;
+};
