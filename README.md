@@ -1,12 +1,3 @@
-# GPT Quant Enterprise 3.0 Stable Hotfix 3.0.1
+# GPT Quant Enterprise 3.1 Stable Core
 
-Stable release goals:
-- one official daily workflow
-- fail-closed schema validation
-- isolated pipeline stages
-- release run tracking
-- data-quality checks
-- stable dashboard
-- paper-only execution lock
-
-Live trading remains disabled by design.
+Unified configuration, health scoring, executive reporting and operations center. PAPER ONLY.

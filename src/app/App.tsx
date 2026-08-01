@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Enterprise31Operations from "../pages/Enterprise31Operations";
 import Enterprise30Status from "../pages/Enterprise30Status";
 import Enterprise30Stable from "../pages/Enterprise30Stable";
 import Enterprise30Release from "../pages/Enterprise30Release";
@@ -33,6 +34,7 @@ import StrategyLabV9 from "../pages/StrategyLabV9";
 import SystemOpsV9 from "../pages/SystemOpsV9";
 
 type Page =
+  | "enterprise31"
   | "status30"
   | "stable30"
   | "release30"
@@ -66,6 +68,7 @@ type Page =
   | "system";
 
 const nav: Array<[Page, string]> = [
+  ["enterprise31", "Enterprise 3.1"],
   ["status30", "3.0 Status"],
   ["stable30", "3.0 Stable"],
   ["release30", "3.0 Command"],
@@ -100,7 +103,7 @@ const nav: Array<[Page, string]> = [
 ];
 
 export default function App() {
-  const [page, setPage] = useState<Page>("stable30");
+  const [page, setPage] = useState<Page>("enterprise31");
   const [symbol, setSymbol] = useState<string | null>(null);
 
   const go = (next: Page) => {
@@ -117,6 +120,8 @@ export default function App() {
         onBack={() => setSymbol(null)}
       />
     );
+  } else if (page === "enterprise31") {
+    content = <Enterprise31Operations />;
   } else if (page === "status30") {
     content = <Enterprise30Status />;
   } else if (page === "stable30") {
@@ -185,7 +190,7 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <div className="brand">GPT QUANT ENTERPRISE 3.0.3 STABLE</div>
+          <div className="brand">GPT QUANT ENTERPRISE 3.1 STABLE</div>
           <div className="subtitle">
             Schema Gate → Stable Pipeline → Data Quality → Governance → PAPER Operations
           </div>

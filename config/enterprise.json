@@ -1,0 +1,22 @@
+{
+  "version": "3.1.0",
+  "mode": "PAPER_ONLY",
+  "account_name": "paper-main",
+  "risk": {
+    "reserve_cash_pct": 30,
+    "max_positions": 5,
+    "max_position_pct": 15,
+    "max_drawdown_pct": 12,
+    "var_95_pct": 3
+  },
+  "portfolio": {
+    "sizing_method": "CONVICTION_WEIGHTED_CAP",
+    "rebalance_frequency": "DAILY",
+    "target_volatility_pct": 12
+  },
+  "operations": {
+    "minimum_health_score": 85,
+    "fail_closed": true,
+    "allow_noncritical_failures": true
+  }
+}

@@ -1,7 +1,7 @@
 {
-  "name": "gpt-quant-enterprise-3-stable",
+  "name": "gpt-quant-enterprise-3-1-stable-core",
   "private": true,
-  "version": "3.0.3",
+  "version": "3.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
