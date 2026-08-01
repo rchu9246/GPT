@@ -1,0 +1,38 @@
+name: Enterprise 4.2 Adaptive Allocation
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "35 7 * * 1-5"
+permissions:
+  contents: read
+jobs:
+  adaptive-allocation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Foundation Gate
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python automation/enterprise40_foundation.py
+      - name: Central Risk Governor
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python automation/enterprise41_risk_governor.py
+      - name: Adaptive Allocation
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ENTERPRISE42_MC_PATHS: "500"
+          ENTERPRISE42_MC_DAYS: "20"
+        run: python automation/enterprise42_adaptive_allocation.py

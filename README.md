@@ -1,3 +1,3 @@
-# GPT Quant Enterprise 4.1 Stable
+# GPT Quant Enterprise 4.2 Stable
 
-Central Risk Governor, circuit breakers and enterprise risk governance. PAPER ONLY.
+Adaptive allocation, Monte Carlo, scenarios and PAPER rebalance proposals.
