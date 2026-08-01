@@ -1,7 +1,7 @@
 {
-  "name": "gpt-quant-enterprise-4-foundation",
+  "name": "gpt-quant-enterprise-4-1-stable",
   "private": true,
-  "version": "4.0.0-foundation.1",
+  "version": "4.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
