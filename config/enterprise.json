@@ -1,5 +1,5 @@
 {
-  "version": "3.2.0",
+  "version": "4.0.0-foundation.1",
   "mode": "PAPER_ONLY",
   "account_name": "paper-main",
   "risk": {
@@ -19,15 +19,25 @@
     "max_turnover_pct": 25
   },
   "operations": {
-    "minimum_health_score": 85,
+    "minimum_health_score": 90,
     "fail_closed": true,
-    "allow_noncritical_failures": true
+    "allow_noncritical_failures": true,
+    "audit_every_stage": true,
+    "idempotent_runs": true
   },
   "features": {
     "factor_factory": true,
     "strategy_marketplace": true,
     "portfolio_optimizer": true,
     "ai_research": true,
-    "risk_engine_2": true
-  }
+    "risk_engine_2": true,
+    "multi_portfolio": true,
+    "multi_strategy_registry": true,
+    "market_regime_foundation": true,
+    "central_risk_governor": false,
+    "oms_v40": false,
+    "paper_execution_v40": false,
+    "performance_attribution_v40": false
+  },
+  "platform_generation": "ENTERPRISE_4"
 }

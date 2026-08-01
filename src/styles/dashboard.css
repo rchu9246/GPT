@@ -666,3 +666,35 @@ tbody tr.selected-row {
     align-items: flex-start;
   }
 }
+
+
+/* Enterprise 4.0 Foundation */
+.enterprise40-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+}
+.enterprise40-score {
+  font-size: clamp(4rem, 10vw, 8rem);
+  font-weight: 800;
+}
+.enterprise40-mode {
+  min-width: 240px;
+  text-align: center;
+}
+.enterprise40-mode span,
+.enterprise40-mode small {
+  display: block;
+  opacity: .75;
+}
+.enterprise40-mode strong {
+  display: block;
+  font-size: 2rem;
+}
+@media (max-width: 760px) {
+  .enterprise40-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

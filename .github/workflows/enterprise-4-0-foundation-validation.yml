@@ -1,0 +1,51 @@
+name: Enterprise 4.0 Foundation Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "automation/enterprise40_foundation.py"
+      - "supabase/**"
+      - "src/**"
+      - "package.json"
+      - "requirements.txt"
+      - ".github/workflows/enterprise-4-0-foundation-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile Python
+        run: python -m compileall automation
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Type check
+        run: npm run check
+
+      - name: Build frontend
+        run: npm run build

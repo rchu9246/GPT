@@ -1,3 +1,14 @@
-# GPT Quant Enterprise 3.2 Stable
+# GPT Quant Enterprise 4.0 Foundation Pack
 
-Factor Lab, risk-adjusted optimizer and Risk Engine 2.0. PAPER ONLY.
+Foundation capabilities:
+- multi-portfolio registry
+- multi-strategy registry
+- strategy version registry
+- idempotent run and stage tracking
+- audit logging
+- market regime foundation
+- strategy-regime allocation
+- Enterprise 3.x compatibility views
+- Foundation dashboard
+
+This release remains PAPER ONLY.
