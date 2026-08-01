@@ -1,3 +1,12 @@
-# GPT Quant Enterprise 4.2 Stable
+# GPT Quant Enterprise 4.3 Stable
 
-Adaptive allocation, Monte Carlo, scenarios and PAPER rebalance proposals.
+Enterprise 4.3 adds:
+- AI Investment Committee
+- multi-agent weighted voting
+- risk veto
+- investment thesis generation
+- explainable decisions
+- committee audit trail
+- knowledge capture foundation
+
+Live trading remains disabled.

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Enterprise43Committee from "../pages/Enterprise43Committee";
 import Enterprise42Adaptive from "../pages/Enterprise42Adaptive";
 import Enterprise41RiskCenter from "../pages/Enterprise41RiskCenter";
 import Enterprise40Foundation from "../pages/Enterprise40Foundation";
@@ -38,6 +39,7 @@ import StrategyLabV9 from "../pages/StrategyLabV9";
 import SystemOpsV9 from "../pages/SystemOpsV9";
 
 type Page =
+  | "enterprise43"
   | "enterprise42"
   | "enterprise41"
   | "enterprise40"
@@ -76,6 +78,7 @@ type Page =
   | "system";
 
 const nav: Array<[Page, string]> = [
+  ["enterprise43", "Enterprise 4.3"],
   ["enterprise42", "Enterprise 4.2"],
   ["enterprise41", "Enterprise 4.1"],
   ["enterprise40", "Enterprise 4.0"],
@@ -115,7 +118,7 @@ const nav: Array<[Page, string]> = [
 ];
 
 export default function App() {
-  const [page, setPage] = useState<Page>("enterprise42");
+  const [page, setPage] = useState<Page>("enterprise43");
   const [symbol, setSymbol] = useState<string | null>(null);
 
   const go = (next: Page) => {
@@ -132,6 +135,8 @@ export default function App() {
         onBack={() => setSymbol(null)}
       />
     );
+  } else if (page === "enterprise43") {
+    content = <Enterprise43Committee />;
   } else if (page === "enterprise42") {
     content = <Enterprise42Adaptive />;
   } else if (page === "enterprise41") {
@@ -210,7 +215,7 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <div className="brand">GPT QUANT ENTERPRISE 4.2 STABLE</div>
+          <div className="brand">GPT QUANT ENTERPRISE 4.3 STABLE</div>
           <div className="subtitle">
             Schema Gate → Stable Pipeline → Data Quality → Governance → PAPER Operations
           </div>

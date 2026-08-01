@@ -1,5 +1,5 @@
 {
-  "version": "4.2.0",
+  "version": "4.3.0",
   "mode": "PAPER_ONLY",
   "account_name": "paper-main",
   "risk": {
@@ -60,7 +60,19 @@
     "strategy_correlation": true,
     "scenario_engine": true,
     "monte_carlo_stress_test": true,
-    "auto_rebalancer": true
+    "auto_rebalancer": true,
+    "ai_investment_committee": true,
+    "multi_agent_voting": true,
+    "investment_thesis": true,
+    "explainable_decisions": true,
+    "decision_audit": true,
+    "knowledge_capture_foundation": true
   },
-  "platform_generation": "ENTERPRISE_4"
+  "platform_generation": "ENTERPRISE_4",
+  "committee": {
+    "minimum_quorum": 4,
+    "approval_threshold": 0.65,
+    "risk_veto_enabled": true,
+    "chairman_required": true
+  }
 }
