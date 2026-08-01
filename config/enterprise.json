@@ -1,5 +1,5 @@
 {
-  "version": "3.1.0",
+  "version": "3.2.0",
   "mode": "PAPER_ONLY",
   "account_name": "paper-main",
   "risk": {
@@ -7,16 +7,27 @@
     "max_positions": 5,
     "max_position_pct": 15,
     "max_drawdown_pct": 12,
-    "var_95_pct": 3
+    "var_95_pct": 3,
+    "expected_shortfall_pct": 4,
+    "stress_loss_pct": 8
   },
   "portfolio": {
     "sizing_method": "CONVICTION_WEIGHTED_CAP",
     "rebalance_frequency": "DAILY",
-    "target_volatility_pct": 12
+    "target_volatility_pct": 12,
+    "optimizer_method": "RISK_ADJUSTED_CONVICTION",
+    "max_turnover_pct": 25
   },
   "operations": {
     "minimum_health_score": 85,
     "fail_closed": true,
     "allow_noncritical_failures": true
+  },
+  "features": {
+    "factor_factory": true,
+    "strategy_marketplace": true,
+    "portfolio_optimizer": true,
+    "ai_research": true,
+    "risk_engine_2": true
   }
 }

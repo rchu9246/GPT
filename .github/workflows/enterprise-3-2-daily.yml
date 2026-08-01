@@ -1,0 +1,47 @@
+name: Enterprise 3.2 Daily Pipeline
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 7 * * 1-5"
+permissions:
+  contents: read
+jobs:
+  daily-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run 3.1 Core
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AUTOTRADER_ACCOUNT: paper-main
+        run: |
+          python automation/enterprise3_stable.py
+          python automation/enterprise31_core.py
+      - name: Factor Lab
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AUTOTRADER_ACCOUNT: paper-main
+        run: python automation/enterprise32_factor_lab.py
+      - name: Portfolio Optimizer
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AUTOTRADER_ACCOUNT: paper-main
+        run: python automation/enterprise32_optimizer.py
+      - name: Risk Engine 2.0
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AUTOTRADER_ACCOUNT: paper-main
+        run: python automation/enterprise32_risk_engine.py

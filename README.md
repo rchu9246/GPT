@@ -1,3 +1,3 @@
-# GPT Quant Enterprise 3.1 Stable Core
+# GPT Quant Enterprise 3.2 Stable
 
-Unified configuration, health scoring, executive reporting and operations center. PAPER ONLY.
+Factor Lab, risk-adjusted optimizer and Risk Engine 2.0. PAPER ONLY.
