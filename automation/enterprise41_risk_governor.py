@@ -15,6 +15,32 @@ def latest(c,t,f,where=""):
     q=f"{where}&order={f}.desc&limit=1" if where else f"order={f}.desc&limit=1"
     r=c.get(t,q); return r[0] if r else {}
 
+
+
+def latest_risk_snapshot(c,pid,account):
+    sources=[
+        ("compat_risk_snapshot_v41","snapshot_date",f"portfolio_id=eq.{pid}"),
+        ("risk_snapshots_v32","snapshot_date",f"account_name=eq.{account}")
+    ]
+    for table,field,where in sources:
+        try:
+            row=latest(c,table,field,where)
+            if row:
+                row["_source"]=table
+                return row
+        except Exception:
+            pass
+    return {
+        "_source":"default",
+        "var_95_pct":0,
+        "expected_shortfall_pct":0,
+        "max_drawdown_pct":0,
+        "concentration_pct":0,
+        "gross_exposure_pct":0,
+        "liquidity_score":100
+    }
+
+
 def main():
     c=SupabaseRestClient()
     portfolios=c.get("enterprise_portfolios_v40","lifecycle_status=eq.ACTIVE&portfolio_type=eq.PAPER&limit=100")
@@ -23,7 +49,7 @@ def main():
 
     for p in portfolios:
         pid=str(p["id"]); account=str(p.get("account_name") or "paper-main")
-        r=latest(c,"risk_snapshots_v32","snapshot_date",f"account_name=eq.{account}")
+        r=latest_risk_snapshot(c,pid,account)
         equity=n(latest(c,"compat_portfolios_v40","latest_snapshot_date",f"portfolio_id=eq.{pid}").get("latest_equity"),n(p.get("starting_cash"),1000000))
         var95=n(r.get("var_95_pct")); es=n(r.get("expected_shortfall_pct")); dd=n(r.get("max_drawdown_pct")); conc=n(r.get("concentration_pct")); gross=n(r.get("gross_exposure_pct")); liq=n(r.get("liquidity_score"),100)
         breaches=[]
@@ -41,7 +67,7 @@ def main():
             bs=c.get("circuit_breakers_v41",f"portfolio_id=eq.{pid}&enabled=eq.true")
             for b in bs:
                 c.patch("circuit_breakers_v41",f"id=eq.{b['id']}",{"breaker_status":"TRIGGERED","last_triggered_at":datetime.now(timezone.utc).isoformat(),"trigger_count":int(b.get("trigger_count") or 0)+1})
-        c.upsert("portfolio_risk_v41",{"portfolio_id":pid,"risk_date":RUN_DATE,"equity":equity,"daily_loss_pct":0,"gross_exposure_pct":gross,"var_95_pct":var95,"expected_shortfall_pct":es,"max_drawdown_pct":dd,"concentration_pct":conc,"liquidity_score":liq,"risk_score":score,"risk_status":status,"breaches":breaches,"diagnostics":{"source":"risk_snapshots_v32"}},"portfolio_id,risk_date")
+        c.upsert("portfolio_risk_v41",{"portfolio_id":pid,"risk_date":RUN_DATE,"equity":equity,"daily_loss_pct":0,"gross_exposure_pct":gross,"var_95_pct":var95,"expected_shortfall_pct":es,"max_drawdown_pct":dd,"concentration_pct":conc,"liquidity_score":liq,"risk_score":score,"risk_status":status,"breaches":breaches,"diagnostics":{"source":r.get("_source","unknown")}},"portfolio_id,risk_date")
         c.insert("risk_governor_decisions_v41",{"decision_date":RUN_DATE,"portfolio_id":pid,"strategy_id":None,"decision_scope":"PORTFOLIO","requested_action":"CONTINUE_PAPER_OPERATIONS","decision":"BLOCKED" if status=="CRITICAL" else "REDUCED" if status=="WARNING" else "APPROVED","rationale":f"Portfolio risk status {status}.","breaches":breaches,"policy_snapshot":{"var95":3,"es":4,"drawdown":n(p.get("max_drawdown_pct"),12),"position":n(p.get("max_position_pct"),15)}})
 
     for s in strategies:
