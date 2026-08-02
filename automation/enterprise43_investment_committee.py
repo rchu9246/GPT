@@ -24,6 +24,12 @@ def latest(client: SupabaseRestClient, table: str, field: str, where: str = "") 
     rows = client.get(table, query)
     return rows[0] if rows else {}
 
+def safe_get(client, table: str, query: str):
+    try:
+        return client.get(table, query)
+    except Exception:
+        return []
+
 def recommendation(score: float) -> str:
     if score >= 68:
         return "BUY"
@@ -108,7 +114,8 @@ def main() -> None:
             "proposal_date",
             f"portfolio_id=eq.{pid}",
         )
-        factor_rows = client.get(
+        factor_rows = safe_get(
+            client,
             "factor_rankings_v32",
             f"account_name=eq.{account}&order=ranking_date.desc,rank_position.asc&limit=20",
         )

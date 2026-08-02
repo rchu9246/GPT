@@ -10,6 +10,14 @@ def n(v,d=0.0):
     except (TypeError,ValueError): return d
 def latest(c,t,f,w=""):
     q=f"{w}&order={f}.desc&limit=1" if w else f"order={f}.desc&limit=1"; r=c.get(t,q); return r[0] if r else {}
+
+
+def safe_get(c,table,query):
+    try:
+        return c.get(table,query)
+    except Exception:
+        return []
+
 def main():
     random.seed(42); c=SupabaseRestClient(); portfolios=c.get("enterprise_portfolios_v40","lifecycle_status=eq.ACTIVE&portfolio_type=eq.PAPER&limit=100"); strategies=c.get("enterprise_strategies_v40","enabled=eq.true&paper_approved=eq.true&limit=100"); regime=str(latest(c,"market_regimes_v40","regime_date").get("regime") or "UNKNOWN"); rm={"BULL":1.0,"SIDEWAYS":.8,"BEAR":.45,"HIGH_VOLATILITY":.35,"RISK_OFF":.1,"UNKNOWN":.5}.get(regime,.5); scenarios=c.get("scenario_definitions_v42","enabled=eq.true&limit=100"); srun=props=0; blockers=[]
     for i,a in enumerate(strategies):
@@ -29,7 +37,7 @@ def main():
           value*=max(.01,1+random.gauss(.0003*rm,vol)); peak=max(peak,value); hit=hit or ((peak-value)/peak*100>ddlim if peak else False)
         terminal.append(value); breaches+=1 if hit else 0
       terminal.sort(); p5=terminal[max(0,int(len(terminal)*.05)-1)]; med=terminal[int(len(terminal)*.5)]; p95=terminal[min(len(terminal)-1,int(len(terminal)*.95))]; pb=breaches/len(terminal); status='CRITICAL' if pb>.25 else 'WARNING' if pb>.10 else 'PASS'; c.upsert('monte_carlo_runs_v42',{'run_date':RUN_DATE,'portfolio_id':pid,'paths':PATHS,'horizon_days':DAYS,'initial_equity':equity,'percentile_5_equity':p5,'median_equity':med,'percentile_95_equity':p95,'probability_of_loss':sum(1 for x in terminal if x<equity)/len(terminal),'probability_of_breach':pb,'expected_shortfall_pct':max(0,(equity-p5)/equity*100) if equity else 0,'status':status,'diagnostics':{'regime':regime}},'run_date,portfolio_id')
-      weights=c.get('portfolio_target_weights_v32',f'account_name=eq.{account}&order=optimization_date.desc,target_weight.desc&limit=100'); latestd=str(weights[0]['optimization_date']) if weights else RUN_DATE; weights=[x for x in weights if str(x.get('optimization_date'))==latestd]; riskm=max(.25,min(1,1-n(risk.get('risk_score'))/140)); items=[]; turn=0
+      weights=safe_get(c,'portfolio_target_weights_v32',f'account_name=eq.{account}&order=optimization_date.desc,target_weight.desc&limit=100'); latestd=str(weights[0]['optimization_date']) if weights else RUN_DATE; weights=[x for x in weights if str(x.get('optimization_date'))==latestd]; riskm=max(.25,min(1,1-n(risk.get('risk_score'))/140)); items=[]; turn=0
       for w in weights:
         base=n(w.get('target_weight')); target=min(n(p.get('max_position_pct'),15),base*rm*riskm); turn+=abs(target); c.upsert('dynamic_position_sizing_v42',{'sizing_date':RUN_DATE,'portfolio_id':pid,'symbol':str(w.get('symbol')),'base_weight':base,'regime_multiplier':rm,'risk_budget_multiplier':riskm,'final_target_weight':target,'action':'BUY' if target>1 else 'HOLD','rationale':f'Base {base:.2f}%, regime {regime}, risk {riskm:.2f}.'},'sizing_date,portfolio_id,symbol'); items.append((w,target))
       pstatus='BLOCKED' if status=='CRITICAL' or worst>10 else 'PROPOSED'; prop=c.upsert('rebalance_proposals_v42',{'proposal_date':RUN_DATE,'portfolio_id':pid,'proposal_status':pstatus,'gross_turnover_pct':turn,'estimated_cost':equity*turn/100*.001425,'target_cash_pct':max(0,100-sum(t for _,t in items)),'risk_before':n(risk.get('risk_score')),'risk_after':n(risk.get('risk_score'))*riskm,'requires_approval':True,'paper_only':True,'summary':f'{len(items)} item(s), regime {regime}, MC {status}, worst stress {worst:.2f}%.','blockers':(['MONTE_CARLO_CRITICAL'] if status=='CRITICAL' else [])+(['STRESS_LOSS_LIMIT'] if worst>10 else [])},'proposal_date,portfolio_id'); prid=prop[0]['id'] if prop else None

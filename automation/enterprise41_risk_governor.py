@@ -20,7 +20,7 @@ def latest(c,t,f,where=""):
 def latest_risk_snapshot(c,pid,account):
     sources=[
         ("compat_risk_snapshot_v41","snapshot_date",f"portfolio_id=eq.{pid}"),
-        ("risk_snapshots_v32","snapshot_date",f"account_name=eq.{account}")
+        ("risk_snapshots_v32","snapshot_date",f"account_name=eq.{account}"),
     ]
     for table,field,where in sources:
         try:
@@ -37,9 +37,8 @@ def latest_risk_snapshot(c,pid,account):
         "max_drawdown_pct":0,
         "concentration_pct":0,
         "gross_exposure_pct":0,
-        "liquidity_score":100
+        "liquidity_score":100,
     }
-
 
 def main():
     c=SupabaseRestClient()

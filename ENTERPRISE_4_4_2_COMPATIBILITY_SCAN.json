@@ -1,0 +1,42 @@
+[
+  {
+    "file": "automation/enterprise32_optimizer.py",
+    "name": "portfolio_optimization_runs_v32"
+  },
+  {
+    "file": "automation/enterprise32_optimizer.py",
+    "name": "portfolio_target_weights_v32"
+  },
+  {
+    "file": "automation/enterprise41_risk_governor.py",
+    "name": "risk_snapshots_v32"
+  },
+  {
+    "file": "automation/enterprise42_adaptive_allocation.py",
+    "name": "portfolio_target_weights_v32"
+  },
+  {
+    "file": "automation/enterprise32_factor_lab.py",
+    "name": "factor_observations_v32"
+  },
+  {
+    "file": "automation/enterprise32_factor_lab.py",
+    "name": "factor_library_v32"
+  },
+  {
+    "file": "automation/enterprise32_factor_lab.py",
+    "name": "factor_rankings_v32"
+  },
+  {
+    "file": "automation/enterprise32_risk_engine.py",
+    "name": "portfolio_target_weights_v32"
+  },
+  {
+    "file": "automation/enterprise32_risk_engine.py",
+    "name": "risk_snapshots_v32"
+  },
+  {
+    "file": "automation/enterprise43_investment_committee.py",
+    "name": "factor_rankings_v32"
+  }
+]
