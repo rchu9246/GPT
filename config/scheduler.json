@@ -1,0 +1,28 @@
+{
+  "version": "4.5.1",
+  "timezone": "Asia/Taipei",
+  "cron_utc": "10 8 * * 1-5",
+  "local_time": "16:10",
+  "days": [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday"
+  ],
+  "workflow": "Enterprise 4.5 Operational Scheduler",
+  "manual_dispatch": true,
+  "paper_only": true,
+  "live_trading_enabled": false,
+  "pipeline": [
+    "Enterprise 4.0 Foundation Gate",
+    "Enterprise 4.1 Central Risk Governor",
+    "Enterprise 4.2 Adaptive Allocation",
+    "Enterprise 4.3 Investment Committee",
+    "Enterprise 4.4 Portfolio Brain",
+    "Enterprise 4.5 Capture Decision Memory",
+    "Enterprise 4.5 Evaluate Learning Outcomes",
+    "Enterprise 4.5 Update Strategy Ratings",
+    "Verify current-date operational data"
+  ]
+}

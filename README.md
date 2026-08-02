@@ -1,13 +1,11 @@
-# GPT Quant Enterprise 4.5 Foundation
+# GPT Quant Enterprise 4.5 Scheduler Pack
 
-Decision Intelligence foundation for GPT Quant.
+Centralized weekday scheduler for Enterprise 4.5.
 
-Includes:
-- Decision Memory
-- Learning Feedback
-- Strategy Rating
-- Learning Cycle Status
-- Enterprise 4.5 Dashboard
-- Validation and scheduled Learning Cycle
+Default schedule:
+- Monday to Friday
+- 16:10 Asia/Taipei
+- Cron: 10 8 * * 1-5 UTC
 
-This version remains PAPER ONLY.
+The scheduler runs the full Enterprise 4.0–4.5 PAPER pipeline and verifies current-date status data.
+Live trading remains disabled.

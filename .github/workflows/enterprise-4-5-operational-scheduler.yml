@@ -1,0 +1,122 @@
+name: Enterprise 4.5 Operational Scheduler
+
+on:
+  workflow_dispatch:
+  schedule:
+    # GitHub Actions cron uses UTC.
+    # 08:10 UTC = 16:10 Asia/Taipei.
+    - cron: "10 8 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: enterprise-4-5-operational-scheduler
+  cancel-in-progress: false
+
+jobs:
+  daily-operation:
+    name: Daily Operation
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate required secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python - <<'PY'
+          import os
+          missing = [
+              key for key in ("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY")
+              if not os.environ.get(key)
+          ]
+          if missing:
+              raise SystemExit("Missing required GitHub secret(s): " + ", ".join(missing))
+          print("Required GitHub secrets are available.")
+          PY
+
+      - name: Enterprise 4.0 Foundation Gate
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python automation/enterprise40_foundation.py
+
+      - name: Enterprise 4.1 Central Risk Governor
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python automation/enterprise41_risk_governor.py
+
+      - name: Enterprise 4.2 Adaptive Allocation
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ENTERPRISE42_MC_PATHS: "500"
+          ENTERPRISE42_MC_DAYS: "20"
+        run: python automation/enterprise42_adaptive_allocation.py
+
+      - name: Enterprise 4.3 Investment Committee
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python automation/enterprise43_investment_committee.py
+
+      - name: Enterprise 4.4 Portfolio Brain
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python automation/enterprise44_portfolio_brain.py
+
+      - name: Enterprise 4.5 Capture Decision Memory
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ENTERPRISE45_OUTCOME_DAYS: "1"
+        run: python automation/enterprise45_decision_memory.py
+
+      - name: Enterprise 4.5 Evaluate Learning Outcomes
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ENTERPRISE45_WIN_THRESHOLD: "0.25"
+          ENTERPRISE45_LOSS_THRESHOLD: "-0.25"
+        run: python automation/enterprise45_learning_engine.py
+
+      - name: Enterprise 4.5 Update Strategy Ratings
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python automation/enterprise45_strategy_rating.py
+
+      - name: Verify current-date operational data
+        if: success()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python automation/enterprise45_scheduler_status.py
+
+      - name: Scheduler summary
+        if: always()
+        run: |
+          echo "## Enterprise 4.5 Scheduler" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Scheduled local time: 16:10 Asia/Taipei" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Cron: 10 8 * * 1-5 (UTC)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Mode: PAPER ONLY" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Live trading: disabled" >> "$GITHUB_STEP_SUMMARY"

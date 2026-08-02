@@ -1,7 +1,7 @@
 {
-  "name": "gpt-quant-enterprise-4-5-foundation",
+  "name": "gpt-quant-enterprise-4-5-scheduler-pack",
   "private": true,
-  "version": "4.5.0",
+  "version": "4.5.1",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -2,9 +2,6 @@ name: Enterprise 4.5 Learning Cycle
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "10 8 * * 1-5"
-
 permissions:
   contents: read
 
