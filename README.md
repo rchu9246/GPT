@@ -1,12 +1,14 @@
-# GPT Quant Enterprise 4.3 Stable
+# GPT Quant Enterprise 4.4 Stable
 
-Enterprise 4.3 adds:
-- AI Investment Committee
-- multi-agent weighted voting
-- risk veto
-- investment thesis generation
-- explainable decisions
-- committee audit trail
-- knowledge capture foundation
+Enterprise 4.4 adds:
+- Portfolio Brain
+- decision memory
+- proxy trade replay
+- win and mistake pattern learning
+- confidence calibration
+- strategy evolution proposals
+- self-learning status and dashboard
 
-Live trading remains disabled.
+This release remains PAPER ONLY.
+It does not modify strategy source code automatically.
+Live learning and live trading remain disabled.
