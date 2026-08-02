@@ -1,5 +1,5 @@
 {
-  "version": "4.4.0",
+  "version": "4.5.0",
   "mode": "PAPER_ONLY",
   "account_name": "paper-main",
   "risk": {
@@ -74,7 +74,12 @@
     "win_pattern_learning": true,
     "confidence_calibration": true,
     "strategy_evolution": true,
-    "self_learning_engine": true
+    "self_learning_engine": true,
+    "decision_memory_v45": true,
+    "learning_feedback_v45": true,
+    "strategy_rating_v45": true,
+    "learning_cycle_v45": true,
+    "decision_intelligence_dashboard": true
   },
   "platform_generation": "ENTERPRISE_4",
   "committee": {
@@ -90,6 +95,9 @@
     "confidence_ceiling": 95,
     "strategy_promotion_threshold": 75,
     "strategy_retirement_threshold": 30,
-    "live_learning_enabled": false
+    "live_learning_enabled": false,
+    "outcome_horizon_days": 1,
+    "win_threshold_pct": 0.25,
+    "loss_threshold_pct": -0.25
   }
 }
