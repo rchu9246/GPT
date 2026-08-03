@@ -1,0 +1,1 @@
+export type Dashboard46={dashboard_date:string;overall_status:string;market_regime:string;portfolios_processed:number;strategies_processed:number;average_health_score:number;average_strategy_edge:number;open_decisions:number;learning_feedback_records:number;scheduler_status:string;blockers:string[];highlights:string[];summary:string;};

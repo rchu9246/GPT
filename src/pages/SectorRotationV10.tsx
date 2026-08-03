@@ -1,0 +1,5 @@
+import { useEffect, useState } from "react";
+import { formatNum, formatPct, loadLatestSignals, sectorRotation } from "../lib/v9Data";
+import type { SectorSnapshot } from "../types/v9";
+
+export default function SectorRotationV10(){ const [rows,setRows]=useState<SectorSnapshot[]>([]); useEffect(()=>{loadLatestSignals().then((signals)=>setRows(sectorRotation(signals))).catch(()=>setRows([]));},[]); return <section><div className="page-title"><div><div className="eyebrow">V10 SECTOR ROTATION</div><h1>產業輪動雷達</h1><p>依產業平均 Score、風險與偏多比例排序。</p></div></div><div className="panel"><div className="table-wrap"><table><thead><tr><th>排名</th><th>產業</th><th>標的數</th><th>平均 Score</th><th>平均風險</th><th>偏多比例</th></tr></thead><tbody>{rows.map((row,index)=><tr key={row.industry}><td>{index+1}</td><td><strong>{row.industry}</strong></td><td>{row.count}</td><td>{formatNum(row.averageScore)}</td><td>{formatNum(row.averageRisk)}</td><td>{formatPct(row.bullishRatio)}</td></tr>)}</tbody></table></div></div></section>; }

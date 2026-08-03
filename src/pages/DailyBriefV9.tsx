@@ -1,0 +1,8 @@
+import { useEffect, useMemo, useState } from "react";
+import { formatNum, loadLatestSignals, marketIntelligence, ratingLabel, regimeLabel } from "../lib/v9Data";
+import type { SignalRow } from "../types/v9";
+export default function DailyBriefV9() {
+  const [signals, setSignals] = useState<SignalRow[]>([]); useEffect(() => { loadLatestSignals().then(setSignals).catch(() => setSignals([])); }, []); const intel = useMemo(() => marketIntelligence(signals), [signals]);
+  const top = signals.slice(0, 3); const message = !signals.length ? "等待最新訊號。" : `最新交易日 ${signals[0].trade_date}，市場屬於${regimeLabel(intel.regime)}，平均 Score ${intel.averageScore.toFixed(1)}。優先觀察 ${top.map((row) => row.symbol).join("、")}。`;
+  return <section><div className="page-title"><div><div className="eyebrow">DAILY EXECUTIVE BRIEF</div><h1>每日決策簡報</h1><p>將量化訊號轉換為管理層可讀的市場摘要。</p></div></div><div className="panel report-hero"><div className="eyebrow">今日結論</div><h2>{regimeLabel(intel.regime)}</h2><p className="report-summary">{message}</p><div className="report-action">{intel.regime === "RISK_ON" ? "採取選擇性進攻，集中高品質與低風險標的。" : intel.regime === "NEUTRAL" ? "控制總曝險，等待市場廣度改善。" : "提高現金、縮小部位並嚴格執行停損。"}</div></div><div className="professional-signal-grid">{signals.slice(0, 6).map((row) => <article className="professional-signal-card" key={row.symbol}><div className="signal-card-head"><div><strong>{row.symbol}</strong><span>{row.name ?? ""}</span></div><b>{formatNum(row.score)}</b></div><span className={`rating rating-${row.rating.toLowerCase()}`}>{ratingLabel(row.rating)}</span><p>趨勢 {formatNum(row.trend_score)} · 品質 {formatNum(row.quality_score)} · 風險 {formatNum(row.risk_score)}</p></article>)}</div></section>;
+}

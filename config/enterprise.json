@@ -1,5 +1,5 @@
 {
-  "version": "4.5.1",
+  "version": "4.6.0",
   "mode": "PAPER_ONLY",
   "account_name": "paper-main",
   "risk": {
@@ -79,7 +79,13 @@
     "learning_feedback_v45": true,
     "strategy_rating_v45": true,
     "learning_cycle_v45": true,
-    "decision_intelligence_dashboard": true
+    "decision_intelligence_dashboard": true,
+    "performance_analytics_v46": true,
+    "market_intelligence_v46": true,
+    "strategy_analytics_v46": true,
+    "portfolio_health_v46": true,
+    "market_replay_v46": true,
+    "enterprise_dashboard_v46": true
   },
   "platform_generation": "ENTERPRISE_4",
   "committee": {
@@ -108,5 +114,11 @@
     "manual_dispatch_enabled": true,
     "single_orchestrator": true,
     "cancel_in_progress": false
+  },
+  "analytics": {
+    "risk_free_rate_pct": 1.5,
+    "minimum_observations": 5,
+    "market_regime_window": 20,
+    "live_trading_enabled": false
   }
 }
