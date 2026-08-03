@@ -1,25 +1,30 @@
 {
-  "name": "Enterprise 5.5 Promotion Control Suite",
-  "version": "2.0",
-  "enterprise_version": "5.5.2",
+  "name": "Enterprise 5.6 Evolution Intelligence Suite",
+  "version": "1.0",
+  "enterprise_version": "5.6.0",
   "overlay_root": true,
   "files": [
-    "automation/enterprise55_promotion_control.py",
-    ".github/workflows/enterprise-5-5-promotion-control.yml",
-    "supabase/ENTERPRISE_5_5_PROMOTION_CONTROL_VERIFY_v2.0.sql",
-    "ENTERPRISE_5_5_PROMOTION_CONTROL_V2_INSTALL_GUIDE.md"
+    "automation/enterprise56_evolution_intelligence.py",
+    ".github/workflows/enterprise-5-6-evolution-intelligence.yml",
+    "supabase/ENTERPRISE_5_6_EVOLUTION_VERIFY.sql",
+    "ENTERPRISE_5_6_EVOLUTION_INTELLIGENCE_INSTALL_GUIDE.md"
   ],
-  "fixes": [
-    "Fallback from missing v54 candidate versions to adaptive proposals",
-    "Fail workflow if v54 proposals exist but zero v55 requests are created",
-    "Verify downstream plans, cycles, and comparisons"
+  "capabilities": [
+    "Candidate Portfolio Registration",
+    "Historical Replay Proxy",
+    "Stress Testing",
+    "Monte Carlo Simulation",
+    "Evolution Scoring",
+    "Portfolio Ranking",
+    "Human Review Selection",
+    "Metrics and Status Update"
   ],
   "safety": {
     "paper_only": true,
     "human_approval_required": true,
-    "automatic_production_promotion": false,
-    "automatic_agent_weight_application": false,
-    "automatic_risk_parameter_application": false,
+    "automatic_baseline_promotion": false,
+    "automatic_portfolio_application": false,
+    "automatic_live_deployment": false,
     "automatic_rollback_execution": false,
     "live_trading": false,
     "broker_submission": false
