@@ -1,0 +1,101 @@
+name: Enterprise 5.0 Operating System
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: enterprise-5-0-operating-system
+  cancel-in-progress: false
+
+jobs:
+  orchestrator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Enterprise 5.0 Orchestrator
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python automation/enterprise50_operating_system.py
+
+      - name: Verify Enterprise 5.0 cycle
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PYTHONPATH: ${{ github.workspace }}/automation
+        run: |
+          python - <<'PY'
+          import os
+          from datetime import date
+          from enterprise2.client import SupabaseRestClient
+
+          run_date = os.environ.get(
+              "QUANT_RUN_DATE",
+              date.today().isoformat(),
+          )
+          client = SupabaseRestClient()
+
+          state = client.get(
+              "operating_state_v50",
+              f"state_date=eq.{run_date}&limit=1",
+          )
+          if not state:
+              raise SystemExit("No operating_state_v50 record")
+
+          cycle_id = state[0].get("current_cycle_id")
+          if not cycle_id:
+              raise SystemExit("No Enterprise 5.0 cycle_id")
+
+          checks = {
+              "execution_context_v50": (
+                  f"cycle_id=eq.{cycle_id}&limit=1"
+              ),
+              "workflow_history_v50": (
+                  f"cycle_id=eq.{cycle_id}&limit=1"
+              ),
+              "decision_timeline_v50": (
+                  f"cycle_id=eq.{cycle_id}&limit=1000"
+              ),
+              "event_bus_v50": (
+                  f"cycle_id=eq.{cycle_id}&limit=1000"
+              ),
+              "orchestrator_status_v50": (
+                  f"status_date=eq.{run_date}&limit=1"
+              ),
+              "system_health_v50": (
+                  f"health_date=eq.{run_date}"
+                  "&order=health_time.desc&limit=1"
+              ),
+          }
+
+          results = {}
+          for table, query in checks.items():
+              rows = client.get(table, query)
+              if not rows:
+                  raise SystemExit(f"No {table} record")
+              results[table] = len(rows)
+
+          print(
+              "Enterprise 5.0 cycle verified:",
+              "cycle_id=", cycle_id,
+              "system_state=", state[0].get("system_state"),
+              "records=", results,
+          )
+          PY
