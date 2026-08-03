@@ -1,0 +1,91 @@
+name: Enterprise 5.5 Promotion Control
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: enterprise-5-5-promotion-control
+  cancel-in-progress: false
+
+jobs:
+  promotion-control:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Enterprise 5.5 Promotion Control
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ENTERPRISE55_MIN_EVIDENCE_COUNT: "5"
+          ENTERPRISE55_MIN_READINESS_SCORE: "70"
+          ENTERPRISE55_PAPER_TRAFFIC_PCT: "10"
+          ENTERPRISE55_PAPER_DURATION_CYCLES: "5"
+        run: |
+          python automation/enterprise55_promotion_control.py
+
+      - name: Verify Enterprise 5.5 writes
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PYTHONPATH: ${{ github.workspace }}/automation
+        run: |
+          python - <<'PY'
+          import os
+          from datetime import date
+          from enterprise2.client import SupabaseRestClient
+
+          run_date = os.environ.get("QUANT_RUN_DATE", date.today().isoformat())
+          client = SupabaseRestClient()
+
+          checks = {
+              "promotion_status_v55": f"status_date=eq.{run_date}&limit=1",
+              "promotion_metrics_v55": f"metric_date=eq.{run_date}&limit=1",
+          }
+
+          results = {}
+          for table, query in checks.items():
+              rows = client.get(table, query)
+              if not rows:
+                  raise SystemExit(f"No {table} rows found")
+              results[table] = rows[0]
+
+          requests = client.get(
+              "promotion_requests_v55",
+              f"request_date=eq.{run_date}&limit=500",
+          )
+
+          print(
+              "Enterprise 5.5 verified:",
+              "status=",
+              results["promotion_status_v55"].get("overall_status"),
+              "requests=",
+              len(requests),
+              "candidate=",
+              results["promotion_status_v55"].get(
+                  "current_candidate_version"
+              ),
+              "live_trading=",
+              results["promotion_status_v55"].get(
+                  "live_trading_enabled"
+              ),
+          )
+          PY
