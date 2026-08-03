@@ -1,0 +1,18 @@
+{
+  "name": "Enterprise 5.4 Adaptive Governance Deploy Pack",
+  "version": "5.4.0",
+  "overlay_root": true,
+  "files": [
+    "automation/enterprise54_adaptive_governance.py",
+    ".github/workflows/enterprise-5-4-adaptive-governance.yml",
+    "supabase/ENTERPRISE_5_4_ADAPTIVE_GOVERNANCE_VERIFY.sql",
+    "ENTERPRISE_5_4_DEPLOY_GUIDE.md"
+  ],
+  "safety": {
+    "automatic_proposal_application": false,
+    "automatic_agent_weight_update": false,
+    "automatic_risk_parameter_update": false,
+    "automatic_rollback": false,
+    "live_trading": false
+  }
+}

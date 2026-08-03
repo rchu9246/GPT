@@ -1,0 +1,87 @@
+name: Enterprise 5.4 Adaptive Governance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: enterprise-5-4-adaptive-governance
+  cancel-in-progress: false
+
+jobs:
+  adaptive-governance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Enterprise 5.4 Adaptive Governance
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ENTERPRISE54_MIN_EVIDENCE_COUNT: "5"
+          ENTERPRISE54_MIN_RELIABILITY_SCORE: "60"
+          ENTERPRISE54_MAX_WEIGHT_CHANGE_PCT: "10"
+          ENTERPRISE54_MAX_CALIBRATION_ERROR: "25"
+        run: |
+          python automation/enterprise54_adaptive_governance.py
+
+      - name: Verify Enterprise 5.4 writes
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PYTHONPATH: ${{ github.workspace }}/automation
+        run: |
+          python - <<'PY'
+          import os
+          from datetime import date
+          from enterprise2.client import SupabaseRestClient
+
+          run_date = os.environ.get("QUANT_RUN_DATE", date.today().isoformat())
+          client = SupabaseRestClient()
+
+          status = client.get(
+              "adaptive_status_v54",
+              f"status_date=eq.{run_date}&limit=1",
+          )
+          if not status:
+              raise SystemExit("No adaptive_status_v54 row found")
+
+          metrics = client.get(
+              "adaptive_metrics_v54",
+              f"metric_date=eq.{run_date}&limit=1",
+          )
+          if not metrics:
+              raise SystemExit("No adaptive_metrics_v54 row found")
+
+          proposals = client.get(
+              "adaptive_proposals_v54",
+              f"proposal_date=eq.{run_date}&limit=500",
+          )
+
+          print(
+              "Enterprise 5.4 verified:",
+              "status=", status[0].get("overall_status"),
+              "proposals=", len(proposals),
+              "candidate_version=",
+              status[0].get("current_candidate_version"),
+              "rollback_ready=",
+              status[0].get("rollback_ready"),
+          )
+          PY
