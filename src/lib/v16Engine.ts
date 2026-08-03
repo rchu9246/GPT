@@ -1,3 +1,0 @@
-import { supabase } from "./supabase";
-import type { OrderEvaluationV16 } from "../types/v16";
-export async function loadEvaluationsV16(): Promise<OrderEvaluationV16[]> { if(!supabase) return []; const {data,error}=await supabase.from("order_evaluations_v16").select("*").order("created_at",{ascending:false}).limit(100); if(error) throw error; return (data??[]).map((r:any)=>({...r,score:Number(r.score??0),risk_score:Number(r.risk_score??0),confidence:Number(r.confidence??0),reference_price:r.reference_price==null?null:Number(r.reference_price),proposed_quantity:Number(r.proposed_quantity??0),proposed_notional:Number(r.proposed_notional??0)})) as OrderEvaluationV16[]; }

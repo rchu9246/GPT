@@ -1,1 +1,0 @@
-export type OrderEvaluationV16 = { id:string; evaluation_date:string; symbol:string|null; name:string|null; score:number; risk_score:number; confidence:number; reference_price:number|null; decision:"ACCEPTED"|"REJECTED"|"SKIPPED"; reason_code:string; reason_message:string|null; proposed_quantity:number; proposed_notional:number; order_id:string|null; created_at:string; };
