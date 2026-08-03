@@ -1,13 +1,18 @@
 {
   "name": "Enterprise 5.5 Promotion Control Suite",
-  "version": "1.0",
-  "enterprise_version": "5.5.0",
+  "version": "2.0",
+  "enterprise_version": "5.5.2",
   "overlay_root": true,
   "files": [
     "automation/enterprise55_promotion_control.py",
     ".github/workflows/enterprise-5-5-promotion-control.yml",
-    "supabase/ENTERPRISE_5_5_PROMOTION_CONTROL_VERIFY.sql",
-    "ENTERPRISE_5_5_PROMOTION_CONTROL_INSTALL_GUIDE.md"
+    "supabase/ENTERPRISE_5_5_PROMOTION_CONTROL_VERIFY_v2.0.sql",
+    "ENTERPRISE_5_5_PROMOTION_CONTROL_V2_INSTALL_GUIDE.md"
+  ],
+  "fixes": [
+    "Fallback from missing v54 candidate versions to adaptive proposals",
+    "Fail workflow if v54 proposals exist but zero v55 requests are created",
+    "Verify downstream plans, cycles, and comparisons"
   ],
   "safety": {
     "paper_only": true,

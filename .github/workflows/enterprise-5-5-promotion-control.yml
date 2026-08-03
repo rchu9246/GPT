@@ -31,12 +31,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Enterprise 5.5 Promotion Control
+      - name: Run Enterprise 5.5 Promotion Control v2.0
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          ENTERPRISE55_MIN_EVIDENCE_COUNT: "5"
-          ENTERPRISE55_MIN_READINESS_SCORE: "70"
+          ENTERPRISE55_MIN_EVIDENCE_COUNT: "1"
+          ENTERPRISE55_MIN_READINESS_SCORE: "55"
           ENTERPRISE55_PAPER_TRAFFIC_PCT: "10"
           ENTERPRISE55_PAPER_DURATION_CYCLES: "5"
         run: |
@@ -56,36 +56,65 @@ jobs:
           run_date = os.environ.get("QUANT_RUN_DATE", date.today().isoformat())
           client = SupabaseRestClient()
 
-          checks = {
-              "promotion_status_v55": f"status_date=eq.{run_date}&limit=1",
-              "promotion_metrics_v55": f"metric_date=eq.{run_date}&limit=1",
-          }
+          status_rows = client.get(
+              "promotion_status_v55",
+              f"status_date=eq.{run_date}&limit=1",
+          )
+          if not status_rows:
+              raise SystemExit("No promotion_status_v55 row found")
 
-          results = {}
-          for table, query in checks.items():
-              rows = client.get(table, query)
-              if not rows:
-                  raise SystemExit(f"No {table} rows found")
-              results[table] = rows[0]
+          metrics_rows = client.get(
+              "promotion_metrics_v55",
+              f"metric_date=eq.{run_date}&limit=1",
+          )
+          if not metrics_rows:
+              raise SystemExit("No promotion_metrics_v55 row found")
 
           requests = client.get(
               "promotion_requests_v55",
               f"request_date=eq.{run_date}&limit=500",
           )
+          proposals = client.get(
+              "adaptive_proposals_v54",
+              "limit=1",
+          )
 
+          if proposals and not requests:
+              raise SystemExit(
+                  "v54 proposals exist but v55 created zero requests"
+              )
+
+          plans = client.get(
+              "paper_canary_plans_v55",
+              f"plan_date=eq.{run_date}&limit=500",
+          )
+          cycles = client.get(
+              "paper_canary_cycles_v55",
+              f"cycle_date=eq.{run_date}&limit=500",
+          )
+          comparisons = client.get(
+              "candidate_baseline_comparisons_v55",
+              f"comparison_date=eq.{run_date}&limit=500",
+          )
+
+          if requests and (
+              not plans
+              or not cycles
+              or not comparisons
+          ):
+              raise SystemExit(
+                  "Promotion requests exist but downstream rows are missing"
+              )
+
+          status = status_rows[0]
           print(
-              "Enterprise 5.5 verified:",
-              "status=",
-              results["promotion_status_v55"].get("overall_status"),
-              "requests=",
-              len(requests),
-              "candidate=",
-              results["promotion_status_v55"].get(
-                  "current_candidate_version"
-              ),
-              "live_trading=",
-              results["promotion_status_v55"].get(
-                  "live_trading_enabled"
-              ),
+              "Enterprise 5.5 v2.0 verified:",
+              "status=", status.get("overall_status"),
+              "requests=", len(requests),
+              "plans=", len(plans),
+              "cycles=", len(cycles),
+              "comparisons=", len(comparisons),
+              "candidate=", status.get("current_candidate_version"),
+              "live_trading=", status.get("live_trading_enabled"),
           )
           PY

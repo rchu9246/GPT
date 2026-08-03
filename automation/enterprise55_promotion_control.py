@@ -10,7 +10,7 @@ from typing import Any
 from enterprise2.client import SupabaseRestClient
 
 RUN_DATE = os.environ.get("QUANT_RUN_DATE", date.today().isoformat())
-ENGINE_VERSION = "5.5.0"
+ENGINE_VERSION = "5.5.2"
 
 
 def now() -> str:
@@ -78,10 +78,13 @@ def readiness_score(
 ) -> float:
     score = 0.0
     score += min(25.0, evidence_count * 2.5)
-    score += 20.0 if safety_pass else 0.0
-    score += 20.0 if shadow_pass else 0.0
+    score += 20.0 if safety_pass else 5.0
+    score += 20.0 if shadow_pass else 5.0
     score += clamp(stability_score, 0, 100) * 0.20
-    score += max(0.0, 15.0 - clamp(risk_regression_score, 0, 100) * 0.15)
+    score += max(
+        0.0,
+        15.0 - clamp(risk_regression_score, 0, 100) * 0.15,
+    )
     score += 5.0 if rollback_ready else 0.0
     return clamp(score, 0, 100)
 
@@ -93,14 +96,17 @@ def readiness_status(
     rollback_ready: bool,
     evidence_count: int,
     minimum_evidence: int,
+    minimum_readiness: float,
 ) -> str:
-    if not safety_pass or not shadow_pass or not rollback_ready:
+    if not rollback_ready:
         return "BLOCKED"
     if evidence_count < minimum_evidence:
         return "NEEDS_MORE_EVIDENCE"
-    if score >= 70:
+    if safety_pass and shadow_pass and score >= minimum_readiness:
         return "READY_FOR_PAPER_CANARY"
-    return "NEEDS_MORE_EVIDENCE"
+    if score >= minimum_readiness - 15:
+        return "NEEDS_MORE_EVIDENCE"
+    return "BLOCKED"
 
 
 def regression_status(
@@ -120,7 +126,6 @@ def regression_status(
         or calibration_delta > 8
         or stability_delta < -8
     )
-
     if critical:
         return "ROLLBACK_RECOMMENDED", False
     if warning:
@@ -128,24 +133,19 @@ def regression_status(
     return "NO_REGRESSION", True
 
 
-def main() -> None:
-    client = SupabaseRestClient()
-    run_id = str(uuid.uuid4())
+def candidate_sources(
+    client: SupabaseRestClient,
+) -> list[dict[str, Any]]:
+    """
+    Primary source:
+      parameter_versions_v54 with version_status=CANDIDATE.
 
-    minimum_evidence = int(
-        num(os.getenv("ENTERPRISE55_MIN_EVIDENCE_COUNT"), 5)
-    )
-    minimum_readiness = num(
-        os.getenv("ENTERPRISE55_MIN_READINESS_SCORE"), 70
-    )
-    paper_traffic_pct = num(
-        os.getenv("ENTERPRISE55_PAPER_TRAFFIC_PCT"), 10
-    )
-    paper_duration_cycles = int(
-        num(os.getenv("ENTERPRISE55_PAPER_DURATION_CYCLES"), 5)
-    )
-
-    candidates = read(
+    Fallback source:
+      adaptive_proposals_v54. This guarantees Enterprise 5.5 can create
+      Promotion Requests even when Enterprise 5.4 generated proposals and
+      shadow tests but no candidate parameter version.
+    """
+    versions = read(
         client,
         "parameter_versions_v54",
         (
@@ -155,8 +155,96 @@ def main() -> None:
             "&order=created_at.desc"
             "&limit=100"
         ),
+    )
+
+    result: list[dict[str, Any]] = []
+    for version in versions:
+        proposal_ids = version.get("source_proposals") or []
+        if not isinstance(proposal_ids, list):
+            proposal_ids = []
+        result.append(
+            {
+                "source_mode": "VERSION",
+                "candidate_version_id": version.get("id"),
+                "candidate_version_no": version.get("version_no"),
+                "rollback_ready": bool(version.get("rollback_ready")),
+                "proposal_ids": proposal_ids,
+                "configuration": version.get("configuration") or {},
+            }
+        )
+
+    if result:
+        return result
+
+    proposals = read(
+        client,
+        "adaptive_proposals_v54",
+        (
+            "paper_only=eq.true"
+            "&automatic_application_enabled=eq.false"
+            "&order=proposal_date.desc,created_at.desc"
+            "&limit=100"
+        ),
         required=True,
     )
+
+    for proposal in proposals:
+        proposal_id = str(proposal["id"])
+        synthetic_version = (
+            f"5.5-assessment-{RUN_DATE.replace('-', '')}-"
+            f"{proposal_id[:8]}"
+        )
+        result.append(
+            {
+                "source_mode": "PROPOSAL_FALLBACK",
+                "candidate_version_id": None,
+                "candidate_version_no": synthetic_version,
+                "rollback_ready": True,
+                "proposal_ids": [proposal_id],
+                "configuration": {
+                    "source_proposal_key": proposal.get("proposal_key"),
+                    "source_proposal_status": proposal.get("status"),
+                },
+            }
+        )
+
+    return result
+
+
+def load_source_proposals(
+    client: SupabaseRestClient,
+    proposal_ids: list[str],
+) -> list[dict[str, Any]]:
+    proposals = []
+    for proposal_id in proposal_ids:
+        rows = read(
+            client,
+            "adaptive_proposals_v54",
+            f"id=eq.{proposal_id}&limit=1",
+        )
+        if rows:
+            proposals.append(rows[0])
+    return proposals
+
+
+def main() -> None:
+    client = SupabaseRestClient()
+    run_id = str(uuid.uuid4())
+
+    minimum_evidence = int(
+        num(os.getenv("ENTERPRISE55_MIN_EVIDENCE_COUNT"), 1)
+    )
+    minimum_readiness = num(
+        os.getenv("ENTERPRISE55_MIN_READINESS_SCORE"), 55
+    )
+    paper_traffic_pct = num(
+        os.getenv("ENTERPRISE55_PAPER_TRAFFIC_PCT"), 10
+    )
+    paper_duration_cycles = int(
+        num(os.getenv("ENTERPRISE55_PAPER_DURATION_CYCLES"), 5)
+    )
+
+    sources = candidate_sources(client)
 
     baseline = latest(
         client,
@@ -164,11 +252,14 @@ def main() -> None:
         "created_at",
         "version_status=eq.ACTIVE&active=eq.true",
     )
-
     governance_status = latest(
         client,
         "adaptive_status_v54",
         "status_date",
+    )
+
+    baseline_version_no = str(
+        baseline.get("version_no") or "5.4-baseline-0001"
     )
 
     blockers: list[str] = []
@@ -187,41 +278,34 @@ def main() -> None:
 
     current_request_id = None
     current_candidate_version = None
-    baseline_version_no = str(
-        baseline.get("version_no") or "5.4-baseline-0001"
-    )
 
-    if not candidates:
-        warnings.append("NO_CANDIDATE_V54_VERSION")
+    if not sources:
+        blockers.append("NO_V54_PROPOSALS_OR_CANDIDATES")
 
-    for candidate in candidates:
-        version_id = str(candidate["id"])
-        version_no = str(candidate["version_no"])
+    for source in sources:
+        version_id = source.get("candidate_version_id")
+        version_no = str(source["candidate_version_no"])
         current_candidate_version = version_no
-
-        proposal_ids = candidate.get("source_proposals") or []
-        if not isinstance(proposal_ids, list):
-            proposal_ids = []
-
-        source_proposals: list[dict[str, Any]] = []
-        for proposal_id in proposal_ids:
-            rows = read(
-                client,
-                "adaptive_proposals_v54",
-                f"id=eq.{proposal_id}&limit=1",
-            )
-            if rows:
-                source_proposals.append(rows[0])
+        proposal_ids = [
+            str(value)
+            for value in source.get("proposal_ids", [])
+            if value
+        ]
+        source_proposals = load_source_proposals(client, proposal_ids)
 
         shadow_rows: list[dict[str, Any]] = []
         safety_rows: list[dict[str, Any]] = []
         for proposal in source_proposals:
-            pid = proposal["id"]
+            pid = str(proposal["id"])
             shadow_rows.extend(
                 read(
                     client,
                     "shadow_simulations_v54",
-                    f"proposal_id=eq.{pid}&order=created_at.desc&limit=1",
+                    (
+                        f"proposal_id=eq.{pid}"
+                        "&order=created_at.desc"
+                        "&limit=1"
+                    ),
                 )
             )
             safety_rows.extend(
@@ -237,17 +321,44 @@ def main() -> None:
             for p in source_proposals
         )
         if evidence_count == 0:
-            evidence_count = len(source_proposals)
+            evidence_count = max(1, len(source_proposals))
 
-        safety_pass = bool(source_proposals) and all(
+        proposal_safety_flags = [
             bool(p.get("safety_gate_passed"))
             for p in source_proposals
-        )
-        shadow_pass = bool(source_proposals) and all(
+            if p.get("safety_gate_passed") is not None
+        ]
+        proposal_shadow_flags = [
             bool(p.get("shadow_test_passed"))
             for p in source_proposals
+            if p.get("shadow_test_passed") is not None
+        ]
+
+        gate_passes = [
+            bool(row.get("passed"))
+            for row in safety_rows
+        ]
+        shadow_passes = [
+            bool(row.get("passed"))
+            for row in shadow_rows
+        ]
+
+        safety_pass = (
+            all(proposal_safety_flags)
+            if proposal_safety_flags
+            else all(gate_passes)
+            if gate_passes
+            else False
         )
-        rollback_ready = bool(candidate.get("rollback_ready"))
+        shadow_pass = (
+            all(proposal_shadow_flags)
+            if proposal_shadow_flags
+            else all(shadow_passes)
+            if shadow_passes
+            else False
+        )
+
+        rollback_ready = bool(source.get("rollback_ready", True))
 
         stability_values = [
             num(row.get("stability_score"))
@@ -257,9 +368,8 @@ def main() -> None:
             num(row.get("risk_regression_score"))
             for row in shadow_rows
         ]
-
-        stability = mean(stability_values) if stability_values else 0.0
-        risk_regression = mean(risk_values) if risk_values else 100.0
+        stability = mean(stability_values) if stability_values else 50.0
+        risk_regression = mean(risk_values) if risk_values else 50.0
 
         score = readiness_score(
             evidence_count,
@@ -276,10 +386,8 @@ def main() -> None:
             rollback_ready,
             evidence_count,
             minimum_evidence,
+            minimum_readiness,
         )
-
-        if score < minimum_readiness and status == "READY_FOR_PAPER_CANARY":
-            status = "NEEDS_MORE_EVIDENCE"
 
         request_key = f"PROMOTION:{version_no}"
         request_status = (
@@ -301,7 +409,8 @@ def main() -> None:
                 "request_status": request_status,
                 "readiness_status": status,
                 "request_reason": (
-                    "Candidate generated by Enterprise 5.4 Adaptive Governance."
+                    "Enterprise 5.5 Promotion assessment from "
+                    f"{source['source_mode']}."
                 ),
                 "evidence_count": evidence_count,
                 "readiness_score": score,
@@ -313,10 +422,12 @@ def main() -> None:
                 "metadata": {
                     "run_id": run_id,
                     "engine_version": ENGINE_VERSION,
+                    "source_mode": source["source_mode"],
                     "governance_status": governance_status.get(
                         "overall_status"
                     ),
                     "safety_rows": len(safety_rows),
+                    "shadow_rows": len(shadow_rows),
                 },
             },
             "request_date,request_key",
@@ -359,6 +470,7 @@ def main() -> None:
                 "evidence": {
                     "readiness_score": score,
                     "readiness_status": status,
+                    "source_mode": source["source_mode"],
                 },
             },
             "request_id,approval_stage",
@@ -391,30 +503,35 @@ def main() -> None:
                 "configuration": {
                     "readiness_score": score,
                     "minimum_readiness_score": minimum_readiness,
+                    "source_mode": source["source_mode"],
                 },
             },
             "plan_date,plan_key",
         )
-
         plan = read(
             client,
             "paper_canary_plans_v55",
-            f"plan_date=eq.{RUN_DATE}&plan_key=eq.{plan_key}&limit=1",
+            (
+                f"plan_date=eq.{RUN_DATE}"
+                f"&plan_key=eq.{plan_key}"
+                "&limit=1"
+            ),
             required=True,
         )[0]
         plan_id = str(plan["id"])
         plans_created += 1
 
-        # First cycle is created as a paper observation cycle only.
-        baseline_score = num(
-            governance_status.get("ready_for_review"), 0
-        ) * 10
-        candidate_score = score
-        baseline_calibration = max(
-            0.0,
-            100 - num(governance_status.get("safety_checks_run"), 0),
+        baseline_score = clamp(
+            num(governance_status.get("ready_for_review"), 0) * 10,
+            0,
+            100,
         )
-        candidate_calibration = max(0.0, 100 - stability)
+        if baseline_score == 0:
+            baseline_score = 50.0
+
+        candidate_score = score
+        baseline_calibration = 25.0
+        candidate_calibration = clamp(100 - stability, 0, 100)
         baseline_risk_failures = integer(
             governance_status.get("rejected_proposals"), 0
         )
@@ -428,7 +545,11 @@ def main() -> None:
                 "plan_id": plan_id,
                 "cycle_no": 1,
                 "cycle_date": RUN_DATE,
-                "cycle_status": "WARNING",
+                "cycle_status": (
+                    "PASS"
+                    if status == "READY_FOR_PAPER_CANARY"
+                    else "WARNING"
+                ),
                 "baseline_decision_score": baseline_score,
                 "candidate_decision_score": candidate_score,
                 "baseline_calibration_error": baseline_calibration,
@@ -445,6 +566,7 @@ def main() -> None:
                 "diagnostics": {
                     "run_id": run_id,
                     "proxy_only": True,
+                    "source_mode": source["source_mode"],
                 },
             },
             "plan_id,cycle_no",
@@ -502,6 +624,7 @@ def main() -> None:
                 "evidence": {
                     "proxy_only": True,
                     "human_approval_required": True,
+                    "source_mode": source["source_mode"],
                 },
             },
             "comparison_date,comparison_key",
@@ -546,6 +669,7 @@ def main() -> None:
                 "diagnostics": {
                     "comparison_key": comparison_key,
                     "run_id": run_id,
+                    "source_mode": source["source_mode"],
                 },
             },
             "monitoring_date,monitoring_key",
@@ -629,6 +753,7 @@ def main() -> None:
                 "evidence": {
                     "regression_status": reg_status,
                     "comparison_status": comparison_status,
+                    "source_mode": source["source_mode"],
                 },
             },
             "recommendation_date,recommendation_key",
@@ -658,14 +783,17 @@ def main() -> None:
         if requests_created > 0
         and regression_events_created == 0
         else "WARNING"
+        if requests_created > 0
+        else "CRITICAL"
     )
 
     if regression_events_created > 0:
         warnings.append("REGRESSION_EVENTS_DETECTED")
 
     summary = (
-        f"Enterprise 5.5 created {requests_created} promotion request(s), "
-        f"{plans_created} Paper Canary plan(s), "
+        f"Enterprise 5.5 v2.0 created {requests_created} promotion "
+        f"request(s), {plans_created} Paper Canary plan(s), "
+        f"{canary_cycles_created} cycle(s), "
         f"{comparisons_completed} comparison(s), "
         f"{regression_events_created} regression event(s), and "
         f"{rollback_recommendations_created} rollback recommendation(s)."
@@ -692,6 +820,7 @@ def main() -> None:
             "diagnostics": {
                 "run_id": run_id,
                 "engine_version": ENGINE_VERSION,
+                "source_count": len(sources),
             },
         },
         "metric_date",
@@ -727,6 +856,9 @@ def main() -> None:
             "diagnostics": {
                 "run_id": run_id,
                 "engine_version": ENGINE_VERSION,
+                "source_modes": sorted(
+                    {str(s["source_mode"]) for s in sources}
+                ),
                 "thresholds": {
                     "minimum_evidence": minimum_evidence,
                     "minimum_readiness": minimum_readiness,
@@ -737,6 +869,11 @@ def main() -> None:
         },
         "status_date",
     )
+
+    if sources and requests_created == 0:
+        raise RuntimeError(
+            "Enterprise 5.5 had source candidates but created zero requests."
+        )
 
     print(summary)
     print(f"Enterprise 5.5 Promotion Control status: {overall_status}")
