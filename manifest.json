@@ -1,7 +1,7 @@
 {
   "name": "Enterprise 5.6 Evolution Intelligence Suite",
-  "version": "1.0",
-  "enterprise_version": "5.6.0",
+  "version": "1.1",
+  "enterprise_version": "5.6.1",
   "overlay_root": true,
   "files": [
     "automation/enterprise56_evolution_intelligence.py",
@@ -28,5 +28,8 @@
     "automatic_rollback_execution": false,
     "live_trading": false,
     "broker_submission": false
-  }
+  },
+  "fixes": [
+    "Constrain deterministic random_seed to PostgreSQL signed BIGINT range"
+  ]
 }

@@ -12,7 +12,7 @@ from typing import Any
 from enterprise2.client import SupabaseRestClient
 
 RUN_DATE = os.environ.get("QUANT_RUN_DATE", date.today().isoformat())
-ENGINE_VERSION = "5.6.0"
+ENGINE_VERSION = "5.6.1"
 
 
 def now() -> str:
@@ -39,9 +39,12 @@ def clamp(value: float, low: float, high: float) -> float:
 
 
 def stable_seed(*parts: Any) -> int:
+    """Return a deterministic PostgreSQL signed BIGINT-safe seed."""
     raw = "|".join(str(p) for p in parts)
-    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
-    return int(digest[:16], 16)
+    digest = hashlib.sha256(raw.encode("utf-8")).digest()
+    # PostgreSQL BIGINT is signed: -9223372036854775808..9223372036854775807.
+    # Keep the deterministic seed inside the non-negative signed range.
+    return int.from_bytes(digest[:8], "big", signed=False) % (2**63 - 1)
 
 
 def read(
