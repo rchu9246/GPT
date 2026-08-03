@@ -1,0 +1,65 @@
+name: Enterprise 4.6.5 Market Regime AI
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: enterprise-4-6-5-market-regime-ai
+  cancel-in-progress: false
+
+jobs:
+  market-regime-ai:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Market Regime AI
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python automation/enterprise465_market_regime.py
+
+      - name: Verify Market Regime AI write
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python - <<'PY'
+          import os
+          from datetime import date
+          from enterprise2.client import SupabaseRestClient
+
+          run_date = os.environ.get("QUANT_RUN_DATE", date.today().isoformat())
+          client = SupabaseRestClient()
+          rows = client.get(
+              "market_regime_ai_v46",
+              f"regime_date=eq.{run_date}&limit=1",
+          )
+          if not rows:
+              raise SystemExit(
+                  f"No market_regime_ai_v46 record found for {run_date}"
+              )
+          row = rows[0]
+          print(
+              "Market Regime AI write verified:",
+              row.get("market_regime"),
+              row.get("regime_confidence"),
+              row.get("recommended_posture"),
+          )
+          PY
