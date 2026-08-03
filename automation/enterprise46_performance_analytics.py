@@ -1,32 +1,205 @@
 from __future__ import annotations
-import math,os
-from datetime import date
-from typing import Any
-from enterprise2.client import SupabaseRestClient
-RUN_DATE=os.environ.get("QUANT_RUN_DATE",date.today().isoformat())
-def n(v:Any,d:float=0.0)->float:
-    try:
-        x=float(v); return x if math.isfinite(x) else d
-    except (TypeError,ValueError): return d
-def latest(c,t,f,where=""):
-    q=f"{where}&order={f}.desc&limit=1" if where else f"order={f}.desc&limit=1"
-    r=c.get(t,q); return r[0] if r else {}
-def clamp(x,a=0.0,b=100.0): return max(a,min(b,x))
 
-from statistics import mean,pstdev
-def main():
- c=SupabaseRestClient(); ps=c.get("enterprise_portfolios_v40","lifecycle_status=eq.ACTIVE&portfolio_type=eq.PAPER&limit=100"); count=0
- for p in ps:
-  pid=str(p["id"]); rows=c.get("portfolio_snapshots_v40",f"portfolio_id=eq.{pid}&order=snapshot_date.asc&limit=500")
-  compat=latest(c,"compat_portfolios_v40","latest_snapshot_date",f"portfolio_id=eq.{pid}"); risk=latest(c,"portfolio_risk_v41","risk_date",f"portfolio_id=eq.{pid}")
-  eq=[n(x.get("equity")) for x in rows if n(x.get("equity"))>0]; cur=n(compat.get("latest_equity"),eq[-1] if eq else n(p.get("starting_cash"),1000000))
-  if not eq: eq=[n(p.get("starting_cash"),1000000),cur]
-  elif eq[-1]!=cur: eq.append(cur)
-  ret=[(eq[i]/eq[i-1]-1)*100 for i in range(1,len(eq)) if eq[i-1]>0]; avg=mean(ret) if ret else 0
-  vol=pstdev(ret)*math.sqrt(252) if len(ret)>=2 else 0; dn=[x for x in ret if x<0]; ddv=pstdev(dn)*math.sqrt(252) if len(dn)>=2 else 0; annual=avg*252
-  peak=eq[0]; draw=[]
-  for v in eq: peak=max(peak,v); draw.append((v/peak-1)*100 if peak else 0)
-  mdd=abs(min(draw)) if draw else 0; wins=[x for x in ret if x>0]; losses=[x for x in ret if x<0]; gp=sum(wins); gl=abs(sum(losses)); gross=n(risk.get("gross_exposure_pct"))
-  c.upsert("performance_daily_v46",{"performance_date":RUN_DATE,"portfolio_id":pid,"equity":cur,"daily_return_pct":ret[-1] if ret else 0,"cumulative_return_pct":(eq[-1]/eq[0]-1)*100 if eq[0] else 0,"rolling_volatility_pct":vol,"sharpe_ratio":(annual-1.5)/vol if vol else 0,"sortino_ratio":(annual-1.5)/ddv if ddv else 0,"calmar_ratio":annual/mdd if mdd else 0,"max_drawdown_pct":mdd,"win_rate":len(wins)/len(ret)*100 if ret else 0,"profit_factor":gp/gl if gl else gp,"expectancy_pct":avg,"gross_exposure_pct":gross,"cash_ratio_pct":clamp(100-gross),"sample_count":len(ret),"diagnostics":{"source":"portfolio_snapshots_v40+compat_portfolios_v40"}},"performance_date,portfolio_id"); count+=1
- print(f"Enterprise 4.6 generated {count} performance record(s).")
-if __name__=="__main__": main()
+import math
+import os
+from datetime import date
+from statistics import mean, pstdev
+from typing import Any
+
+from enterprise2.client import SupabaseRestClient
+
+RUN_DATE = os.environ.get("QUANT_RUN_DATE", date.today().isoformat())
+
+
+def n(value: Any, fallback: float = 0.0) -> float:
+    try:
+        result = float(value)
+        return result if math.isfinite(result) else fallback
+    except (TypeError, ValueError):
+        return fallback
+
+
+def latest(
+    client: SupabaseRestClient,
+    table: str,
+    field: str,
+    where: str = "",
+) -> dict[str, Any]:
+    query = (
+        f"{where}&order={field}.desc&limit=1"
+        if where
+        else f"order={field}.desc&limit=1"
+    )
+    rows = client.get(table, query)
+    return rows[0] if rows else {}
+
+
+def safe_get(
+    client: SupabaseRestClient,
+    table: str,
+    query: str,
+) -> list[dict[str, Any]]:
+    """
+    Read an optional compatibility source without terminating the pipeline.
+
+    portfolio_snapshots_v40 does not exist in some upgraded deployments.
+    In that case Performance Analytics falls back to compat_portfolios_v40.
+    """
+    try:
+        rows = client.get(table, query)
+        return rows if isinstance(rows, list) else []
+    except Exception as exc:
+        print(f"Optional source unavailable: {table}: {exc}")
+        return []
+
+
+def clamp(value: float, low: float = 0.0, high: float = 100.0) -> float:
+    return max(low, min(high, value))
+
+
+def main() -> None:
+    client = SupabaseRestClient()
+    portfolios = client.get(
+        "enterprise_portfolios_v40",
+        "lifecycle_status=eq.ACTIVE&portfolio_type=eq.PAPER&limit=100",
+    )
+    generated = 0
+
+    for portfolio in portfolios:
+        portfolio_id = str(portfolio["id"])
+
+        snapshot_rows = safe_get(
+            client,
+            "portfolio_snapshots_v40",
+            (
+                f"portfolio_id=eq.{portfolio_id}"
+                "&order=snapshot_date.asc&limit=500"
+            ),
+        )
+
+        compat = latest(
+            client,
+            "compat_portfolios_v40",
+            "latest_snapshot_date",
+            f"portfolio_id=eq.{portfolio_id}",
+        )
+        risk = latest(
+            client,
+            "portfolio_risk_v41",
+            "risk_date",
+            f"portfolio_id=eq.{portfolio_id}",
+        )
+
+        equities = [
+            n(row.get("equity"))
+            for row in snapshot_rows
+            if n(row.get("equity")) > 0
+        ]
+
+        starting_cash = n(portfolio.get("starting_cash"), 1_000_000)
+        current_equity = n(
+            compat.get("latest_equity"),
+            equities[-1] if equities else starting_cash,
+        )
+
+        source = "portfolio_snapshots_v40"
+        if not equities:
+            # Compatibility fallback for deployments without snapshot history.
+            equities = [starting_cash, current_equity]
+            source = "compat_portfolios_v40_fallback"
+        elif equities[-1] != current_equity:
+            equities.append(current_equity)
+
+        returns = [
+            (equities[index] / equities[index - 1] - 1) * 100
+            for index in range(1, len(equities))
+            if equities[index - 1] > 0
+        ]
+
+        average_return = mean(returns) if returns else 0.0
+        volatility = (
+            pstdev(returns) * math.sqrt(252)
+            if len(returns) >= 2
+            else 0.0
+        )
+
+        downside_returns = [value for value in returns if value < 0]
+        downside_deviation = (
+            pstdev(downside_returns) * math.sqrt(252)
+            if len(downside_returns) >= 2
+            else 0.0
+        )
+        annualized_return = average_return * 252
+
+        peak = equities[0]
+        drawdowns: list[float] = []
+        for equity in equities:
+            peak = max(peak, equity)
+            drawdowns.append((equity / peak - 1) * 100 if peak else 0.0)
+
+        max_drawdown = abs(min(drawdowns)) if drawdowns else 0.0
+        wins = [value for value in returns if value > 0]
+        losses = [value for value in returns if value < 0]
+        gross_profit = sum(wins)
+        gross_loss = abs(sum(losses))
+        gross_exposure = n(risk.get("gross_exposure_pct"))
+
+        client.upsert(
+            "performance_daily_v46",
+            {
+                "performance_date": RUN_DATE,
+                "portfolio_id": portfolio_id,
+                "equity": current_equity,
+                "daily_return_pct": returns[-1] if returns else 0,
+                "cumulative_return_pct": (
+                    (equities[-1] / equities[0] - 1) * 100
+                    if equities[0] > 0
+                    else 0
+                ),
+                "rolling_volatility_pct": volatility,
+                "sharpe_ratio": (
+                    (annualized_return - 1.5) / volatility
+                    if volatility > 0
+                    else 0
+                ),
+                "sortino_ratio": (
+                    (annualized_return - 1.5) / downside_deviation
+                    if downside_deviation > 0
+                    else 0
+                ),
+                "calmar_ratio": (
+                    annualized_return / max_drawdown
+                    if max_drawdown > 0
+                    else 0
+                ),
+                "max_drawdown_pct": max_drawdown,
+                "win_rate": (
+                    len(wins) / len(returns) * 100 if returns else 0
+                ),
+                "profit_factor": (
+                    gross_profit / gross_loss
+                    if gross_loss > 0
+                    else gross_profit
+                ),
+                "expectancy_pct": average_return,
+                "gross_exposure_pct": gross_exposure,
+                "cash_ratio_pct": clamp(100 - gross_exposure),
+                "sample_count": len(returns),
+                "diagnostics": {
+                    "source": source,
+                    "snapshot_history_available": bool(snapshot_rows),
+                    "compatibility_hotfix": "4.6.1",
+                },
+            },
+            "performance_date,portfolio_id",
+        )
+        generated += 1
+
+    print(
+        f"Enterprise 4.6.1 generated {generated} "
+        "performance record(s)."
+    )
+
+
+if __name__ == "__main__":
+    main()
