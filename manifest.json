@@ -1,33 +1,40 @@
 {
-  "name": "GPT Quant V9 Confidence Engine",
-  "version": "2.2",
-  "engine_version": "9.2.2",
+  "name": "GPT Quant V9 Position Sizing Engine",
+  "version": "1.0",
+  "engine_version": "9.3.0",
   "files": [
-    "automation/gpt_quant_v9_confidence_engine_v2.py",
-    ".github/workflows/gpt-quant-v9-confidence-engine-v2.yml",
-    "supabase/GPT_QUANT_V9_CONFIDENCE_ENGINE_V2_VERIFY.sql",
-    "GPT_QUANT_V9_CONFIDENCE_ENGINE_V2_INSTALL_GUIDE.md"
+    "automation/gpt_quant_v9_position_sizing_engine.py",
+    ".github/workflows/gpt-quant-v9-position-sizing-engine.yml",
+    "supabase/GPT_QUANT_V9_POSITION_SIZING_FOUNDATION.sql",
+    "supabase/GPT_QUANT_V9_POSITION_SIZING_VERIFY.sql",
+    "GPT_QUANT_V9_POSITION_SIZING_INSTALL_GUIDE.md"
   ],
-  "components": [
-    "simulation_pass_rate",
-    "stress_pass_rate",
-    "walk_forward_consistency",
-    "regime_consistency",
+  "inputs": [
+    "evolution_score",
+    "confidence_score",
+    "rank_no",
+    "max_drawdown",
+    "volatility",
     "risk_stability",
-    "cross_run_dispersion",
-    "evidence_density",
     "data_completeness",
-    "uncertainty_penalty"
+    "recommendation",
+    "selected_for_review"
+  ],
+  "outputs": [
+    "final_position_size",
+    "sizing_status",
+    "blockers",
+    "warnings",
+    "components",
+    "risk_metrics"
   ],
   "safety": {
-    "automatic_promotion": false,
-    "automatic_baseline_activation": false,
+    "paper_only": true,
+    "maximum_position_size": 0.25,
+    "default_maximum_position_size": 0.1,
+    "automatic_order_submission": false,
     "live_trading": false,
-    "broker_submission": false
-  },
-  "fixes": [
-    "Update the latest evolution_status_v56 row instead of requiring today's status_date",
-    "Prefer status row id for precise diagnostics update",
-    "Fail explicitly if evolution_status_v56 contains no rows"
-  ]
+    "broker_submission": false,
+    "ranking_table_overwrite": false
+  }
 }
