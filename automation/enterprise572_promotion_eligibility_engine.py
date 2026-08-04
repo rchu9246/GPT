@@ -10,7 +10,7 @@ from typing import Any
 from enterprise2.client import SupabaseRestClient
 
 RUN_DATE = os.environ.get("QUANT_RUN_DATE", date.today().isoformat())
-ENGINE_VERSION = "5.7.2"
+ENGINE_VERSION = "5.7.2.1"
 
 POLICIES: dict[str, dict[str, Any]] = {
     "STRICT": {
@@ -46,6 +46,31 @@ def integer(value: Any, default: int = 0) -> int:
         return int(float(value))
     except (TypeError, ValueError):
         return default
+
+
+def boolean(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return value != 0
+
+    normalized = str(value).strip().lower()
+    if normalized in {"true", "t", "1", "yes", "y", "pass", "passed"}:
+        return True
+    if normalized in {"false", "f", "0", "no", "n", "fail", "failed", ""}:
+        return False
+    return False
+
+
+def evaluation_passed(row: dict[str, Any]) -> bool:
+    raw_passed = row.get("passed")
+    if raw_passed is not None:
+        return boolean(raw_passed)
+
+    status = str(row.get("evaluation_status") or "").strip().upper()
+    return status == "PASS"
 
 
 def read(
@@ -99,20 +124,71 @@ def get_version_snapshot(
     return rows[0] if rows else {}
 
 
-def candidate_evaluations(
+def load_all_evaluations(
     client: SupabaseRestClient,
-    candidate_id: str,
-) -> list[dict[str, Any]]:
-    return read(
+) -> dict[str, list[dict[str, Any]]]:
+    rows = read(
         client,
         "candidate_evaluations_v57",
-        (
-            f"candidate_id=eq.{candidate_id}"
-            "&order=created_at.asc"
-            "&limit=200"
-        ),
+        "limit=5000",
         required=True,
     )
+
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        candidate_id = str(row.get("candidate_id") or "")
+        if not candidate_id:
+            continue
+        grouped.setdefault(candidate_id, []).append(row)
+
+    return grouped
+
+
+def fallback_evaluations_from_candidate(
+    candidate: dict[str, Any],
+) -> list[dict[str, Any]]:
+    rank_no = integer(candidate.get("rank_no"), 999)
+    evolution_score = num(candidate.get("evolution_score"))
+    confidence_score = num(candidate.get("confidence_score"))
+    recommendation = str(candidate.get("source_recommendation") or "")
+    selected = boolean(candidate.get("source_selected_for_review"))
+
+    return [
+        {
+            "rule_key": "TOP_RANK_ONLY",
+            "evaluation_status": "PASS" if rank_no == 1 else "FAIL",
+            "passed": rank_no == 1,
+            "severity": "CRITICAL",
+        },
+        {
+            "rule_key": "MIN_EVOLUTION_SCORE",
+            "evaluation_status": "PASS" if evolution_score >= 70 else "FAIL",
+            "passed": evolution_score >= 70,
+            "severity": "CRITICAL",
+        },
+        {
+            "rule_key": "MIN_CONFIDENCE_SCORE",
+            "evaluation_status": "PASS" if confidence_score >= 60 else "FAIL",
+            "passed": confidence_score >= 60,
+            "severity": "CRITICAL",
+        },
+        {
+            "rule_key": "PROMOTION_RECOMMENDATION_REQUIRED",
+            "evaluation_status": (
+                "PASS"
+                if recommendation == "PROMOTE_FOR_HUMAN_REVIEW"
+                else "FAIL"
+            ),
+            "passed": recommendation == "PROMOTE_FOR_HUMAN_REVIEW",
+            "severity": "CRITICAL",
+        },
+        {
+            "rule_key": "SELECTED_FOR_REVIEW_REQUIRED",
+            "evaluation_status": "PASS" if selected else "FAIL",
+            "passed": selected,
+            "severity": "CRITICAL",
+        },
+    ]
 
 
 def calculate_eligibility(
@@ -122,12 +198,15 @@ def calculate_eligibility(
 ) -> dict[str, Any]:
     policy = POLICIES[policy_name]
 
+    if not evaluations:
+        evaluations = fallback_evaluations_from_candidate(candidate)
+
     required_rows = [
         row for row in evaluations
         if str(row.get("evaluation_status")) != "NOT_APPLICABLE"
     ]
-    passed_rows = [row for row in required_rows if bool(row.get("passed"))]
-    failed_rows = [row for row in required_rows if not bool(row.get("passed"))]
+    passed_rows = [row for row in required_rows if evaluation_passed(row)]
+    failed_rows = [row for row in required_rows if not evaluation_passed(row)]
     critical_failures = [
         str(row.get("rule_key"))
         for row in failed_rows
@@ -437,8 +516,12 @@ def main() -> None:
     if not candidates:
         raise RuntimeError("No promotion_candidates_v57 rows found.")
 
+    evaluations_by_candidate = load_all_evaluations(client)
+
     evaluated = 0
     eligible_count = 0
+    rejected_count = 0
+    retest_count = 0
     review_count = 0
     plan_count = 0
     scores: list[float] = []
@@ -450,7 +533,7 @@ def main() -> None:
 
     for candidate in candidates:
         candidate_id = str(candidate["id"])
-        evaluations = candidate_evaluations(client, candidate_id)
+        evaluations = evaluations_by_candidate.get(candidate_id, [])
         result = calculate_eligibility(
             candidate,
             evaluations,
@@ -524,12 +607,20 @@ def main() -> None:
                     "policy_name": args.policy,
                     "passed_rules": result["passed_rules"],
                     "total_rules": result["total_rules"],
+                    "eligibility_score": result["eligibility_score"],
+                    "evaluation_rows_loaded": len(evaluations),
+                    "used_fallback_evaluation": len(evaluations) == 0,
                     "blockers": result["blockers"],
                     "warnings": result["warnings"],
                 },
             },
             "id",
         )
+
+        if result["eligibility_status"] == "NOT_ELIGIBLE":
+            rejected_count += 1
+        elif result["eligibility_status"] == "NEEDS_MORE_EVIDENCE":
+            retest_count += 1
 
         if not result["eligible"]:
             continue
@@ -570,17 +661,8 @@ def main() -> None:
                 existing_metrics.get("candidates_created") or len(candidates)
             ),
             "candidates_eligible": eligible_count,
-            "candidates_rejected": sum(
-                1
-                for candidate in candidates
-                if candidate.get("eligibility_status") == "NOT_ELIGIBLE"
-            ),
-            "candidates_retest_required": sum(
-                1
-                for candidate in candidates
-                if candidate.get("eligibility_status")
-                == "NEEDS_MORE_EVIDENCE"
-            ),
+            "candidates_rejected": rejected_count,
+            "candidates_retest_required": retest_count,
             "rule_evaluations": int(
                 existing_metrics.get("rule_evaluations") or 0
             ),
@@ -635,11 +717,8 @@ def main() -> None:
                 existing_metrics.get("candidates_created") or len(candidates)
             ),
             "candidates_eligible": eligible_count,
-            "candidates_rejected": max(
-                0,
-                len(candidates) - eligible_count,
-            ),
-            "candidates_retest_required": 0,
+            "candidates_rejected": rejected_count,
+            "candidates_retest_required": retest_count,
             "rule_evaluations": int(
                 existing_metrics.get("rule_evaluations") or 0
             ),
@@ -678,6 +757,16 @@ def main() -> None:
         },
         "status_date",
     )
+
+    any_pass_rows = any(
+        evaluation_passed(row)
+        for rows in evaluations_by_candidate.values()
+        for row in rows
+    )
+    if any_pass_rows and scores and max(scores) <= 0:
+        raise RuntimeError(
+            "Evaluation rows contain PASS results but every eligibility score is 0."
+        )
 
     if eligible_count > 0 and (review_count == 0 or plan_count == 0):
         raise RuntimeError(

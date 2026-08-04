@@ -1,7 +1,7 @@
 {
   "name": "Enterprise 5.7.2 Promotion Eligibility Engine",
-  "version": "2.0",
-  "enterprise_version": "5.7.2",
+  "version": "2.1",
+  "enterprise_version": "5.7.2.1",
   "policies": {
     "STRICT": {
       "minimum_pass_rate": 100,
@@ -20,7 +20,8 @@
     "automation/enterprise572_promotion_eligibility_engine.py",
     ".github/workflows/enterprise-5-7-2-promotion-eligibility.yml",
     "supabase/ENTERPRISE_5_7_2_PROMOTION_ELIGIBILITY_VERIFY.sql",
-    "ENTERPRISE_5_7_2_PROMOTION_ELIGIBILITY_INSTALL_GUIDE.md"
+    "ENTERPRISE_5_7_2_PROMOTION_ELIGIBILITY_INSTALL_GUIDE.md",
+    "supabase/ENTERPRISE_5_7_2_V2_1_DIAGNOSTIC.sql"
   ],
   "safety": {
     "paper_only": true,
@@ -30,5 +31,12 @@
     "automatic_rollback": false,
     "live_trading": false,
     "broker_submission": false
-  }
+  },
+  "fixes": [
+    "Bulk-load and group candidate evaluations by candidate_id",
+    "Normalize PostgreSQL and JSON boolean values",
+    "Fallback to evaluation_status when passed is missing",
+    "Fallback to candidate-derived core rules when evaluation rows are missing",
+    "Fail workflow when PASS rows exist but all scores remain zero"
+  ]
 }

@@ -1,4 +1,4 @@
-# Enterprise 5.7.2 Promotion Eligibility Engine v2.0
+# Enterprise 5.7.2 Promotion Eligibility Engine v2.1
 
 ## 目的
 
@@ -64,3 +64,15 @@ PAPER_PILOT 只是允許候選進入人工 Paper Baseline 審核，
 - Automatic Rollback = false
 - Live Trading = false
 - Broker Submission = false
+
+
+## v2.1 修正
+
+- 一次讀取並依 candidate_id 分組全部 Candidate Evaluations。
+- 正規化 boolean、text 與 numeric 格式。
+- `passed` 缺失時改用 `evaluation_status = PASS`。
+- Evaluation 資料缺失時，使用 Candidate 原始欄位重建五條核心規則。
+- Audit 新增 passed_rules、total_rules、eligibility_score 與 fallback 診斷。
+- 若資料中已有 PASS，但所有 Candidate 仍計算為 0 分，Workflow 會直接失敗。
+
+不需要重新執行 Enterprise 5.7 Foundation Database SQL。
