@@ -1,23 +1,18 @@
 {
-  "name": "Enterprise 5.6.2 Evolution Score Optimizer",
-  "version": "2.0",
-  "enterprise_version": "5.6.2",
+  "name": "Enterprise 5.6.3 Evolution Score Optimizer",
+  "version": "3.0",
+  "enterprise_version": "5.6.3",
   "files": [
-    "automation/enterprise562_evolution_score_optimizer.py",
-    ".github/workflows/enterprise-5-6-2-evolution-score-optimizer.yml",
-    "supabase/ENTERPRISE_5_6_2_OPTIMIZER_VERIFY.sql",
-    "ENTERPRISE_5_6_2_OPTIMIZER_INSTALL_GUIDE.md"
+    "automation/enterprise563_evolution_score_optimizer.py",
+    ".github/workflows/enterprise-5-6-3-evolution-score-optimizer.yml",
+    "supabase/ENTERPRISE_5_6_3_OPTIMIZER_VERIFY.sql",
+    "ENTERPRISE_5_6_3_OPTIMIZER_INSTALL_GUIDE.md"
   ],
   "scoring": {
-    "missing_data_policy": "conservative_neutral",
+    "absolute_weight": 0.72,
+    "relative_weight": 0.28,
     "artificial_score_inflation": false,
-    "promotion_thresholds": {
-      "rank": 1,
-      "evolution_score": 70,
-      "confidence_score": 60,
-      "max_drawdown": 20,
-      "minimum_data_completeness": 40
-    }
+    "candidate_specific_confidence": true
   },
   "safety": {
     "human_approval_required": true,

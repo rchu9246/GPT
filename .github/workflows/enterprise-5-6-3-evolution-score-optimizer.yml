@@ -1,0 +1,113 @@
+name: Enterprise 5.6.3 Evolution Score Optimizer
+
+on:
+  workflow_dispatch:
+    inputs:
+      ranking_id:
+        description: "Optional portfolio_rankings_v56 UUID"
+        required: false
+        type: string
+      limit:
+        description: "Maximum rankings to optimize"
+        required: true
+        default: "20"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: enterprise-5-6-3-evolution-score-optimizer
+  cancel-in-progress: false
+
+jobs:
+  optimizer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Enterprise 5.6.3 Optimizer
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          ARGS=(--limit "${{ inputs.limit }}")
+          if [ -n "${{ inputs.ranking_id }}" ]; then
+            ARGS+=(--ranking-id "${{ inputs.ranking_id }}")
+          fi
+          python automation/enterprise563_evolution_score_optimizer.py "${ARGS[@]}"
+
+      - name: Verify Enterprise 5.6.3 Writes
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PYTHONPATH: ${{ github.workspace }}/automation
+        run: |
+          python - <<'PY'
+          from enterprise2.client import SupabaseRestClient
+
+          client = SupabaseRestClient()
+          rows = client.get(
+              "portfolio_rankings_v56",
+              "order=ranking_date.desc,rank_no.asc&limit=20",
+          )
+          if not rows:
+              raise SystemExit("portfolio_rankings_v56 not found")
+
+          scores = []
+          confidences = []
+
+          for row in rows:
+              evolution = row.get("evolution_score")
+              confidence = row.get("confidence_score")
+              recommendation = row.get("recommendation")
+
+              if evolution is None:
+                  raise SystemExit("Missing evolution_score")
+              if confidence is None:
+                  raise SystemExit("Missing confidence_score")
+              if recommendation is None:
+                  raise SystemExit("Missing recommendation")
+
+              scores.append(float(evolution))
+              confidences.append(float(confidence))
+
+          if len(rows) > 1 and len(set(scores)) == 1:
+              raise SystemExit(
+                  "All evolution scores are identical; calibration failed"
+              )
+
+          selected = [
+              row for row in rows
+              if row.get("selected_for_review") is True
+          ]
+
+          for row in selected:
+              if row.get("recommendation") != "PROMOTE_FOR_HUMAN_REVIEW":
+                  raise SystemExit(
+                      "selected_for_review recommendation mismatch"
+                  )
+
+          print(
+              "Enterprise 5.6.3 verified:",
+              "rows=", len(rows),
+              "score_range=", max(scores) - min(scores),
+              "confidence_range=", max(confidences) - min(confidences),
+              "selected=", len(selected),
+          )
+          PY
