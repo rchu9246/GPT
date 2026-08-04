@@ -10,7 +10,7 @@ from typing import Any, Iterable
 from enterprise2.client import SupabaseRestClient
 
 RUN_DATE = os.environ.get("QUANT_RUN_DATE", date.today().isoformat())
-ENGINE_VERSION = "9.2.0"
+ENGINE_VERSION = "9.2.1"
 
 
 def now() -> str:
@@ -533,36 +533,14 @@ def main() -> None:
         )
         result = calculate_confidence(metrics)
 
-        metadata = ranking.get("metadata") or {}
-        if not isinstance(metadata, dict):
-            metadata = {}
-
+        # portfolio_rankings_v56 does not necessarily contain a metadata
+        # column. Only write the existing confidence_score field here.
+        # Detailed diagnostics are stored in evolution_status_v56.diagnostics.
         client.patch(
             "portfolio_rankings_v56",
             f"id=eq.{ranking_id}",
             {
                 "confidence_score": result["confidence_score"],
-                "metadata": {
-                    **metadata,
-                    "confidence_engine_version": ENGINE_VERSION,
-                    "confidence_components": {
-                        key: value
-                        for key, value in result.items()
-                        if key not in {
-                            "confidence_score",
-                            "blockers",
-                            "warnings",
-                            "confidence_recommendation",
-                        }
-                    },
-                    "confidence_blockers": result["blockers"],
-                    "confidence_warnings": result["warnings"],
-                    "confidence_recommendation": (
-                        result["confidence_recommendation"]
-                    ),
-                    "confidence_metrics": metrics,
-                    "confidence_updated_at": now(),
-                },
             },
         )
 

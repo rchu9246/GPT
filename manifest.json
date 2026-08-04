@@ -1,7 +1,7 @@
 {
   "name": "GPT Quant V9 Confidence Engine",
-  "version": "2.0",
-  "engine_version": "9.2.0",
+  "version": "2.1",
+  "engine_version": "9.2.1",
   "files": [
     "automation/gpt_quant_v9_confidence_engine_v2.py",
     ".github/workflows/gpt-quant-v9-confidence-engine-v2.yml",
@@ -24,5 +24,11 @@
     "automatic_baseline_activation": false,
     "live_trading": false,
     "broker_submission": false
-  }
+  },
+  "fixes": [
+    "Remove writes to missing portfolio_rankings_v56.metadata column",
+    "Store detailed confidence diagnostics in evolution_status_v56.diagnostics",
+    "Update workflow verification to use status diagnostics",
+    "Update SQL verification to avoid metadata column"
+  ]
 }

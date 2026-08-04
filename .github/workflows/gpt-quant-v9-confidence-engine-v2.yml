@@ -76,19 +76,33 @@ jobs:
                   raise SystemExit("Missing confidence_score")
               values.append(float(value))
 
-              metadata = row.get("metadata") or {}
-              if (
-                  metadata.get("confidence_engine_version")
-                  != "9.2.0"
-              ):
-                  raise SystemExit(
-                      "Confidence engine metadata not written"
-                  )
+
+          status_rows = client.get(
+              "evolution_status_v56",
+              "order=status_date.desc&limit=1",
+          )
+          if not status_rows:
+              raise SystemExit("evolution_status_v56 not found")
+
+          diagnostics = status_rows[0].get("diagnostics") or {}
+          if (
+              diagnostics.get(
+                  "gpt_quant_v9_confidence_engine_version"
+              )
+              != "9.2.1"
+          ):
+              raise SystemExit(
+                  "Confidence diagnostics version not written"
+              )
 
           print(
               "GPT Quant V9 Confidence Engine verified:",
               "rows=", len(rows),
               "confidence_range=", max(values) - min(values),
               "top_confidence=", values[0],
+              "engine_version=",
+              diagnostics.get(
+                  "gpt_quant_v9_confidence_engine_version"
+              ),
           )
           PY

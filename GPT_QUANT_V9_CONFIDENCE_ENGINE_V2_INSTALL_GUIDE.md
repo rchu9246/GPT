@@ -1,4 +1,4 @@
-# GPT Quant V9 Confidence Engine v2.0
+# GPT Quant V9 Confidence Engine v2.1
 
 ## 功能
 
@@ -62,3 +62,14 @@
 - 不自動啟用 Baseline
 - Live Trading = false
 - Broker Submission = false
+
+
+## v2.1 修正
+
+- 修正 `portfolio_rankings_v56.metadata` 不存在造成的 SQL 與 Supabase HTTP 400 問題。
+- Ranking 僅更新既有的 `confidence_score` 欄位。
+- Confidence components、blockers、warnings、recommendation 與 metrics 全部寫入：
+  `evolution_status_v56.diagnostics.confidence_score_details`
+- Workflow 驗證改讀取 `evolution_status_v56.diagnostics`。
+- 驗證 SQL 不再查詢不存在的 `metadata` 欄位。
+- 不需要重新執行 Foundation Database SQL。
