@@ -1,0 +1,94 @@
+name: GPT Quant V9 Confidence Engine v2
+
+on:
+  workflow_dispatch:
+    inputs:
+      ranking_id:
+        description: "Optional portfolio_rankings_v56 UUID"
+        required: false
+        type: string
+      limit:
+        description: "Maximum rankings to process"
+        required: true
+        default: "20"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-v9-confidence-engine-v2
+  cancel-in-progress: false
+
+jobs:
+  confidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run GPT Quant V9 Confidence Engine v2
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          ARGS=(--limit "${{ inputs.limit }}")
+          if [ -n "${{ inputs.ranking_id }}" ]; then
+            ARGS+=(--ranking-id "${{ inputs.ranking_id }}")
+          fi
+          python automation/gpt_quant_v9_confidence_engine_v2.py "${ARGS[@]}"
+
+      - name: Verify Confidence Writes
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PYTHONPATH: ${{ github.workspace }}/automation
+        run: |
+          python - <<'PY'
+          from enterprise2.client import SupabaseRestClient
+
+          client = SupabaseRestClient()
+          rows = client.get(
+              "portfolio_rankings_v56",
+              "order=ranking_date.desc,rank_no.asc&limit=20",
+          )
+          if not rows:
+              raise SystemExit("portfolio_rankings_v56 not found")
+
+          values = []
+          for row in rows:
+              value = row.get("confidence_score")
+              if value is None:
+                  raise SystemExit("Missing confidence_score")
+              values.append(float(value))
+
+              metadata = row.get("metadata") or {}
+              if (
+                  metadata.get("confidence_engine_version")
+                  != "9.2.0"
+              ):
+                  raise SystemExit(
+                      "Confidence engine metadata not written"
+                  )
+
+          print(
+              "GPT Quant V9 Confidence Engine verified:",
+              "rows=", len(rows),
+              "confidence_range=", max(values) - min(values),
+              "top_confidence=", values[0],
+          )
+          PY

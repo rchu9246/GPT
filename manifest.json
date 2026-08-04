@@ -1,23 +1,27 @@
 {
-  "name": "Enterprise 5.7.4 Promotion Decision Engine",
-  "version": "1.0",
-  "enterprise_version": "5.7.4",
-  "outputs": [
-    "PROMOTE",
-    "HOLD",
-    "REJECT"
-  ],
+  "name": "GPT Quant V9 Confidence Engine",
+  "version": "2.0",
+  "engine_version": "9.2.0",
   "files": [
-    "automation/enterprise574_promotion_decision_engine.py",
-    ".github/workflows/enterprise-5-7-4-promotion-decision.yml",
-    "supabase/ENTERPRISE_5_7_4_PROMOTION_DECISION_VERIFY.sql",
-    "ENTERPRISE_5_7_4_PROMOTION_DECISION_INSTALL_GUIDE.md"
+    "automation/gpt_quant_v9_confidence_engine_v2.py",
+    ".github/workflows/gpt-quant-v9-confidence-engine-v2.yml",
+    "supabase/GPT_QUANT_V9_CONFIDENCE_ENGINE_V2_VERIFY.sql",
+    "GPT_QUANT_V9_CONFIDENCE_ENGINE_V2_INSTALL_GUIDE.md"
+  ],
+  "components": [
+    "simulation_pass_rate",
+    "stress_pass_rate",
+    "walk_forward_consistency",
+    "regime_consistency",
+    "risk_stability",
+    "cross_run_dispersion",
+    "evidence_density",
+    "data_completeness",
+    "uncertainty_penalty"
   ],
   "safety": {
-    "paper_only": true,
-    "human_approval_required": true,
+    "automatic_promotion": false,
     "automatic_baseline_activation": false,
-    "automatic_rollback": false,
     "live_trading": false,
     "broker_submission": false
   }
