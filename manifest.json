@@ -1,7 +1,7 @@
 {
   "name": "Enterprise 5.7 Promotion Engine",
-  "version": "2.0",
-  "enterprise_version": "5.7.0",
+  "version": "2.1",
+  "enterprise_version": "5.7.1",
   "files": [
     "automation/enterprise57_baseline_promotion_human_approval.py",
     ".github/workflows/enterprise-5-7-baseline-promotion.yml",
@@ -27,5 +27,9 @@
     "automatic_rollback_execution": false,
     "live_trading": false,
     "broker_submission": false
-  }
+  },
+  "fixes": [
+    "Replace invalid upsert on_conflict=None for promotion_audit_v57",
+    "Use deterministic audit UUID and on_conflict=id"
+  ]
 }

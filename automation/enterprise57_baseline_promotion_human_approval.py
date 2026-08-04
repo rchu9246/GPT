@@ -9,7 +9,7 @@ from typing import Any
 from enterprise2.client import SupabaseRestClient
 
 RUN_DATE = os.environ.get("QUANT_RUN_DATE", date.today().isoformat())
-ENGINE_VERSION = "5.7.0"
+ENGINE_VERSION = "5.7.1"
 
 
 def now() -> str:
@@ -333,9 +333,16 @@ def main() -> None:
             },
         )
 
+        audit_id = str(
+            uuid.uuid5(
+                uuid.NAMESPACE_URL,
+                f"enterprise57:{RUN_DATE}:{candidate_id}:CANDIDATE_EVALUATED",
+            )
+        )
         client.upsert(
             "promotion_audit_v57",
             {
+                "id": audit_id,
                 "audit_time": now(),
                 "audit_date": RUN_DATE,
                 "candidate_id": candidate_id,
@@ -365,7 +372,7 @@ def main() -> None:
                     "warning_failures": warning_failures,
                 },
             },
-            None,
+            "id",
         )
 
         if eligibility_status != "ELIGIBLE":

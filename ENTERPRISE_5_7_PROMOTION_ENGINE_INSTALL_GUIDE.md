@@ -1,4 +1,4 @@
-# Enterprise 5.7 Promotion Engine v2.0
+# Enterprise 5.7 Promotion Engine v2.1
 
 ## 前置條件
 
@@ -48,3 +48,12 @@ Engine 不會自動核准、不會自動啟用 Baseline，也不會進行任何�
 執行：
 
 `supabase/ENTERPRISE_5_7_PROMOTION_ENGINE_VERIFY.sql`
+
+
+## v2.1 修正
+
+修正 `promotion_audit_v57` 寫入時傳入 `on_conflict=None`，
+導致 `TypeError: quote_from_bytes() expected bytes` 的問題。
+
+新版使用 deterministic UUID 作為 Audit 主鍵，並以 `id` 執行 upsert。
+不需要重新執行 Foundation Database SQL。
