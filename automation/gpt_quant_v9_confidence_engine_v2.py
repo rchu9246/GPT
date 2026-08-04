@@ -10,7 +10,7 @@ from typing import Any, Iterable
 from enterprise2.client import SupabaseRestClient
 
 RUN_DATE = os.environ.get("QUANT_RUN_DATE", date.today().isoformat())
-ENGINE_VERSION = "9.2.1"
+ENGINE_VERSION = "9.2.2"
 
 
 def now() -> str:
@@ -559,38 +559,52 @@ def main() -> None:
             f"recommendation={result['confidence_recommendation']}"
         )
 
+    # Update the latest available status row instead of requiring a row
+    # whose status_date equals today's date. Existing deployments may keep
+    # the current v56 status on an earlier date.
     status_rows = read(
         client,
         "evolution_status_v56",
-        f"status_date=eq.{RUN_DATE}&limit=1",
+        "order=status_date.desc&limit=1",
+        required=True,
     )
-    if status_rows:
-        status = status_rows[0]
-        existing = status.get("diagnostics") or {}
-        if not isinstance(existing, dict):
-            existing = {}
-
-        client.patch(
-            "evolution_status_v56",
-            f"status_date=eq.{RUN_DATE}",
-            {
-                "overall_status": status.get("overall_status") or "WARNING",
-                "diagnostics": {
-                    **existing,
-                    "gpt_quant_v9_confidence_engine_version": ENGINE_VERSION,
-                    "confidence_rankings_updated": updated,
-                    "average_confidence_score": round(
-                        mean(
-                            row["confidence_score"]
-                            for row in diagnostics
-                        ),
-                        4,
-                    ),
-                    "confidence_score_details": diagnostics,
-                    "confidence_updated_at": now(),
-                },
-            },
+    if not status_rows:
+        raise RuntimeError(
+            "evolution_status_v56 has no row available for diagnostics"
         )
+
+    status = status_rows[0]
+    existing = status.get("diagnostics") or {}
+    if not isinstance(existing, dict):
+        existing = {}
+
+    status_id = status.get("id")
+    if status_id is not None:
+        status_filter = f"id=eq.{status_id}"
+    else:
+        status_filter = f"status_date=eq.{status['status_date']}"
+
+    client.patch(
+        "evolution_status_v56",
+        status_filter,
+        {
+            "overall_status": status.get("overall_status") or "WARNING",
+            "diagnostics": {
+                **existing,
+                "gpt_quant_v9_confidence_engine_version": ENGINE_VERSION,
+                "confidence_rankings_updated": updated,
+                "average_confidence_score": round(
+                    mean(
+                        row["confidence_score"]
+                        for row in diagnostics
+                    ),
+                    4,
+                ),
+                "confidence_score_details": diagnostics,
+                "confidence_updated_at": now(),
+            },
+        },
+    )
 
     print(
         f"GPT Quant V9 Confidence Engine complete: "

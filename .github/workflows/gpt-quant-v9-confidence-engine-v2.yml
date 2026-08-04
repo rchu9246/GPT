@@ -89,7 +89,7 @@ jobs:
               diagnostics.get(
                   "gpt_quant_v9_confidence_engine_version"
               )
-              != "9.2.1"
+              != "9.2.2"
           ):
               raise SystemExit(
                   "Confidence diagnostics version not written"
