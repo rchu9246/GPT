@@ -1,23 +1,25 @@
 {
-  "name": "Enterprise 5.6.1 Evolution Score Optimizer",
-  "version": "1.0",
-  "enterprise_version": "5.6.1",
+  "name": "Enterprise 5.6.2 Evolution Score Optimizer",
+  "version": "2.0",
+  "enterprise_version": "5.6.2",
   "files": [
-    "automation/enterprise561_evolution_score_optimizer.py",
-    ".github/workflows/enterprise-5-6-1-evolution-score-optimizer.yml",
-    "supabase/ENTERPRISE_5_6_1_OPTIMIZER_VERIFY.sql",
-    "ENTERPRISE_5_6_1_OPTIMIZER_INSTALL_GUIDE.md"
+    "automation/enterprise562_evolution_score_optimizer.py",
+    ".github/workflows/enterprise-5-6-2-evolution-score-optimizer.yml",
+    "supabase/ENTERPRISE_5_6_2_OPTIMIZER_VERIFY.sql",
+    "ENTERPRISE_5_6_2_OPTIMIZER_INSTALL_GUIDE.md"
   ],
-  "promotion_requirements": {
-    "rank_no": 1,
-    "minimum_evolution_score": 70,
-    "minimum_confidence_score": 60,
-    "maximum_drawdown": 20,
-    "simulation_pass_required": true,
-    "stress_test_pass_required": true
+  "scoring": {
+    "missing_data_policy": "conservative_neutral",
+    "artificial_score_inflation": false,
+    "promotion_thresholds": {
+      "rank": 1,
+      "evolution_score": 70,
+      "confidence_score": 60,
+      "max_drawdown": 20,
+      "minimum_data_completeness": 40
+    }
   },
   "safety": {
-    "artificial_score_inflation": false,
     "human_approval_required": true,
     "automatic_baseline_activation": false,
     "live_trading": false,
