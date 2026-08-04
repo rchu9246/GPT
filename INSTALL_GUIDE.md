@@ -1,9 +1,6 @@
-# Enterprise 5.7 Baseline Promotion & Human Approval Suite v1.0
+# Enterprise 5.7.2 Promotion Eligibility Engine
 
-This package provides a starter implementation.
-
-Status:
-- Reads ranking (to implement)
-- Generates promotion candidates (to implement)
-- Human approval workflow (to implement)
-- Paper-only by design
+1. Copy files into repository.
+2. Commit & Push.
+3. Run GitHub Action 'Enterprise 5.7.2 Promotion Eligibility Engine'.
+4. Execute verification SQL.

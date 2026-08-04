@@ -1,21 +1,31 @@
 {
-  "name": "Enterprise 5.7.1 Human Approval API",
-  "version": "1.0",
-  "enterprise_version": "5.7.1",
+  "name": "Enterprise 5.7.2 Promotion Eligibility Engine",
+  "version": "2.0",
+  "enterprise_version": "5.7.2",
+  "policies": {
+    "STRICT": {
+      "minimum_pass_rate": 100,
+      "rank_one_required": true,
+      "selected_for_review_required": true,
+      "promotion_recommendation_required": true
+    },
+    "PAPER_PILOT": {
+      "minimum_pass_rate": 60,
+      "rank_one_required": true,
+      "paper_only": true,
+      "human_approval_required": true
+    }
+  },
   "files": [
-    "automation/enterprise571_human_approval_api.py",
-    ".github/workflows/enterprise-5-7-1-human-approval.yml",
-    "supabase/ENTERPRISE_5_7_1_HUMAN_APPROVAL_VERIFY.sql",
-    "ENTERPRISE_5_7_1_HUMAN_APPROVAL_INSTALL_GUIDE.md"
-  ],
-  "decisions": [
-    "APPROVED",
-    "REJECTED",
-    "RETEST_REQUIRED"
+    "automation/enterprise572_promotion_eligibility_engine.py",
+    ".github/workflows/enterprise-5-7-2-promotion-eligibility.yml",
+    "supabase/ENTERPRISE_5_7_2_PROMOTION_ELIGIBILITY_VERIFY.sql",
+    "ENTERPRISE_5_7_2_PROMOTION_ELIGIBILITY_INSTALL_GUIDE.md"
   ],
   "safety": {
     "paper_only": true,
     "human_approval_required": true,
+    "automatic_promotion": false,
     "automatic_activation": false,
     "automatic_rollback": false,
     "live_trading": false,

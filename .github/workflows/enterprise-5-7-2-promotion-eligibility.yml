@@ -1,0 +1,105 @@
+name: Enterprise 5.7.2 Promotion Eligibility Engine
+
+on:
+  workflow_dispatch:
+    inputs:
+      policy:
+        description: "Eligibility policy"
+        required: true
+        type: choice
+        default: STRICT
+        options:
+          - STRICT
+          - PAPER_PILOT
+      candidate_id:
+        description: "Optional promotion_candidates_v57 UUID; leave blank for all"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: enterprise-5-7-2-eligibility-${{ inputs.policy }}
+  cancel-in-progress: false
+
+jobs:
+  eligibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Enterprise 5.7.2 Eligibility Engine
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          ARGS=(--policy "${{ inputs.policy }}")
+          if [ -n "${{ inputs.candidate_id }}" ]; then
+            ARGS+=(--candidate-id "${{ inputs.candidate_id }}")
+          fi
+          python automation/enterprise572_promotion_eligibility_engine.py "${ARGS[@]}"
+
+      - name: Verify Enterprise 5.7.2 Writes
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PYTHONPATH: ${{ github.workspace }}/automation
+        run: |
+          python - <<'PY'
+          from enterprise2.client import SupabaseRestClient
+
+          client = SupabaseRestClient()
+          status_rows = client.get(
+              "promotion_status_v57",
+              "order=status_date.desc&limit=1",
+          )
+          if not status_rows:
+              raise SystemExit("promotion_status_v57 not found")
+
+          status = status_rows[0]
+          eligible = client.get(
+              "promotion_candidates_v57",
+              "eligibility_status=eq.ELIGIBLE&limit=500",
+          )
+          reviews = client.get(
+              "human_review_requests_v57",
+              "request_status=eq.PENDING&limit=500",
+          )
+          plans = client.get(
+              "baseline_promotion_plans_v57",
+              "plan_status=eq.WAITING_FOR_APPROVAL&limit=500",
+          )
+
+          if eligible and (not reviews or not plans):
+              raise SystemExit(
+                  "Eligible candidates exist but pending review or plan is missing"
+              )
+
+          if status.get("live_trading_enabled") is not False:
+              raise SystemExit("Safety violation: live trading enabled")
+
+          print(
+              "Enterprise 5.7.2 verified:",
+              "status=", status.get("overall_status"),
+              "eligible=", len(eligible),
+              "pending_reviews=", len(reviews),
+              "plans=", len(plans),
+              "live_trading=", status.get("live_trading_enabled"),
+          )
+          PY
