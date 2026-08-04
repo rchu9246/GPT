@@ -1,35 +1,24 @@
 {
-  "name": "Enterprise 5.7 Promotion Engine",
-  "version": "2.1",
+  "name": "Enterprise 5.7.1 Human Approval API",
+  "version": "1.0",
   "enterprise_version": "5.7.1",
   "files": [
-    "automation/enterprise57_baseline_promotion_human_approval.py",
-    ".github/workflows/enterprise-5-7-baseline-promotion.yml",
-    "supabase/ENTERPRISE_5_7_PROMOTION_ENGINE_VERIFY.sql",
-    "ENTERPRISE_5_7_PROMOTION_ENGINE_INSTALL_GUIDE.md"
+    "automation/enterprise571_human_approval_api.py",
+    ".github/workflows/enterprise-5-7-1-human-approval.yml",
+    "supabase/ENTERPRISE_5_7_1_HUMAN_APPROVAL_VERIFY.sql",
+    "ENTERPRISE_5_7_1_HUMAN_APPROVAL_INSTALL_GUIDE.md"
   ],
-  "capabilities": [
-    "Read v56 portfolio rankings",
-    "Create promotion candidates",
-    "Evaluate promotion rules",
-    "Create human review requests",
-    "Create pending human decisions",
-    "Create candidate baseline versions",
-    "Create manual promotion plans",
-    "Update metrics and status"
+  "decisions": [
+    "APPROVED",
+    "REJECTED",
+    "RETEST_REQUIRED"
   ],
   "safety": {
     "paper_only": true,
     "human_approval_required": true,
-    "automatic_baseline_promotion": false,
-    "automatic_portfolio_application": false,
-    "automatic_live_deployment": false,
-    "automatic_rollback_execution": false,
+    "automatic_activation": false,
+    "automatic_rollback": false,
     "live_trading": false,
     "broker_submission": false
-  },
-  "fixes": [
-    "Replace invalid upsert on_conflict=None for promotion_audit_v57",
-    "Use deterministic audit UUID and on_conflict=id"
-  ]
+  }
 }

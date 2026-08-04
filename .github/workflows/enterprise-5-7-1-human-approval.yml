@@ -1,0 +1,110 @@
+name: Enterprise 5.7.1 Human Approval
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_id:
+        description: "promotion_candidates_v57 Candidate UUID"
+        required: true
+        type: string
+      decision:
+        description: "Human review decision"
+        required: true
+        type: choice
+        options:
+          - APPROVED
+          - REJECTED
+          - RETEST_REQUIRED
+      reviewer:
+        description: "Reviewer name or identifier"
+        required: true
+        type: string
+      comment:
+        description: "Required review comment"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: enterprise-5-7-1-human-approval-${{ inputs.candidate_id }}
+  cancel-in-progress: false
+
+jobs:
+  human-approval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Process Human Approval
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python automation/enterprise571_human_approval_api.py             --candidate-id "${{ inputs.candidate_id }}"             --decision "${{ inputs.decision }}"             --reviewer "${{ inputs.reviewer }}"             --comment "${{ inputs.comment }}"
+
+      - name: Verify Human Approval Write
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PYTHONPATH: ${{ github.workspace }}/automation
+        run: |
+          python - <<'PY'
+          from enterprise2.client import SupabaseRestClient
+
+          candidate_id = "${{ inputs.candidate_id }}"
+          expected = "${{ inputs.decision }}"
+          client = SupabaseRestClient()
+
+          reviews = client.get(
+              "human_review_requests_v57",
+              f"candidate_id=eq.{candidate_id}&order=requested_at.desc&limit=1",
+          )
+          if not reviews:
+              raise SystemExit("Review request not found")
+
+          review_id = reviews[0]["id"]
+          decisions = client.get(
+              "human_review_decisions_v57",
+              f"review_request_id=eq.{review_id}&decision_key=eq.PRIMARY_DECISION&limit=1",
+          )
+          if not decisions:
+              raise SystemExit("Decision row not found")
+          if decisions[0].get("decision") != expected:
+              raise SystemExit(
+                  f"Decision mismatch: {decisions[0].get('decision')} != {expected}"
+              )
+
+          status = client.get(
+              "promotion_status_v57",
+              "order=status_date.desc&limit=1",
+          )
+          if not status:
+              raise SystemExit("promotion_status_v57 not found")
+          if status[0].get("live_trading_enabled") is not False:
+              raise SystemExit("Safety violation: live trading enabled")
+
+          print(
+              "Enterprise 5.7.1 verified:",
+              "candidate=", candidate_id,
+              "decision=", expected,
+              "reviewer=", decisions[0].get("decided_by"),
+              "live_trading=", status[0].get("live_trading_enabled"),
+          )
+          PY
