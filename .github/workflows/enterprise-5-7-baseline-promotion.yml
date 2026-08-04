@@ -1,0 +1,14 @@
+name: Enterprise 5.7 Baseline Promotion
+
+on:
+  workflow_dispatch:
+
+jobs:
+  baseline-promotion:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python automation/enterprise57_baseline_promotion_human_approval.py
