@@ -1,38 +1,24 @@
 {
-  "name": "Enterprise 5.7.3 Promotion Calibration Engine",
-  "version": "1.1",
-  "enterprise_version": "5.7.3.1",
-  "files": [
-    "automation/enterprise573_promotion_calibration_engine.py",
-    ".github/workflows/enterprise-5-7-3-promotion-calibration.yml",
-    "supabase/ENTERPRISE_5_7_3_PROMOTION_CALIBRATION_VERIFY.sql",
-    "ENTERPRISE_5_7_3_PROMOTION_CALIBRATION_INSTALL_GUIDE.md"
+  "name": "Enterprise 5.7.4 Promotion Decision Engine",
+  "version": "1.0",
+  "enterprise_version": "5.7.4",
+  "outputs": [
+    "PROMOTE",
+    "HOLD",
+    "REJECT"
   ],
-  "strict_thresholds": {
-    "minimum_evolution_score": 70.0,
-    "minimum_confidence_score": 60.0,
-    "minimum_rule_pass_rate": 100.0
-  },
-  "paper_safety_floors": {
-    "minimum_evolution_score": 60.0,
-    "minimum_confidence_score": 30.0,
-    "minimum_rule_pass_rate": 60.0
-  },
-  "modes": [
-    "ANALYZE_ONLY",
-    "APPLY_PAPER_PILOT"
+  "files": [
+    "automation/enterprise574_promotion_decision_engine.py",
+    ".github/workflows/enterprise-5-7-4-promotion-decision.yml",
+    "supabase/ENTERPRISE_5_7_4_PROMOTION_DECISION_VERIFY.sql",
+    "ENTERPRISE_5_7_4_PROMOTION_DECISION_INSTALL_GUIDE.md"
   ],
   "safety": {
     "paper_only": true,
     "human_approval_required": true,
-    "strict_thresholds_unchanged": true,
     "automatic_baseline_activation": false,
+    "automatic_rollback": false,
     "live_trading": false,
     "broker_submission": false
-  },
-  "fixes": [
-    "Preserve existing promotion_status_v57 overall_status",
-    "Avoid unsupported CALIBRATION_READY and CALIBRATION_WARNING values",
-    "Store calibration state in diagnostics, summary, warnings and audit"
-  ]
+  }
 }
