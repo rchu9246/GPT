@@ -1,23 +1,22 @@
 {
-  "name": "Enterprise 5.6 Evolution Intelligence Suite",
-  "version": "1.1",
-  "enterprise_version": "5.6.1",
-  "overlay_root": true,
+  "name": "Enterprise 5.7 Promotion Engine",
+  "version": "2.0",
+  "enterprise_version": "5.7.0",
   "files": [
-    "automation/enterprise56_evolution_intelligence.py",
-    ".github/workflows/enterprise-5-6-evolution-intelligence.yml",
-    "supabase/ENTERPRISE_5_6_EVOLUTION_VERIFY.sql",
-    "ENTERPRISE_5_6_EVOLUTION_INTELLIGENCE_INSTALL_GUIDE.md"
+    "automation/enterprise57_baseline_promotion_human_approval.py",
+    ".github/workflows/enterprise-5-7-baseline-promotion.yml",
+    "supabase/ENTERPRISE_5_7_PROMOTION_ENGINE_VERIFY.sql",
+    "ENTERPRISE_5_7_PROMOTION_ENGINE_INSTALL_GUIDE.md"
   ],
   "capabilities": [
-    "Candidate Portfolio Registration",
-    "Historical Replay Proxy",
-    "Stress Testing",
-    "Monte Carlo Simulation",
-    "Evolution Scoring",
-    "Portfolio Ranking",
-    "Human Review Selection",
-    "Metrics and Status Update"
+    "Read v56 portfolio rankings",
+    "Create promotion candidates",
+    "Evaluate promotion rules",
+    "Create human review requests",
+    "Create pending human decisions",
+    "Create candidate baseline versions",
+    "Create manual promotion plans",
+    "Update metrics and status"
   ],
   "safety": {
     "paper_only": true,
@@ -28,8 +27,5 @@
     "automatic_rollback_execution": false,
     "live_trading": false,
     "broker_submission": false
-  },
-  "fixes": [
-    "Constrain deterministic random_seed to PostgreSQL signed BIGINT range"
-  ]
+  }
 }

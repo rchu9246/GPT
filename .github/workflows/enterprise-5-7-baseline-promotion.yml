@@ -3,12 +3,108 @@ name: Enterprise 5.7 Baseline Promotion
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: enterprise-5-7-baseline-promotion
+  cancel-in-progress: false
+
 jobs:
   baseline-promotion:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python automation/enterprise57_baseline_promotion_human_approval.py
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Enterprise 5.7 Promotion Engine
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ENTERPRISE57_MAX_RANKINGS: "20"
+        run: |
+          python automation/enterprise57_baseline_promotion_human_approval.py
+
+      - name: Verify Enterprise 5.7 writes
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PYTHONPATH: ${{ github.workspace }}/automation
+        run: |
+          python - <<'PY'
+          import os
+          from datetime import date
+          from enterprise2.client import SupabaseRestClient
+
+          run_date = os.environ.get("QUANT_RUN_DATE", date.today().isoformat())
+          client = SupabaseRestClient()
+
+          rankings = client.get(
+              "portfolio_rankings_v56",
+              "limit=1",
+          )
+          candidates = client.get(
+              "promotion_candidates_v57",
+              f"candidate_date=eq.{run_date}&limit=500",
+          )
+          status_rows = client.get(
+              "promotion_status_v57",
+              f"status_date=eq.{run_date}&limit=1",
+          )
+          metrics_rows = client.get(
+              "promotion_metrics_v57",
+              f"metric_date=eq.{run_date}&limit=1",
+          )
+
+          if not status_rows:
+              raise SystemExit("No promotion_status_v57 row found")
+          if not metrics_rows:
+              raise SystemExit("No promotion_metrics_v57 row found")
+          if rankings and not candidates:
+              raise SystemExit(
+                  "v56 rankings exist but v57 created zero candidates"
+              )
+
+          eligible = client.get(
+              "promotion_candidates_v57",
+              f"candidate_date=eq.{run_date}&eligibility_status=eq.ELIGIBLE&limit=500",
+          )
+          reviews = client.get(
+              "human_review_requests_v57",
+              f"request_date=eq.{run_date}&limit=500",
+          )
+          plans = client.get(
+              "baseline_promotion_plans_v57",
+              f"plan_date=eq.{run_date}&limit=500",
+          )
+
+          if eligible and (not reviews or not plans):
+              raise SystemExit(
+                  "Eligible v57 candidates exist but review or plan rows are missing"
+              )
+
+          status = status_rows[0]
+          print(
+              "Enterprise 5.7 verified:",
+              "status=", status.get("overall_status"),
+              "candidates=", len(candidates),
+              "eligible=", len(eligible),
+              "reviews=", len(reviews),
+              "plans=", len(plans),
+              "live_trading=", status.get("live_trading_enabled"),
+          )
+          PY
