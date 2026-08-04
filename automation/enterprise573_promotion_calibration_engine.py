@@ -11,7 +11,7 @@ from typing import Any
 from enterprise2.client import SupabaseRestClient
 
 RUN_DATE = os.environ.get("QUANT_RUN_DATE", date.today().isoformat())
-ENGINE_VERSION = "5.7.3"
+ENGINE_VERSION = "5.7.3.1"
 
 STRICT_THRESHOLDS = {
     "minimum_evolution_score": 70.0,
@@ -362,11 +362,10 @@ def main() -> None:
             "promotion_status_v57",
             f"status_date=eq.{RUN_DATE}",
             {
-                "overall_status": (
-                    "CALIBRATION_READY"
-                    if calibration["paper_reviewable"]
-                    else "CALIBRATION_WARNING"
-                ),
+                # Preserve the existing database-approved status value.
+                # promotion_status_v57 may have a CHECK constraint and does
+                # not necessarily allow CALIBRATION_READY/CALIBRATION_WARNING.
+                "overall_status": status.get("overall_status") or "WARNING",
                 "human_approval_required": True,
                 "automatic_baseline_promotion_enabled": False,
                 "automatic_portfolio_application_enabled": False,

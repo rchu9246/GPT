@@ -1,4 +1,4 @@
-# Enterprise 5.7.3 Promotion Calibration Engine v1.0
+# Enterprise 5.7.3 Promotion Calibration Engine v1.1
 
 ## 目的
 
@@ -62,3 +62,14 @@ Paper Pilot 安全下限：
 - Automatic Baseline Activation = false
 - Live Trading = false
 - Broker Submission = false
+
+
+## v1.1 修正
+
+- 修正 `promotion_status_v57` HTTP 400。
+- 不再寫入可能違反 CHECK constraint 的：
+  - `CALIBRATION_READY`
+  - `CALIBRATION_WARNING`
+- 保留資料庫原本的 `overall_status`。
+- Calibration 結果改存於 `diagnostics`、`summary`、`warnings` 與 `promotion_audit_v57`。
+- 不需重新執行 Foundation Database SQL。

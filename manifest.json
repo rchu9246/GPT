@@ -1,7 +1,7 @@
 {
   "name": "Enterprise 5.7.3 Promotion Calibration Engine",
-  "version": "1.0",
-  "enterprise_version": "5.7.3",
+  "version": "1.1",
+  "enterprise_version": "5.7.3.1",
   "files": [
     "automation/enterprise573_promotion_calibration_engine.py",
     ".github/workflows/enterprise-5-7-3-promotion-calibration.yml",
@@ -29,5 +29,10 @@
     "automatic_baseline_activation": false,
     "live_trading": false,
     "broker_submission": false
-  }
+  },
+  "fixes": [
+    "Preserve existing promotion_status_v57 overall_status",
+    "Avoid unsupported CALIBRATION_READY and CALIBRATION_WARNING values",
+    "Store calibration state in diagnostics, summary, warnings and audit"
+  ]
 }
