@@ -1,42 +1,26 @@
 {
-  "name": "Enterprise 5.7.2 Promotion Eligibility Engine",
-  "version": "2.1",
-  "enterprise_version": "5.7.2.1",
-  "policies": {
-    "STRICT": {
-      "minimum_pass_rate": 100,
-      "rank_one_required": true,
-      "selected_for_review_required": true,
-      "promotion_recommendation_required": true
-    },
-    "PAPER_PILOT": {
-      "minimum_pass_rate": 60,
-      "rank_one_required": true,
-      "paper_only": true,
-      "human_approval_required": true
-    }
-  },
+  "name": "Enterprise 5.6.1 Evolution Score Optimizer",
+  "version": "1.0",
+  "enterprise_version": "5.6.1",
   "files": [
-    "automation/enterprise572_promotion_eligibility_engine.py",
-    ".github/workflows/enterprise-5-7-2-promotion-eligibility.yml",
-    "supabase/ENTERPRISE_5_7_2_PROMOTION_ELIGIBILITY_VERIFY.sql",
-    "ENTERPRISE_5_7_2_PROMOTION_ELIGIBILITY_INSTALL_GUIDE.md",
-    "supabase/ENTERPRISE_5_7_2_V2_1_DIAGNOSTIC.sql"
+    "automation/enterprise561_evolution_score_optimizer.py",
+    ".github/workflows/enterprise-5-6-1-evolution-score-optimizer.yml",
+    "supabase/ENTERPRISE_5_6_1_OPTIMIZER_VERIFY.sql",
+    "ENTERPRISE_5_6_1_OPTIMIZER_INSTALL_GUIDE.md"
   ],
+  "promotion_requirements": {
+    "rank_no": 1,
+    "minimum_evolution_score": 70,
+    "minimum_confidence_score": 60,
+    "maximum_drawdown": 20,
+    "simulation_pass_required": true,
+    "stress_test_pass_required": true
+  },
   "safety": {
-    "paper_only": true,
+    "artificial_score_inflation": false,
     "human_approval_required": true,
-    "automatic_promotion": false,
-    "automatic_activation": false,
-    "automatic_rollback": false,
+    "automatic_baseline_activation": false,
     "live_trading": false,
     "broker_submission": false
-  },
-  "fixes": [
-    "Bulk-load and group candidate evaluations by candidate_id",
-    "Normalize PostgreSQL and JSON boolean values",
-    "Fallback to evaluation_status when passed is missing",
-    "Fallback to candidate-derived core rules when evaluation rows are missing",
-    "Fail workflow when PASS rows exist but all scores remain zero"
-  ]
+  }
 }
