@@ -1,21 +1,31 @@
 {
-  "name": "Enterprise 5.6.3 Evolution Score Optimizer",
-  "version": "3.0",
-  "enterprise_version": "5.6.3",
+  "name": "Enterprise 5.7.3 Promotion Calibration Engine",
+  "version": "1.0",
+  "enterprise_version": "5.7.3",
   "files": [
-    "automation/enterprise563_evolution_score_optimizer.py",
-    ".github/workflows/enterprise-5-6-3-evolution-score-optimizer.yml",
-    "supabase/ENTERPRISE_5_6_3_OPTIMIZER_VERIFY.sql",
-    "ENTERPRISE_5_6_3_OPTIMIZER_INSTALL_GUIDE.md"
+    "automation/enterprise573_promotion_calibration_engine.py",
+    ".github/workflows/enterprise-5-7-3-promotion-calibration.yml",
+    "supabase/ENTERPRISE_5_7_3_PROMOTION_CALIBRATION_VERIFY.sql",
+    "ENTERPRISE_5_7_3_PROMOTION_CALIBRATION_INSTALL_GUIDE.md"
   ],
-  "scoring": {
-    "absolute_weight": 0.72,
-    "relative_weight": 0.28,
-    "artificial_score_inflation": false,
-    "candidate_specific_confidence": true
+  "strict_thresholds": {
+    "minimum_evolution_score": 70.0,
+    "minimum_confidence_score": 60.0,
+    "minimum_rule_pass_rate": 100.0
   },
+  "paper_safety_floors": {
+    "minimum_evolution_score": 60.0,
+    "minimum_confidence_score": 30.0,
+    "minimum_rule_pass_rate": 60.0
+  },
+  "modes": [
+    "ANALYZE_ONLY",
+    "APPLY_PAPER_PILOT"
+  ],
   "safety": {
+    "paper_only": true,
     "human_approval_required": true,
+    "strict_thresholds_unchanged": true,
     "automatic_baseline_activation": false,
     "live_trading": false,
     "broker_submission": false
