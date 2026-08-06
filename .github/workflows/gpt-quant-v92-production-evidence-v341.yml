@@ -1,0 +1,40 @@
+name: GPT Quant V9.2 Production Evidence Adapter v3.4.1
+on:
+  workflow_dispatch:
+    inputs:
+      min_trades: {required: true, default: "20", type: string}
+      min_equity_rows: {required: true, default: "30", type: string}
+permissions: {contents: read}
+jobs:
+  adapt-v9:
+    runs-on: ubuntu-latest
+    env: {REAL_COMMAND: "${{ vars.V9_REAL_BACKTEST_COMMAND }}", SUPABASE_URL: "${{ secrets.SUPABASE_URL }}", SUPABASE_SERVICE_ROLE_KEY: "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}", FINMIND_TOKEN: "${{ secrets.FINMIND_TOKEN }}"}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: "python -m pip install --upgrade pip && if [ -f requirements.txt ]; then pip install -r requirements.txt; else pip install requests; fi"
+      - id: adapt
+        continue-on-error: true
+        run: python automation/v92/production_evidence_adapter_v341.py --version v9 --command "$REAL_COMMAND" --output-dir artifacts/v9 --min-trades "${{ inputs.min_trades }}" --min-equity-rows "${{ inputs.min_equity_rows }}"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: {name: v341-v9-production-evidence, path: artifacts/v9/, if-no-files-found: warn}
+      - if: steps.adapt.outcome == 'failure'
+        run: exit 1
+  adapt-v91:
+    runs-on: ubuntu-latest
+    env: {REAL_COMMAND: "${{ vars.V91_REAL_BACKTEST_COMMAND }}", SUPABASE_URL: "${{ secrets.SUPABASE_URL }}", SUPABASE_SERVICE_ROLE_KEY: "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}", FINMIND_TOKEN: "${{ secrets.FINMIND_TOKEN }}"}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: "python -m pip install --upgrade pip && if [ -f requirements.txt ]; then pip install -r requirements.txt; else pip install requests; fi"
+      - id: adapt
+        continue-on-error: true
+        run: python automation/v92/production_evidence_adapter_v341.py --version v91 --command "$REAL_COMMAND" --output-dir artifacts/v91 --min-trades "${{ inputs.min_trades }}" --min-equity-rows "${{ inputs.min_equity_rows }}"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: {name: v341-v91-production-evidence, path: artifacts/v91/, if-no-files-found: warn}
+      - if: steps.adapt.outcome == 'failure'
+        run: exit 1

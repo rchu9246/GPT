@@ -1,0 +1,1 @@
+{"version":"3.4.1","minimum_trades":20,"minimum_equity_rows":30,"derive_metrics_when_missing":true,"required_raw_files":["trades.csv","equity.csv"],"optional_raw_files":["metrics.json"],"always_upload_diagnostics":true}

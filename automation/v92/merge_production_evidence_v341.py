@@ -1,0 +1,3 @@
+import argparse,json
+from pathlib import Path
+p=argparse.ArgumentParser();p.add_argument('--v9',type=Path,required=True);p.add_argument('--v91',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args();v9=json.loads(a.v9.read_text());v91=json.loads(a.v91.read_text());ok=bool(v9.get('production_evidence') and v91.get('production_evidence'));o={'adapter_version':'3.4.1','source_type':'production_backtest' if ok else 'invalid_production_evidence','production_evidence':ok,'v9':v9,'v91':v91};a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(json.dumps(o,indent=2)+'\n');raise SystemExit(0 if ok else 2)
