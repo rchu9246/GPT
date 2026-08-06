@@ -1,52 +1,44 @@
-name: GPT Quant V9 vs V9.1 Comparison
-on:
-  workflow_dispatch:
-    inputs:
-      v9_metrics_path:
-        description: "V9 JSON or CSV metrics path"
-        required: true
-        default: "artifacts/backtest/v9_metrics.json"
-        type: string
-      v91_metrics_path:
-        description: "V9.1 JSON or CSV metrics path"
-        required: true
-        default: "artifacts/backtest/v91_metrics.json"
-        type: string
-      fail_on_regression:
-        description: "Fail when policy gate fails"
-        required: true
-        default: true
-        type: boolean
-permissions:
-  contents: read
-jobs:
-  compare:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Verify inputs
-        shell: bash
-        run: |
-          test -f "${{ inputs.v9_metrics_path }}" || { echo "::error::Missing V9 metrics"; exit 1; }
-          test -f "${{ inputs.v91_metrics_path }}" || { echo "::error::Missing V9.1 metrics"; exit 1; }
-      - name: Generate report
-        shell: bash
-        run: |
-          EXTRA=""
-          if [ "${{ inputs.fail_on_regression }}" = "true" ]; then EXTRA="--fail-on-regression"; fi
-          python automation/gpt_quant_v9_v91_compare.py \
-            --v9 "${{ inputs.v9_metrics_path }}" \
-            --v91 "${{ inputs.v91_metrics_path }}" \
-            --policy config/gpt_quant_v9_v91_comparison_policy.json \
-            --output-dir artifacts/comparison $EXTRA
-      - name: Upload report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gpt-quant-v9-v91-comparison
-          path: artifacts/comparison/
-          if-no-files-found: error
-          retention-days: 30
+# ============================================
+# FIX: GPT Quant V9 vs V9.1 Comparison
+# ============================================
+
+# 修改檔案：
+# .github/workflows/gpt-quant-v9-v91-comparison.yml
+
+# 找到：
+
+v9_metrics_path:
+  description: "V9 JSON or CSV metrics path"
+  required: true
+  default: "artifacts/backtest/v9_metrics.json"
+  type: string
+
+v91_metrics_path:
+  description: "V9.1 JSON or CSV metrics path"
+  required: true
+  default: "artifacts/backtest/v91_metrics.json"
+  type: string
+
+# 改成：
+
+v9_metrics_path:
+  description: "V9 JSON or CSV metrics path"
+  required: true
+  default: "backtest/examples/v9_metrics.example.json"
+  type: string
+
+v91_metrics_path:
+  description: "V9.1 JSON or CSV metrics path"
+  required: true
+  default: "backtest/examples/v91_metrics.example.json"
+  type: string
+
+# ============================================
+# Git
+# ============================================
+
+git add .github/workflows/gpt-quant-v9-v91-comparison.yml
+
+git commit -m "Fix comparison workflow default metrics paths"
+
+git push origin main
