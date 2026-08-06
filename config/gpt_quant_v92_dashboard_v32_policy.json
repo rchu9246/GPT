@@ -1,0 +1,17 @@
+{
+  "version": "3.2",
+  "score_weights": {
+    "sharpe": 25,
+    "sortino": 15,
+    "max_drawdown": 20,
+    "profit_factor": 15,
+    "walk_forward": 15,
+    "monte_carlo": 10
+  },
+  "readiness_thresholds": {
+    "ready_for_paper_trading": 90,
+    "continue_research": 80,
+    "reject_below": 80
+  },
+  "production_evidence_required": true
+}
