@@ -1,0 +1,15 @@
+{
+  "version": "3.3",
+  "dashboard_focus": "enterprise_decision_and_visualization",
+  "score_weights": {
+    "sharpe": 25,
+    "sortino": 15,
+    "drawdown": 20,
+    "profit_factor": 15,
+    "walk_forward": 15,
+    "monte_carlo": 10
+  },
+  "paper_trading_threshold": 90,
+  "production_evidence_required": true,
+  "artifact_retention_days": 90
+}

@@ -1,0 +1,111 @@
+name: GPT Quant V9.2 Enterprise Dashboard v3.3
+
+on:
+  workflow_dispatch:
+    inputs:
+      research_mode:
+        description: "auto, production, or smoke"
+        required: true
+        default: "auto"
+        type: choice
+        options: [auto, production, smoke]
+      wfa_windows:
+        description: "Walk-forward windows"
+        required: true
+        default: "5"
+        type: string
+      monte_carlo_iterations:
+        description: "Monte Carlo iterations"
+        required: true
+        default: "1000"
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  dashboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      V9_REAL_BACKTEST_COMMAND: ${{ vars.V9_REAL_BACKTEST_COMMAND }}
+      V91_REAL_BACKTEST_COMMAND: ${{ vars.V91_REAL_BACKTEST_COMMAND }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download latest Phase 2 evidence
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: gpt-quant-v92-phase2.yml
+          workflow_conclusion: success
+          name: v92-phase2-real-backtest-evidence
+          path: artifacts/phase2
+          if_no_artifact_found: warn
+
+      - name: Resolve research input
+        run: |
+          python automation/v92/research_input_resolver_v31.py \
+            --source-dir artifacts/phase2 \
+            --output-dir artifacts/resolved \
+            --mode "${{ inputs.research_mode }}" \
+            --min-equity-rows 30 \
+            --min-trade-rows 20
+
+      - name: Generate comparison without legacy summary
+        shell: bash
+        run: |
+          env -u GITHUB_STEP_SUMMARY python automation/v92/compare_backtests.py \
+            --v9 artifacts/resolved/v9_metrics.json \
+            --v91 artifacts/resolved/v91_metrics.json \
+            --policy config/gpt_quant_v92_phase1_policy.json \
+            --output-dir artifacts/comparison
+
+      - name: Walk-forward analysis
+        continue-on-error: true
+        run: |
+          python automation/v92/walk_forward_analysis_v31.py \
+            --equity artifacts/resolved/v91_equity_curve.csv \
+            --output-dir artifacts/research/wfa \
+            --windows "${{ inputs.wfa_windows }}"
+
+      - name: Monte Carlo analysis
+        continue-on-error: true
+        run: |
+          python automation/v92/monte_carlo_analysis_v31.py \
+            --trades artifacts/resolved/v91_trades.csv \
+            --output-dir artifacts/research/monte-carlo \
+            --iterations "${{ inputs.monte_carlo_iterations }}"
+
+      - name: Calculate dashboard score
+        run: |
+          python automation/v92/enterprise_dashboard_score_v33.py \
+            --comparison artifacts/comparison/v9-vs-v91-report.json \
+            --wfa artifacts/research/wfa/walk_forward.json \
+            --monte-carlo artifacts/research/monte-carlo/monte_carlo.json \
+            --manifest artifacts/resolved/research_input_manifest.json \
+            --output artifacts/dashboard/research_score_v33.json
+
+      - name: Build final Enterprise Dashboard summary
+        run: |
+          python automation/v92/build_enterprise_dashboard_v33.py \
+            --score artifacts/dashboard/research_score_v33.json \
+            --comparison artifacts/comparison/v9-vs-v91-report.json \
+            --wfa artifacts/research/wfa/walk_forward.json \
+            --monte-carlo artifacts/research/monte-carlo/monte_carlo.json \
+            --manifest artifacts/resolved/research_input_manifest.json \
+            --equity artifacts/resolved/v91_equity_curve.csv \
+            --output-dir artifacts/dashboard
+
+      - name: Upload Enterprise Dashboard
+        uses: actions/upload-artifact@v4
+        with:
+          name: v92-enterprise-dashboard-v33
+          path: artifacts/dashboard/
+          if-no-files-found: error
+          retention-days: 90
