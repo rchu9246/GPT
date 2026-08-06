@@ -1,0 +1,89 @@
+name: GPT Quant V9.2 Enterprise CI/CD Phase 2
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "smoke validates integration; production runs real backtests"
+        required: true
+        default: "smoke"
+        type: choice
+        options: [smoke, production]
+      fail_on_regression:
+        description: "Fail when V9.1 regression gate fails"
+        required: true
+        default: true
+        type: boolean
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: |
+          python -m py_compile automation/v92/real_backtest_adapter.py
+          python -m py_compile automation/v92/smoke_strategy_runner.py
+          python -m unittest discover -s tests/v92 -p "test_phase2_*.py" -v
+  backtest-v9:
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      REAL_COMMAND: ${{ vars.V9_REAL_BACKTEST_COMMAND }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - id: select
+        shell: bash
+        run: |
+          if [ "${{ inputs.mode }}" = "smoke" ]; then
+            echo 'cmd=python automation/v92/smoke_strategy_runner.py --version v9' >> "$GITHUB_OUTPUT"
+          else
+            test -n "$REAL_COMMAND" || { echo "::error::Missing V9_REAL_BACKTEST_COMMAND"; exit 1; }
+            echo "cmd=$REAL_COMMAND" >> "$GITHUB_OUTPUT"
+          fi
+      - run: python automation/v92/real_backtest_adapter.py --version v9 --output-dir artifacts/backtest --command '${{ steps.select.outputs.cmd }}'
+      - uses: actions/upload-artifact@v4
+        with: {name: v92-v9-real-backtest, path: artifacts/backtest/, if-no-files-found: error}
+  backtest-v91:
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      REAL_COMMAND: ${{ vars.V91_REAL_BACKTEST_COMMAND }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - id: select
+        shell: bash
+        run: |
+          if [ "${{ inputs.mode }}" = "smoke" ]; then
+            echo 'cmd=python automation/v92/smoke_strategy_runner.py --version v91' >> "$GITHUB_OUTPUT"
+          else
+            test -n "$REAL_COMMAND" || { echo "::error::Missing V91_REAL_BACKTEST_COMMAND"; exit 1; }
+            echo "cmd=$REAL_COMMAND" >> "$GITHUB_OUTPUT"
+          fi
+      - run: python automation/v92/real_backtest_adapter.py --version v91 --output-dir artifacts/backtest --command '${{ steps.select.outputs.cmd }}'
+      - uses: actions/upload-artifact@v4
+        with: {name: v92-v91-real-backtest, path: artifacts/backtest/, if-no-files-found: error}
+  compare:
+    needs: [backtest-v9, backtest-v91]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: actions/download-artifact@v4
+        with: {name: v92-v9-real-backtest, path: artifacts/v9}
+      - uses: actions/download-artifact@v4
+        with: {name: v92-v91-real-backtest, path: artifacts/v91}
+      - shell: bash
+        run: |
+          EXTRA=""
+          if [ "${{ inputs.fail_on_regression }}" = "true" ]; then EXTRA="--fail-on-regression"; fi
+          python automation/v92/compare_backtests.py             --v9 artifacts/v9/v9_metrics.json             --v91 artifacts/v91/v91_metrics.json             --policy config/gpt_quant_v92_phase1_policy.json             --output-dir artifacts/comparison $EXTRA
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: v92-phase2-real-backtest-evidence, path: artifacts/, if-no-files-found: warn}
