@@ -1,0 +1,14 @@
+{
+  "total_return": 27.0,
+  "annual_return": 20.1,
+  "max_drawdown": -8.0,
+  "sharpe": 1.83,
+  "sortino": 2.8,
+  "win_rate": 57.0,
+  "profit_factor": 1.89,
+  "total_trades": 315,
+  "average_trade": 3500,
+  "exposure": 55.0,
+  "volatility": 11.8,
+  "calmar": 2.51
+}
