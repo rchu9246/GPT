@@ -1,0 +1,139 @@
+name: GPT Quant V9.2 Production Evidence Adapter v3.4
+
+on:
+  workflow_dispatch:
+    inputs:
+      min_trades:
+        description: "Minimum normalized trades per version"
+        required: true
+        default: "20"
+        type: string
+      min_equity_rows:
+        description: "Minimum normalized equity rows per version"
+        required: true
+        default: "30"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  adapt-v9:
+    name: Adapt V9 Production Evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      REAL_COMMAND: ${{ vars.V9_REAL_BACKTEST_COMMAND }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate V9 command
+        run: |
+          if [ -z "$REAL_COMMAND" ]; then
+            echo "::error::Missing Repository Variable V9_REAL_BACKTEST_COMMAND"
+            exit 1
+          fi
+
+      - name: Run and adapt V9 evidence
+        run: |
+          python automation/v92/production_evidence_adapter_v34.py \
+            --version v9 \
+            --command "$REAL_COMMAND" \
+            --output-dir artifacts/v9 \
+            --min-trades "${{ inputs.min_trades }}" \
+            --min-equity-rows "${{ inputs.min_equity_rows }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v34-v9-production-evidence
+          path: artifacts/v9/
+          if-no-files-found: error
+          retention-days: 60
+
+  adapt-v91:
+    name: Adapt V9.1 Production Evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      REAL_COMMAND: ${{ vars.V91_REAL_BACKTEST_COMMAND }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate V9.1 command
+        run: |
+          if [ -z "$REAL_COMMAND" ]; then
+            echo "::error::Missing Repository Variable V91_REAL_BACKTEST_COMMAND"
+            exit 1
+          fi
+
+      - name: Run and adapt V9.1 evidence
+        run: |
+          python automation/v92/production_evidence_adapter_v34.py \
+            --version v91 \
+            --command "$REAL_COMMAND" \
+            --output-dir artifacts/v91 \
+            --min-trades "${{ inputs.min_trades }}" \
+            --min-equity-rows "${{ inputs.min_equity_rows }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v34-v91-production-evidence
+          path: artifacts/v91/
+          if-no-files-found: error
+          retention-days: 60
+
+  package:
+    name: Package Dashboard Production Evidence
+    needs: [adapt-v9, adapt-v91]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: v34-v9-production-evidence
+          path: artifacts/v9
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: v34-v91-production-evidence
+          path: artifacts/v91
+
+      - name: Build production evidence manifest
+        run: |
+          python automation/v92/merge_production_evidence_v34.py \
+            --v9 artifacts/v9/v9_production_evidence_manifest.json \
+            --v91 artifacts/v91/v91_production_evidence_manifest.json \
+            --output artifacts/production/research_input_manifest.json
+
+      - name: Assemble Dashboard-compatible package
+        run: |
+          mkdir -p artifacts/production
+          cp artifacts/v9/v9_metrics.json artifacts/production/
+          cp artifacts/v9/v9_trades.csv artifacts/production/
+          cp artifacts/v9/v9_equity_curve.csv artifacts/production/
+          cp artifacts/v91/v91_metrics.json artifacts/production/
+          cp artifacts/v91/v91_trades.csv artifacts/production/
+          cp artifacts/v91/v91_equity_curve.csv artifacts/production/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v92-production-evidence-v34
+          path: artifacts/production/
+          if-no-files-found: error
+          retention-days: 90

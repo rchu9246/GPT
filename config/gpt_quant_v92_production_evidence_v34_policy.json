@@ -1,0 +1,24 @@
+{
+  "version": "3.4",
+  "minimum_trades": 20,
+  "minimum_equity_rows": 30,
+  "required_metrics": [
+    "total_return",
+    "max_drawdown",
+    "sharpe",
+    "profit_factor",
+    "total_trades"
+  ],
+  "standard_trade_columns": [
+    "timestamp",
+    "side",
+    "entry_price",
+    "exit_price",
+    "pnl"
+  ],
+  "standard_equity_columns": [
+    "timestamp",
+    "equity"
+  ],
+  "production_evidence_requires_both_versions": true
+}
