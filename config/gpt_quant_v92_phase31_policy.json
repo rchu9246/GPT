@@ -1,0 +1,8 @@
+{
+  "version": "3.1",
+  "minimum_equity_rows": 30,
+  "minimum_trade_rows": 20,
+  "walk_forward_minimum_pass_rate": 0.6,
+  "monte_carlo_maximum_p95_drawdown": 25.0,
+  "production_release_requires_real_evidence": true
+}

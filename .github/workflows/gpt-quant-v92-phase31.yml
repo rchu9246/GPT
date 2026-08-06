@@ -1,0 +1,122 @@
+name: GPT Quant V9.2 Enterprise Production Research Pipeline v3.1
+
+on:
+  workflow_dispatch:
+    inputs:
+      research_mode:
+        description: "auto reruns production when configured; smoke validates pipeline only"
+        required: true
+        default: "auto"
+        type: choice
+        options: [auto, production, smoke]
+      fail_on_gate:
+        description: "Fail when production release gate blocks"
+        required: true
+        default: false
+        type: boolean
+      wfa_windows:
+        description: "Walk-forward windows"
+        required: true
+        default: "5"
+        type: string
+      monte_carlo_iterations:
+        description: "Monte Carlo iterations"
+        required: true
+        default: "1000"
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      V9_REAL_BACKTEST_COMMAND: ${{ vars.V9_REAL_BACKTEST_COMMAND }}
+      V91_REAL_BACKTEST_COMMAND: ${{ vars.V91_REAL_BACKTEST_COMMAND }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download latest Phase 2 evidence
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: gpt-quant-v92-phase2.yml
+          workflow_conclusion: success
+          name: v92-phase2-real-backtest-evidence
+          path: artifacts/phase2
+          if_no_artifact_found: warn
+
+      - name: Resolve research input
+        run: |
+          python automation/v92/research_input_resolver_v31.py \
+            --source-dir artifacts/phase2 \
+            --output-dir artifacts/resolved \
+            --mode "${{ inputs.research_mode }}" \
+            --min-equity-rows 30 \
+            --min-trade-rows 20
+
+      - name: Generate fresh comparison
+        shell: bash
+        run: |
+          python automation/v92/compare_backtests.py \
+            --v9 artifacts/resolved/v9_metrics.json \
+            --v91 artifacts/resolved/v91_metrics.json \
+            --policy config/gpt_quant_v92_phase1_policy.json \
+            --output-dir artifacts/comparison
+
+      - name: Walk-forward analysis
+        continue-on-error: true
+        run: |
+          python automation/v92/walk_forward_analysis_v31.py \
+            --equity artifacts/resolved/v91_equity_curve.csv \
+            --output-dir artifacts/research/wfa \
+            --windows "${{ inputs.wfa_windows }}"
+
+      - name: Monte Carlo robustness
+        continue-on-error: true
+        run: |
+          python automation/v92/monte_carlo_analysis_v31.py \
+            --trades artifacts/resolved/v91_trades.csv \
+            --output-dir artifacts/research/monte-carlo \
+            --iterations "${{ inputs.monte_carlo_iterations }}"
+
+      - name: Build v3.1 research report
+        run: |
+          python automation/v92/build_research_report_v31.py \
+            --manifest artifacts/resolved/research_input_manifest.json \
+            --comparison artifacts/comparison/v9-vs-v91-report.json \
+            --wfa artifacts/research/wfa/walk_forward.json \
+            --monte-carlo artifacts/research/monte-carlo/monte_carlo.json \
+            --output-dir artifacts/research/report
+
+      - name: Production release gate
+        id: gate
+        continue-on-error: true
+        run: |
+          python automation/v92/production_release_gate_v31.py \
+            --report artifacts/research/report/production_research_report.json \
+            --output artifacts/research/release_gate.json
+
+      - name: Upload v3.1 research evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v92-production-research-v31-evidence
+          path: |
+            artifacts/resolved/
+            artifacts/comparison/
+            artifacts/research/
+          if-no-files-found: error
+          retention-days: 60
+
+      - name: Enforce production gate
+        if: ${{ inputs.fail_on_gate && steps.gate.outcome == 'failure' }}
+        run: |
+          echo "::error::Production release gate blocked"
+          exit 1
