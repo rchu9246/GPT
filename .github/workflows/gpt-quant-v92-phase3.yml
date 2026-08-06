@@ -1,0 +1,97 @@
+name: GPT Quant V9.2 Production Research Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      fail_on_gate:
+        description: "Fail workflow when production research gate blocks"
+        required: true
+        default: true
+        type: boolean
+      wfa_windows:
+        description: "Walk-forward windows"
+        required: true
+        default: "5"
+        type: string
+      monte_carlo_iterations:
+        description: "Monte Carlo iterations"
+        required: true
+        default: "1000"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download latest Phase 2 evidence
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: gpt-quant-v92-phase2.yml
+          workflow_conclusion: success
+          name: v92-phase2-real-backtest-evidence
+          path: artifacts/phase2
+
+      - name: Locate Phase 2 files
+        shell: bash
+        run: |
+          find artifacts/phase2 -type f | sort
+          test -f artifacts/phase2/v91/v91_equity_curve.csv
+          test -f artifacts/phase2/v91/v91_trades.csv
+          test -f artifacts/phase2/comparison/v9-vs-v91-report.json
+
+      - name: Walk-forward analysis
+        run: |
+          python automation/v92/walk_forward_analysis.py \
+            --equity artifacts/phase2/v91/v91_equity_curve.csv \
+            --output-dir artifacts/research/wfa \
+            --windows "${{ inputs.wfa_windows }}"
+
+      - name: Monte Carlo robustness
+        run: |
+          python automation/v92/monte_carlo_analysis.py \
+            --trades artifacts/phase2/v91/v91_trades.csv \
+            --output-dir artifacts/research/monte-carlo \
+            --iterations "${{ inputs.monte_carlo_iterations }}"
+
+      - name: Generate production research report
+        run: |
+          python automation/v92/build_research_report.py \
+            --comparison artifacts/phase2/comparison/v9-vs-v91-report.json \
+            --wfa artifacts/research/wfa/walk_forward.json \
+            --monte-carlo artifacts/research/monte-carlo/monte_carlo.json \
+            --policy config/gpt_quant_v92_phase3_policy.json \
+            --output-dir artifacts/research/report
+
+      - name: Production release gate
+        id: gate
+        continue-on-error: true
+        run: |
+          python automation/v92/production_release_gate.py \
+            --report artifacts/research/report/production_research_report.json \
+            --output artifacts/research/release_gate.json
+
+      - name: Upload production research evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v92-production-research-evidence
+          path: artifacts/research/
+          if-no-files-found: error
+          retention-days: 60
+
+      - name: Enforce gate
+        if: ${{ inputs.fail_on_gate && steps.gate.outcome == 'failure' }}
+        run: |
+          echo "::error::Production Research Gate blocked release"
+          exit 1

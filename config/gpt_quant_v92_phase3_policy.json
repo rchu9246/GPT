@@ -1,0 +1,16 @@
+{
+  "walk_forward": {
+    "minimum_pass_rate": 0.6,
+    "maximum_window_drawdown": 25.0
+  },
+  "monte_carlo": {
+    "iterations": 1000,
+    "maximum_p95_drawdown": 25.0,
+    "maximum_probability_of_ruin": 0.0
+  },
+  "release": {
+    "require_comparison_pass": true,
+    "require_walk_forward_pass": true,
+    "require_monte_carlo_pass": true
+  }
+}
