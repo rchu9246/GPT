@@ -1,0 +1,57 @@
+name: GPT Quant V9.2 Enterprise CI/CD Phase 1
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "smoke uses example metrics; production runs configured backtests"
+        required: true
+        default: "smoke"
+        type: choice
+        options: [smoke, production]
+      fail_on_regression:
+        description: "Fail when V9.1 regression gate fails"
+        required: true
+        default: true
+        type: boolean
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python automation/v92/validate_build.py --root .
+      - run: python -m unittest discover -s tests/v92 -p "test_*.py" -v
+  backtest:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      V9_BACKTEST_COMMAND: ${{ vars.V9_BACKTEST_COMMAND }}
+      V91_BACKTEST_COMMAND: ${{ vars.V91_BACKTEST_COMMAND }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python automation/v92/run_backtest_pair.py --mode "${{ inputs.mode }}" --output-dir artifacts/backtest
+      - uses: actions/upload-artifact@v4
+        with: {name: v92-backtest-results, path: artifacts/backtest/, if-no-files-found: error, retention-days: 30}
+  compare:
+    needs: backtest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: actions/download-artifact@v4
+        with: {name: v92-backtest-results, path: artifacts/backtest}
+      - name: Compare and gate
+        shell: bash
+        run: |
+          EXTRA=""
+          if [ "${{ inputs.fail_on_regression }}" = "true" ]; then EXTRA="--fail-on-regression"; fi
+          python automation/v92/compare_backtests.py --v9 artifacts/backtest/v9_metrics.json --v91 artifacts/backtest/v91_metrics.json --policy config/gpt_quant_v92_phase1_policy.json --output-dir artifacts/comparison $EXTRA
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: {name: v92-comparison-report, path: artifacts/comparison/, if-no-files-found: warn, retention-days: 30}
