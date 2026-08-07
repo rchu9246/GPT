@@ -1,0 +1,57 @@
+name: GPT Quant V9.2 Production Evidence Adapter v3.4.2 Debug
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  debug:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - version: v9
+            command: V9_REAL_BACKTEST_COMMAND
+          - version: v91
+            command: V91_REAL_BACKTEST_COMMAND
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+      V9_REAL_BACKTEST_COMMAND: ${{ vars.V9_REAL_BACKTEST_COMMAND }}
+      V91_REAL_BACKTEST_COMMAND: ${{ vars.V91_REAL_BACKTEST_COMMAND }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; else pip install requests; fi
+      - name: Select command
+        shell: bash
+        run: |
+          if [ "${{ matrix.command }}" = "V9_REAL_BACKTEST_COMMAND" ]; then CMD="$V9_REAL_BACKTEST_COMMAND"; else CMD="$V91_REAL_BACKTEST_COMMAND"; fi
+          test -n "$CMD" || (echo "::error::Missing ${{ matrix.command }}" && exit 1)
+          echo "REAL_COMMAND=$CMD" >> "$GITHUB_ENV"
+      - name: Run debug adapter
+        id: debug
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/${{ matrix.version }}
+          python -u automation/v92/production_evidence_adapter_v342_debug.py --version "${{ matrix.version }}" --command "$REAL_COMMAND" --output-dir "artifacts/${{ matrix.version }}" 2>&1 | tee "artifacts-${{ matrix.version }}-console.log"
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v342-debug-${{ matrix.version }}
+          path: |
+            artifacts/${{ matrix.version }}/
+            artifacts-${{ matrix.version }}-console.log
+          if-no-files-found: warn
+      - name: Enforce result
+        if: steps.debug.outcome == 'failure'
+        run: exit 1

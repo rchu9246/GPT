@@ -1,0 +1,7 @@
+{
+  "version": "3.4.2-debug",
+  "full_stdout": true,
+  "full_stderr": true,
+  "traceback": true,
+  "always_upload": true
+}
