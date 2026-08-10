@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>GPT Quant V9.2 Paper Trading Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:#0b1020; --panel:#121a2f; --panel2:#17213b; --line:#263454;
+      --text:#edf3ff; --muted:#93a4c7; --good:#35d07f; --warn:#f7c948;
+      --bad:#ff6b6b; --accent:#6ea8fe; --accent2:#9b8cff;
+    }
+    * { box-sizing:border-box }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:Inter,Segoe UI,Arial,sans-serif; }
+    .wrap { max-width:1500px; margin:0 auto; padding:24px; }
+    .header { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:22px; }
+    h1 { margin:0; font-size:26px; }
+    .sub { color:var(--muted); margin-top:6px; }
+    .badge { padding:7px 12px; border-radius:999px; font-size:13px; font-weight:700; background:rgba(53,208,127,.14); color:var(--good); border:1px solid rgba(53,208,127,.35); }
+    .toolbar { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:18px; }
+    select,button { background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:9px; padding:9px 12px; }
+    button { cursor:pointer; }
+    button:hover { border-color:var(--accent); }
+    .grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; }
+    .card { background:linear-gradient(180deg,var(--panel),#0f1729); border:1px solid var(--line); border-radius:14px; padding:16px; }
+    .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
+    .value { margin-top:8px; font-size:28px; font-weight:750; }
+    .good { color:var(--good) } .bad { color:var(--bad) } .warn { color:var(--warn) }
+    .section { margin-top:16px; }
+    .section h2 { font-size:17px; margin:0 0 12px; }
+    .two { display:grid; grid-template-columns:1.25fr .75fr; gap:14px; }
+    .chartbox { height:340px; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th,td { padding:10px 9px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap; }
+    th { color:var(--muted); font-weight:600; }
+    .scroll { overflow:auto; max-height:420px; }
+    .empty { color:var(--muted); padding:22px 0; text-align:center; }
+    .status-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .dot { width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:6px; background:var(--good); }
+    .meta { color:var(--muted); font-size:12px; }
+    .error { background:rgba(255,107,107,.10); border:1px solid rgba(255,107,107,.35); color:#ffd2d2; padding:12px; border-radius:10px; margin-bottom:14px; display:none; }
+    @media (max-width:1000px) { .grid{grid-template-columns:repeat(2,1fr)} .two{grid-template-columns:1fr} }
+    @media (max-width:600px) { .grid{grid-template-columns:1fr} .header{flex-direction:column} .wrap{padding:14px} }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div>
+      <h1>GPT Quant V9.2 Paper Trading Dashboard</h1>
+      <div class="sub">Shadow Production · Paper Trading · No Broker Execution</div>
+    </div>
+    <div class="status-row">
+      <span class="badge"><span class="dot"></span>SHADOW ONLY</span>
+      <span id="lastRefresh" class="meta">尚未更新</span>
+    </div>
+  </div>
+
+  <div id="errorBox" class="error"></div>
+
+  <div class="toolbar">
+    <select id="strategy">
+      <option value="V9.1">V9.1</option>
+      <option value="V9">V9</option>
+    </select>
+    <button id="refreshBtn">重新整理</button>
+  </div>
+
+  <div class="grid">
+    <div class="card"><div class="label">Total Equity</div><div id="equity" class="value">—</div></div>
+    <div class="card"><div class="label">Cash</div><div id="cash" class="value">—</div></div>
+    <div class="card"><div class="label">Market Value</div><div id="marketValue" class="value">—</div></div>
+    <div class="card"><div class="label">Unrealized P&amp;L</div><div id="upnl" class="value">—</div></div>
+    <div class="card"><div class="label">Open Positions</div><div id="positionsCount" class="value">—</div></div>
+    <div class="card"><div class="label">Latest Orders</div><div id="ordersCount" class="value">—</div></div>
+    <div class="card"><div class="label">Latest Run</div><div id="latestRun" class="value" style="font-size:20px">—</div></div>
+    <div class="card"><div class="label">Engine Status</div><div id="engineStatus" class="value good" style="font-size:20px">—</div></div>
+  </div>
+
+  <div class="section two">
+    <div class="card">
+      <h2>Equity Curve</h2>
+      <div class="chartbox"><canvas id="equityChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Latest Run</h2>
+      <table>
+        <tbody>
+          <tr><th>Run Date</th><td id="runDate">—</td></tr>
+          <tr><th>Strategy</th><td id="runStrategy">—</td></tr>
+          <tr><th>Status</th><td id="runStatus">—</td></tr>
+          <tr><th>Orders Created</th><td id="runOrders">—</td></tr>
+          <tr><th>Positions Open</th><td id="runPositions">—</td></tr>
+          <tr><th>Realized P&amp;L</th><td id="runRpnl">—</td></tr>
+          <tr><th>Unrealized P&amp;L</th><td id="runUpnl">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section card">
+    <h2>Current Positions</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr>
+          <th>Symbol</th><th>Shares</th><th>Avg Price</th><th>Last Price</th>
+          <th>Market Value</th><th>Unrealized P&amp;L</th><th>Opened</th>
+        </tr></thead>
+        <tbody id="positionsBody"></tbody>
+      </table>
+      <div id="positionsEmpty" class="empty">目前沒有模擬持倉</div>
+    </div>
+  </div>
+
+  <div class="section card">
+    <h2>Recent Paper Orders</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr>
+          <th>Date</th><th>Symbol</th><th>Side</th><th>Score</th><th>Signal</th>
+          <th>Reference</th><th>Fill</th><th>Shares</th><th>Notional</th><th>Status</th>
+        </tr></thead>
+        <tbody id="ordersBody"></tbody>
+      </table>
+      <div id="ordersEmpty" class="empty">目前沒有模擬訂單</div>
+    </div>
+  </div>
+</div>
+
+<script src="./paper_trading_dashboard_config.js"></script>
+<script>
+const cfg = window.GPTQ_PAPER_DASHBOARD || {};
+const API = (cfg.supabaseUrl || "").replace(/\/$/,"") + "/rest/v1";
+const KEY = cfg.publishableKey || cfg.anonKey || "";
+let chart;
+
+function money(v) {
+  const n = Number(v || 0);
+  return new Intl.NumberFormat("zh-TW",{style:"currency",currency:"TWD",maximumFractionDigits:0}).format(n);
+}
+function num(v,d=2){ return Number(v||0).toLocaleString("zh-TW",{maximumFractionDigits:d}); }
+function signed(el, v) {
+  const n = Number(v || 0);
+  el.textContent = money(n);
+  el.className = "value " + (n > 0 ? "good" : n < 0 ? "bad" : "");
+}
+async function rest(path) {
+  if (!cfg.supabaseUrl || !KEY) throw new Error("尚未設定 dashboard/paper_trading_dashboard_config.js");
+  const r = await fetch(API + "/" + path, {
+    headers:{apikey:KEY, Authorization:"Bearer "+KEY}
+  });
+  if (!r.ok) throw new Error("Supabase " + r.status + ": " + (await r.text()));
+  return await r.json();
+}
+function esc(v){ return String(v ?? "").replace(/[&<>"']/g, s=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[s])); }
+
+async function loadDashboard() {
+  const strategy = document.getElementById("strategy").value;
+  const errorBox = document.getElementById("errorBox");
+  errorBox.style.display="none";
+
+  try {
+    const q = encodeURIComponent(strategy);
+    const [runs,orders,positions,snaps] = await Promise.all([
+      rest(`gptq_paper_runs?select=*&strategy_version=eq.${q}&order=run_date.desc&limit=1`),
+      rest(`gptq_paper_orders?select=*&strategy_version=eq.${q}&order=created_at.desc&limit=100`),
+      rest(`gptq_paper_positions?select=*&strategy_version=eq.${q}&order=market_value.desc.nullslast`),
+      rest(`gptq_paper_equity_snapshots?select=*&strategy_version=eq.${q}&order=run_date.asc&limit=365`)
+    ]);
+
+    const run = runs[0] || {};
+    const snap = snaps[snaps.length-1] || {};
+
+    document.getElementById("equity").textContent = money(snap.total_equity);
+    document.getElementById("cash").textContent = money(snap.cash);
+    document.getElementById("marketValue").textContent = money(snap.market_value);
+    signed(document.getElementById("upnl"), snap.unrealized_pnl);
+    document.getElementById("positionsCount").textContent = num(positions.length,0);
+    document.getElementById("ordersCount").textContent = num(orders.length,0);
+    document.getElementById("latestRun").textContent = run.run_date || "—";
+    document.getElementById("engineStatus").textContent = run.status || "NO RUN";
+
+    document.getElementById("runDate").textContent = run.run_date || "—";
+    document.getElementById("runStrategy").textContent = run.strategy_version || strategy;
+    document.getElementById("runStatus").textContent = run.status || "—";
+    document.getElementById("runOrders").textContent = run.orders_created ?? "—";
+    document.getElementById("runPositions").textContent = run.positions_open ?? "—";
+    document.getElementById("runRpnl").textContent = money(run.realized_pnl);
+    document.getElementById("runUpnl").textContent = money(run.unrealized_pnl);
+
+    const pb = document.getElementById("positionsBody");
+    pb.innerHTML = positions.map(p=>`<tr>
+      <td>${esc(p.symbol)}</td><td>${esc(p.shares)}</td><td>${num(p.average_price,2)}</td>
+      <td>${num(p.last_price,2)}</td><td>${money(p.market_value)}</td>
+      <td class="${Number(p.unrealized_pnl)>0?'good':Number(p.unrealized_pnl)<0?'bad':''}">${money(p.unrealized_pnl)}</td>
+      <td>${esc(p.opened_at)}</td></tr>`).join("");
+    document.getElementById("positionsEmpty").style.display = positions.length ? "none" : "block";
+
+    const ob = document.getElementById("ordersBody");
+    ob.innerHTML = orders.map(o=>`<tr>
+      <td>${esc(o.run_date)}</td><td>${esc(o.symbol)}</td><td>${esc(o.side)}</td>
+      <td>${num(o.signal_score,2)}</td><td>${esc(o.signal_label)}</td>
+      <td>${num(o.reference_price,2)}</td><td>${num(o.simulated_fill_price,2)}</td>
+      <td>${esc(o.shares)}</td><td>${money(o.notional)}</td><td>${esc(o.status)}</td>
+    </tr>`).join("");
+    document.getElementById("ordersEmpty").style.display = orders.length ? "none" : "block";
+
+    const labels = snaps.map(x=>x.run_date);
+    const data = snaps.map(x=>Number(x.total_equity));
+    if (chart) chart.destroy();
+    chart = new Chart(document.getElementById("equityChart"),{
+      type:"line",
+      data:{labels,datasets:[{label:"Total Equity",data,tension:.25,fill:false}]},
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{labels:{color:"#cdd8f3"}}},
+        scales:{
+          x:{ticks:{color:"#93a4c7"},grid:{color:"#1d2943"}},
+          y:{ticks:{color:"#93a4c7"},grid:{color:"#1d2943"}}
+        }
+      }
+    });
+
+    document.getElementById("lastRefresh").textContent = "更新：" + new Date().toLocaleString("zh-TW");
+  } catch(e) {
+    errorBox.textContent = e.message;
+    errorBox.style.display="block";
+    console.error(e);
+  }
+}
+document.getElementById("refreshBtn").addEventListener("click",loadDashboard);
+document.getElementById("strategy").addEventListener("change",loadDashboard);
+loadDashboard();
+</script>
+</body>
+</html>
