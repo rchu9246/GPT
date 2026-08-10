@@ -1,0 +1,15 @@
+{
+  "mode": "SHADOW_ONLY_NO_BROKER",
+  "real_order_execution": false,
+  "default_initial_capital": 1000000,
+  "default_score_threshold": 65,
+  "default_position_size": 0.1,
+  "default_max_new_orders": 5,
+  "default_max_open_positions": 10,
+  "schedule_taipei": "14:20 Monday-Friday",
+  "notes": [
+    "Does not connect to a broker.",
+    "Does not submit real orders.",
+    "Uses Supabase market data and simulation tables only."
+  ]
+}
