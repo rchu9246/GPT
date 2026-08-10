@@ -1,0 +1,22 @@
+{
+  "version": "2.2",
+  "mode": "MARKET_DATA_ONLY_NO_BROKER",
+  "provider": "finmind",
+  "dataset": "TaiwanStockPrice",
+  "purpose": "automatic missing-day backfill into Supabase daily_prices",
+  "defaults": {
+    "lookback_days_if_empty": 45,
+    "max_backfill_days": 120,
+    "request_sleep_seconds": 0.35
+  },
+  "workflow_order": [
+    "14:05 Phase 2.2 Automatic Market Data Ingestion",
+    "14:15 Phase 2.1 Signal Generation",
+    "14:25 Phase 2 Paper Trading"
+  ],
+  "safety": {
+    "broker_execution": false,
+    "real_orders": false,
+    "writes_only_market_and_ingestion_tables": true
+  }
+}
