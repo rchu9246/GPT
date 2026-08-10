@@ -1,0 +1,71 @@
+name: GPT Quant V9.2 Paper Trading Phase 2 - Live Signal Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: "V9 or V9.1"
+        required: true
+        default: "V9.1"
+        type: choice
+        options: [V9, V9.1]
+  schedule:
+    # 14:25 Asia/Taipei, Mon-Fri (06:25 UTC)
+    - cron: "25 6 * * 1-5"
+
+permissions:
+  contents: read
+
+jobs:
+  phase2-shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+
+      PAPER_INITIAL_CAPITAL: ${{ vars.PAPER_INITIAL_CAPITAL || '1000000' }}
+      PAPER_SCORE_THRESHOLD: ${{ vars.PAPER_SCORE_THRESHOLD || '65' }}
+      PAPER_POSITION_SIZE: ${{ vars.PAPER_POSITION_SIZE || '0.10' }}
+      PAPER_MAX_NEW_ORDERS: ${{ vars.PAPER_MAX_NEW_ORDERS || '5' }}
+      PAPER_MAX_OPEN_POSITIONS: ${{ vars.PAPER_MAX_OPEN_POSITIONS || '10' }}
+
+      PAPER_MAX_GROSS_EXPOSURE: ${{ vars.PAPER_MAX_GROSS_EXPOSURE || '0.80' }}
+      PAPER_MAX_SINGLE_POSITION: ${{ vars.PAPER_MAX_SINGLE_POSITION || '0.15' }}
+      PAPER_STOP_LOSS: ${{ vars.PAPER_STOP_LOSS || '0.05' }}
+      PAPER_TAKE_PROFIT: ${{ vars.PAPER_TAKE_PROFIT || '0.10' }}
+      PAPER_MAX_HOLDING_DAYS: ${{ vars.PAPER_MAX_HOLDING_DAYS || '10' }}
+      PAPER_TRAILING_STOP: ${{ vars.PAPER_TRAILING_STOP || '0.06' }}
+
+      PAPER_SLIPPAGE_RATE: ${{ vars.PAPER_SLIPPAGE_RATE || '0.001' }}
+      PAPER_COMMISSION_RATE: ${{ vars.PAPER_COMMISSION_RATE || '0.001425' }}
+      PAPER_TAX_RATE: ${{ vars.PAPER_TAX_RATE || '0.003' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install requests
+          fi
+
+      - name: Run Phase 2 Live Signal Pipeline
+        run: python automation/v92/production_paper_trading_phase2.py
+
+      - name: Upload Phase 2 report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper-trading-phase2-${{ github.run_number }}
+          path: artifacts/paper_trading_phase2/
+          if-no-files-found: warn
+          retention-days: 90
