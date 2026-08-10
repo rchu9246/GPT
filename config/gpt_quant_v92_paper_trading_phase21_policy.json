@@ -1,0 +1,17 @@
+{
+  "version": "2.1",
+  "mode": "SHADOW_ONLY_NO_BROKER",
+  "purpose": "live market data health + transparent signal generation",
+  "defaults": {
+    "score_threshold": 65,
+    "min_history_rows": 122,
+    "max_stale_days": 5,
+    "top_n": 30
+  },
+  "outputs": [
+    "gptq_market_data_health",
+    "gptq_signal_generation_summary",
+    "gptq_paper_signals",
+    "phase21_signal_report.json"
+  ]
+}
