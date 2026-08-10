@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import math
 import os
@@ -7,6 +8,7 @@ import statistics
 import sys
 from collections import defaultdict
 from datetime import date
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -25,6 +27,12 @@ TAX_RATE = float(os.getenv("BACKTEST_TAX_RATE", "0.003"))
 SLIPPAGE_RATE = float(os.getenv("BACKTEST_SLIPPAGE_RATE", "0.001"))
 START_DATE = os.getenv("BACKTEST_START_DATE", "").strip()
 END_DATE = os.getenv("BACKTEST_END_DATE", "").strip()
+GPTQ_RAW_METRICS_OUTPUT = os.getenv("GPTQ_RAW_METRICS_OUTPUT", "").strip()
+GPTQ_RAW_TRADES_OUTPUT = os.getenv("GPTQ_RAW_TRADES_OUTPUT", "").strip()
+GPTQ_RAW_EQUITY_OUTPUT = os.getenv("GPTQ_RAW_EQUITY_OUTPUT", "").strip()
+GPTQ_METRICS_OUTPUT = os.getenv("GPTQ_METRICS_OUTPUT", "").strip()
+GPTQ_TRADES_OUTPUT = os.getenv("GPTQ_TRADES_OUTPUT", "").strip()
+GPTQ_EQUITY_OUTPUT = os.getenv("GPTQ_EQUITY_OUTPUT", "").strip()
 
 
 def required_env(name: str) -> str:
@@ -243,6 +251,55 @@ def calculate_drawdown(equity: list[float]) -> float:
     return maximum
 
 
+
+def _write_json(path_value: str, payload: dict[str, Any]) -> None:
+    if not path_value:
+        return
+    path = Path(path_value)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _write_trades_csv(path_value: str, trades: list[dict[str, Any]]) -> None:
+    if not path_value:
+        return
+    path = Path(path_value)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["timestamp","side","entry_price","exit_price","pnl"])
+        writer.writeheader()
+        for trade in trades:
+            writer.writerow({
+                "timestamp": trade.get("exit_date") or trade.get("entry_date") or trade.get("signal_date"),
+                "side": "LONG",
+                "entry_price": trade.get("entry_price"),
+                "exit_price": trade.get("exit_price"),
+                "pnl": trade.get("pnl"),
+            })
+
+
+def _write_equity_csv(path_value: str, equity: list[float]) -> None:
+    if not path_value:
+        return
+    path = Path(path_value)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["timestamp","equity"])
+        writer.writeheader()
+        for index, value in enumerate(equity):
+            writer.writerow({"timestamp": f"trade_{index}", "equity": round(value, 2)})
+
+
+def export_production_evidence(*, trades: list[dict[str, Any]], equity: list[float], metrics: dict[str, Any]) -> None:
+    metrics_paths=[GPTQ_RAW_METRICS_OUTPUT,GPTQ_METRICS_OUTPUT]
+    trades_paths=[GPTQ_RAW_TRADES_OUTPUT,GPTQ_TRADES_OUTPUT]
+    equity_paths=[GPTQ_RAW_EQUITY_OUTPUT,GPTQ_EQUITY_OUTPUT]
+    for path in dict.fromkeys(p for p in metrics_paths if p): _write_json(path,metrics)
+    for path in dict.fromkeys(p for p in trades_paths if p): _write_trades_csv(path,trades)
+    for path in dict.fromkeys(p for p in equity_paths if p): _write_equity_csv(path,equity)
+    if any(metrics_paths+trades_paths+equity_paths):
+        print(json.dumps({"production_evidence_export":True,"strategy_version":STRATEGY_VERSION,"metrics_output":next((p for p in metrics_paths if p),None),"trades_output":next((p for p in trades_paths if p),None),"equity_output":next((p for p in equity_paths if p),None)},ensure_ascii=False))
+
 def main():
     stocks = fetch_all(
         "stocks",
@@ -410,32 +467,30 @@ def main():
         downside_std = statistics.pstdev(downside) if len(downside) > 1 else 0
         sortino = statistics.mean(returns) / downside_std * math.sqrt(252 / max(MAX_HOLDING_DAYS, 1)) if downside_std else 0
 
-        update_run(
-            run_id,
-            {
-                "status": "COMPLETED",
-                "total_return": round(total_return, 8),
-                "annual_return": round(annual_return, 8),
-                "win_rate": round(win_rate, 8),
-                "profit_factor": round(profit_factor, 8),
-                "max_drawdown": round(calculate_drawdown(equity), 8),
-                "sharpe_ratio": round(sharpe, 8),
-                "sortino_ratio": round(sortino, 8),
-                "total_trades": len(trades),
-                "average_return": round(statistics.mean(returns), 8) if returns else 0,
-                "average_holding_days": round(
-                    statistics.mean([trade["holding_days"] for trade in trades]), 2
-                ) if trades else 0,
-                "best_trade": max(returns) if returns else 0,
-                "worst_trade": min(returns) if returns else 0,
-                "final_capital": round(equity[-1], 2),
-                "equity_curve": [
-                    {"trade": index, "equity": round(value, 2)}
-                    for index, value in enumerate(equity)
-                ],
-                "completed_at": "now()",
-            },
-        )
+        max_drawdown = calculate_drawdown(equity)
+        average_return = statistics.mean(returns) if returns else 0
+        average_holding_days = statistics.mean([trade["holding_days"] for trade in trades]) if trades else 0
+        metrics_payload = {
+            "strategy_version": STRATEGY_VERSION,
+            "total_return": round(total_return, 8),
+            "annual_return": round(annual_return, 8),
+            "win_rate": round(win_rate, 8),
+            "profit_factor": round(profit_factor, 8),
+            "max_drawdown": round(max_drawdown, 8),
+            "sharpe": round(sharpe, 8),
+            "sharpe_ratio": round(sharpe, 8),
+            "sortino": round(sortino, 8),
+            "sortino_ratio": round(sortino, 8),
+            "total_trades": len(trades),
+            "average_trade": round(average_return, 8),
+            "average_return": round(average_return, 8),
+            "average_holding_days": round(average_holding_days, 2),
+            "best_trade": max(returns) if returns else 0,
+            "worst_trade": min(returns) if returns else 0,
+            "final_capital": round(equity[-1], 2),
+        }
+        update_run(run_id,{"status":"COMPLETED",**metrics_payload,"equity_curve":[{"trade":index,"equity":round(value,2)} for index,value in enumerate(equity)],"completed_at":"now()"})
+        export_production_evidence(trades=trades,equity=equity,metrics=metrics_payload)
         print(json.dumps({
             "run_id": run_id,
             "trades": len(trades),

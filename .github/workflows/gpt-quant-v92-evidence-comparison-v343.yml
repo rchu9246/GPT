@@ -1,0 +1,102 @@
+name: GPT Quant V9.2 Evidence Adapter → V9 vs V9.1 Comparison v3.4.3
+on:
+  workflow_dispatch:
+    inputs:
+      min_trades:
+        required: true
+        default: "20"
+        type: string
+      min_equity_rows:
+        required: true
+        default: "30"
+        type: string
+      fail_on_regression:
+        required: true
+        default: true
+        type: boolean
+permissions:
+  contents: read
+jobs:
+  backtest-v9:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      BACKTEST_STRATEGY: V9
+      BACKTEST_SCORE_THRESHOLD: ${{ vars.V9_SCORE_THRESHOLD || '65' }}
+      BACKTEST_TAKE_PROFIT: ${{ vars.V9_TAKE_PROFIT || '0.10' }}
+      BACKTEST_STOP_LOSS: ${{ vars.V9_STOP_LOSS || '0.05' }}
+      BACKTEST_MAX_HOLDING_DAYS: ${{ vars.V9_MAX_HOLDING_DAYS || '10' }}
+      BACKTEST_POSITION_SIZE: ${{ vars.V9_POSITION_SIZE || '0.10' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; else pip install requests; fi
+      - name: Run V9 production backtest
+        env:
+          GPTQ_RAW_METRICS_OUTPUT: artifacts/v9/raw/v9_raw_metrics.json
+          GPTQ_RAW_TRADES_OUTPUT: artifacts/v9/raw/v9_raw_trades.csv
+          GPTQ_RAW_EQUITY_OUTPUT: artifacts/v9/raw/v9_raw_equity.csv
+        run: python automation/run_backtest.py
+      - uses: actions/upload-artifact@v4
+        with: {name: v343-v9-raw-evidence, path: artifacts/v9/raw/, if-no-files-found: error}
+  backtest-v91:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      BACKTEST_STRATEGY: V9.1
+      BACKTEST_SCORE_THRESHOLD: ${{ vars.V91_SCORE_THRESHOLD || '65' }}
+      BACKTEST_TAKE_PROFIT: ${{ vars.V91_TAKE_PROFIT || '0.10' }}
+      BACKTEST_STOP_LOSS: ${{ vars.V91_STOP_LOSS || '0.05' }}
+      BACKTEST_MAX_HOLDING_DAYS: ${{ vars.V91_MAX_HOLDING_DAYS || '10' }}
+      BACKTEST_POSITION_SIZE: ${{ vars.V91_POSITION_SIZE || '0.10' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; else pip install requests; fi
+      - name: Run V9.1 production backtest
+        env:
+          GPTQ_RAW_METRICS_OUTPUT: artifacts/v91/raw/v91_raw_metrics.json
+          GPTQ_RAW_TRADES_OUTPUT: artifacts/v91/raw/v91_raw_trades.csv
+          GPTQ_RAW_EQUITY_OUTPUT: artifacts/v91/raw/v91_raw_equity.csv
+        run: python automation/run_backtest.py
+      - uses: actions/upload-artifact@v4
+        with: {name: v343-v91-raw-evidence, path: artifacts/v91/raw/, if-no-files-found: error}
+  compare:
+    needs: [backtest-v9, backtest-v91]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: actions/download-artifact@v4
+        with: {name: v343-v9-raw-evidence, path: artifacts/v9/raw}
+      - uses: actions/download-artifact@v4
+        with: {name: v343-v91-raw-evidence, path: artifacts/v91/raw}
+      - name: Adapt V9
+        run: python automation/v92/adapt_existing_evidence_v343.py --version v9 --raw-dir artifacts/v9/raw --output-dir artifacts/v9 --min-trades "${{ inputs.min_trades }}" --min-equity-rows "${{ inputs.min_equity_rows }}"
+      - name: Adapt V9.1
+        run: python automation/v92/adapt_existing_evidence_v343.py --version v91 --raw-dir artifacts/v91/raw --output-dir artifacts/v91 --min-trades "${{ inputs.min_trades }}" --min-equity-rows "${{ inputs.min_equity_rows }}"
+      - name: Compare V9 vs V9.1
+        shell: bash
+        run: |
+          EXTRA=""
+          if [ "${{ inputs.fail_on_regression }}" = "true" ]; then EXTRA="--fail-on-regression"; fi
+          python automation/v92/compare_backtests.py --v9 artifacts/v9/v9_metrics.json --v91 artifacts/v91/v91_metrics.json --policy config/gpt_quant_v92_phase1_policy.json --output-dir artifacts/comparison $EXTRA
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v343-evidence-and-comparison
+          path: |
+            artifacts/v9/
+            artifacts/v91/
+            artifacts/comparison/
+          if-no-files-found: error
+          retention-days: 90
