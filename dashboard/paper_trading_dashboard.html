@@ -50,6 +50,7 @@
     <div>
       <h1>GPT Quant V9.2 Paper Trading Dashboard</h1>
       <div class="sub">Shadow Production · Paper Trading · No Broker Execution</div>
+      <div id="apiMeta" class="meta" style="margin-top:4px"></div>
     </div>
     <div class="status-row">
       <span class="badge"><span class="dot"></span>SHADOW ONLY</span>
@@ -131,8 +132,22 @@
 <script src="./paper_trading_dashboard_config.js"></script>
 <script>
 const cfg = window.GPTQ_PAPER_DASHBOARD || {};
-const API = (cfg.supabaseUrl || "").replace(/\/$/,"") + "/rest/v1";
-const KEY = cfg.publishableKey || cfg.anonKey || "";
+
+function normalizeSupabaseBaseUrl(value) {
+  let url = String(value || "").trim();
+  url = url.replace(/\/+$/,"");
+  // Accept either:
+  //   https://PROJECT.supabase.co
+  // or
+  //   https://PROJECT.supabase.co/rest/v1
+  // and always normalize back to the project root.
+  url = url.replace(/\/rest\/v1$/i,"");
+  return url;
+}
+
+const SUPABASE_BASE = normalizeSupabaseBaseUrl(cfg.supabaseUrl);
+const API = SUPABASE_BASE ? SUPABASE_BASE + "/rest/v1" : "";
+const KEY = String(cfg.publishableKey || cfg.anonKey || "").trim();
 let chart;
 
 function money(v) {
@@ -146,11 +161,35 @@ function signed(el, v) {
   el.className = "value " + (n > 0 ? "good" : n < 0 ? "bad" : "");
 }
 async function rest(path) {
-  if (!cfg.supabaseUrl || !KEY) throw new Error("尚未設定 dashboard/paper_trading_dashboard_config.js");
-  const r = await fetch(API + "/" + path, {
-    headers:{apikey:KEY, Authorization:"Bearer "+KEY}
-  });
-  if (!r.ok) throw new Error("Supabase " + r.status + ": " + (await r.text()));
+  if (!SUPABASE_BASE || !KEY) {
+    throw new Error("尚未設定 dashboard/paper_trading_dashboard_config.js");
+  }
+
+  const safePath = String(path || "").replace(/^\/+/,"");
+  const requestUrl = API + "/" + safePath;
+
+  let r;
+  try {
+    r = await fetch(requestUrl, {
+      method:"GET",
+      headers:{
+        apikey:KEY,
+        Authorization:"Bearer "+KEY,
+        Accept:"application/json"
+      }
+    });
+  } catch (networkError) {
+    throw new Error("Supabase network error: " + networkError.message);
+  }
+
+  if (!r.ok) {
+    const body = await r.text();
+    throw new Error(
+      "Supabase " + r.status +
+      " | REST base: " + API +
+      " | response: " + body
+    );
+  }
   return await r.json();
 }
 function esc(v){ return String(v ?? "").replace(/[&<>"']/g, s=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[s])); }
@@ -229,6 +268,9 @@ async function loadDashboard() {
     console.error(e);
   }
 }
+document.getElementById("apiMeta").textContent =
+  SUPABASE_BASE ? ("REST: " + SUPABASE_BASE + "/rest/v1") : "REST: 尚未設定";
+
 document.getElementById("refreshBtn").addEventListener("click",loadDashboard);
 document.getElementById("strategy").addEventListener("change",loadDashboard);
 loadDashboard();

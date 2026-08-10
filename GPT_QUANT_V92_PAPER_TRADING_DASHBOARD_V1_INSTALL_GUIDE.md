@@ -1,4 +1,4 @@
-# GPT Quant V9.2 Paper Trading Dashboard v1.0
+# GPT Quant V9.2 Paper Trading Dashboard v1.0.1 – Supabase REST Fix
 
 ## 你會看到什麼
 
@@ -56,3 +56,16 @@ Dashboard 只能使用：
 - Supabase Auth 登入
 - authenticated-only RLS
 - private dashboard
+
+
+## v1.0.1 修正
+
+- 自動正規化 `DASHBOARD_SUPABASE_URL`
+- 可接受 Project URL：
+  `https://PROJECT.supabase.co`
+- 也可接受誤填成：
+  `https://PROJECT.supabase.co/rest/v1`
+- 避免重複組成 `/rest/v1/rest/v1`
+- 錯誤訊息會顯示實際 REST base，方便定位設定問題
+
+重新部署後不需要修改 Paper Trading Engine。
