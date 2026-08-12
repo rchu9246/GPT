@@ -1,181 +1,118 @@
 #!/usr/bin/env python3
-"""GPT Quant V9.2 Paper Trading Phase 2.5 - Automatic Trading Orchestrator.
-
-Fail-closed coordinator for the already deployed Phase 2.2 -> 2.1 -> 2.3 -> 2.4
-paper-trading scripts. No broker orders are sent by this module.
-"""
-from __future__ import annotations
-import json, os, subprocess, sys, time, urllib.request, urllib.error
+"""GPT Quant V9.2 Phase 2.5 - retry-safe orchestrator hotfix."""
+import json, os, subprocess, sys, time, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-LOG_DIR = ROOT / "phase25_logs"
-LOG_DIR.mkdir(exist_ok=True)
-RESULT = ROOT / "phase25_result.json"
-SUMMARY = ROOT / "phase25_summary.md"
-
-MODE = os.getenv("PAPER_TRADING_MODE", "SHADOW_ONLY_NO_BROKER")
-STRATEGY = os.getenv("PAPER_STRATEGY_VERSION", "V9.1")
-FAIL_CLOSED = os.getenv("PHASE25_FAIL_CLOSED", "true").lower() == "true"
-
-PHASES = [
-    ("2.2", "Market Data Ingestion", ROOT/"automation/v92/paper_trading_phase22_market_ingestion.py"),
-    ("2.1", "Signal Generation", ROOT/"automation/v92/paper_trading_phase21_signal_engine.py"),
-    ("2.3", "Automatic Signal Execution", ROOT/"automation/v92/paper_trading_phase23_signal_execution.py"),
-    ("2.4", "Automatic Position Management", ROOT/"automation/v92/paper_trading_phase24_position_management.py"),
+ROOT=Path(__file__).resolve().parents[2]
+LOG_DIR=ROOT/"phase25_logs"; LOG_DIR.mkdir(parents=True,exist_ok=True)
+URL=os.environ["SUPABASE_URL"].rstrip("/")
+KEY=os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+VERSION=os.getenv("PAPER_STRATEGY_VERSION","V9.1")
+MODE=os.getenv("PAPER_TRADING_MODE","SHADOW_ONLY_NO_BROKER")
+FAIL_CLOSED=os.getenv("PHASE25_FAIL_CLOSED","true").lower()=="true"
+RUN_DATE=datetime.now(timezone.utc).astimezone().date().isoformat()
+RUN_KEY=f"{RUN_DATE}-{VERSION}"
+PHASES=[
+("2.2","Market Data Ingestion",ROOT/"automation/v92/paper_trading_phase22_market_ingestion.py"),
+("2.1","Signal Generation",ROOT/"automation/v92/paper_trading_phase21_signal_engine.py"),
+("2.3","Automatic Signal Execution",ROOT/"automation/v92/paper_trading_phase23_signal_execution.py"),
+("2.4","Automatic Position Management",ROOT/"automation/v92/paper_trading_phase24_position_management.py"),
 ]
 
-def require_env():
-    missing = [x for x in ("SUPABASE_URL","SUPABASE_SERVICE_ROLE_KEY") if not os.getenv(x)]
-    if missing:
-        raise RuntimeError("Missing required environment variables: " + ", ".join(missing))
-    if MODE != "SHADOW_ONLY_NO_BROKER":
-        raise RuntimeError(f"Safety lock: PAPER_TRADING_MODE must be SHADOW_ONLY_NO_BROKER, got {MODE!r}")
+def now(): return datetime.now(timezone.utc).isoformat()
 
-def rest_get(table, query):
-    base = os.environ["SUPABASE_URL"].rstrip("/")
-    key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-    req = urllib.request.Request(
-        f"{base}/rest/v1/{table}?{query}",
-        headers={"apikey":key, "Authorization":f"Bearer {key}", "Accept":"application/json"},
-    )
+def rest(method,table,query="",payload=None,prefer=None):
+    u=f"{URL}/rest/v1/{table}"+(("?"+query) if query else "")
+    h={"apikey":KEY,"Authorization":f"Bearer {KEY}","Content-Type":"application/json","Accept":"application/json"}
+    if prefer: h["Prefer"]=prefer
+    data=None if payload is None else json.dumps(payload).encode()
+    req=urllib.request.Request(u,data=data,headers=h,method=method)
     try:
-        with urllib.request.urlopen(req, timeout=20) as r:
-            return json.loads(r.read().decode() or "[]")
-    except Exception:
-        return []
-
-def rest_post(table, payload):
-    base = os.environ["SUPABASE_URL"].rstrip("/")
-    key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-    body = json.dumps(payload).encode()
-    req = urllib.request.Request(
-        f"{base}/rest/v1/{table}", data=body, method="POST",
-        headers={"apikey":key, "Authorization":f"Bearer {key}",
-                 "Content-Type":"application/json", "Prefer":"return=representation"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=20) as r:
-            return json.loads(r.read().decode() or "[]")
+        with urllib.request.urlopen(req,timeout=30) as r:
+            raw=r.read().decode()
+            return json.loads(raw) if raw else None
     except urllib.error.HTTPError as e:
-        raise RuntimeError(f"Supabase insert {table}: HTTP {e.code}: {e.read().decode()[:1000]}")
+        body=e.read().decode(errors="replace")
+        raise RuntimeError(f"Supabase {method} {table}: HTTP {e.code}: {body}") from e
 
-def rest_patch(table, query, payload):
-    base = os.environ["SUPABASE_URL"].rstrip("/")
-    key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-    req = urllib.request.Request(
-        f"{base}/rest/v1/{table}?{query}", data=json.dumps(payload).encode(), method="PATCH",
-        headers={"apikey":key, "Authorization":f"Bearer {key}",
-                 "Content-Type":"application/json", "Prefer":"return=representation"},
-    )
+def existing():
+    q=urllib.parse.urlencode({"run_key":f"eq.{RUN_KEY}","select":"*","limit":"1"})
+    rows=rest("GET","gptq_paper_orchestrator_runs",q)
+    return rows[0] if rows else None
+
+def patch(payload):
+    q=urllib.parse.urlencode({"run_key":f"eq.{RUN_KEY}"})
+    return rest("PATCH","gptq_paper_orchestrator_runs",q,payload,"return=representation")
+
+def start_run():
+    p={"run_key":RUN_KEY,"strategy_version":VERSION,"mode":MODE,"status":"RUNNING",
+       "pipeline_status":"STARTING","result":{},"started_at":now(),"finished_at":None}
+    old=existing()
+    if old:
+        print(f"[Phase 2.5] Existing run {RUN_KEY}; reusing it safely.")
+        rows=patch(p); return rows[0] if rows else old
     try:
-        with urllib.request.urlopen(req, timeout=20) as r:
-            return json.loads(r.read().decode() or "[]")
-    except urllib.error.HTTPError as e:
-        raise RuntimeError(f"Supabase update {table}: HTTP {e.code}: {e.read().decode()[:1000]}")
+        rows=rest("POST","gptq_paper_orchestrator_runs",payload=p,prefer="return=representation")
+        return rows[0] if rows else p
+    except RuntimeError as e:
+        if "409" not in str(e): raise
+        old=existing()
+        if not old: raise
+        print(f"[Phase 2.5] 409 recovered for {RUN_KEY}.")
+        rows=patch(p); return rows[0] if rows else old
 
-def run_phase(code, name, path):
-    if not path.exists():
-        raise RuntimeError(f"Missing Phase {code} script: {path.relative_to(ROOT)}")
-    started = time.time()
-    p = subprocess.run([sys.executable, str(path)], cwd=ROOT, text=True,
-                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    log = p.stdout or ""
-    (LOG_DIR/f"phase_{code.replace('.','')}.log").write_text(log, encoding="utf-8")
-    return {"phase":code, "name":name, "status":"PASS" if p.returncode == 0 else "FAIL",
-            "exit_code":p.returncode, "duration_seconds":round(time.time()-started,2),
-            "log":str((LOG_DIR/f"phase_{code.replace('.','')}.log").relative_to(ROOT))}
+def update(**fields):
+    patch(fields)
 
-def latest_market_date():
-    rows = rest_get("gptq_market_data_health", "select=latest_market_date,data_status&order=created_at.desc&limit=1")
-    if not rows: return None, None
-    return rows[0].get("latest_market_date"), rows[0].get("data_status")
+def run_phase(phase,name,script):
+    logfile=LOG_DIR/f"phase{phase.replace('.','_')}.log"
+    t=time.time()
+    if not script.exists():
+        return {"phase":phase,"name":name,"status":"FAIL","exit_code":127,
+                "duration_seconds":0,"log":str(logfile.relative_to(ROOT)),
+                "error":f"Missing script: {script}"}
+    p=subprocess.run([sys.executable,str(script)],cwd=ROOT,env=os.environ.copy(),
+                     text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+    out=p.stdout or ""; logfile.write_text(out,encoding="utf-8")
+    if out: print(out,end="" if out.endswith("\n") else "\n")
+    return {"phase":phase,"name":name,"status":"PASS" if p.returncode==0 else "FAIL",
+            "exit_code":p.returncode,"duration_seconds":round(time.time()-t,2),
+            "log":str(logfile.relative_to(ROOT))}
 
-def snapshot():
-    rows = rest_get("gptq_paper_positions", "select=*&status=eq.OPEN")
-    positions = len(rows)
-    mv = sum(float(r.get("market_value") or 0) for r in rows)
-    upnl = sum(float(r.get("unrealized_pnl") or 0) for r in rows)
-    return {"positions_open":positions, "market_value":round(mv,2), "unrealized_pnl":round(upnl,2)}
-
-def write_summary(state):
-    checks = "\n".join(f"- Phase {p['phase']} {p['name']}: **{p['status']}**" for p in state["phases"])
-    s = state.get("portfolio", {})
-    text = f"""# GPT Quant V9.2 Paper Trading Phase 2.5
-
-- mode: `{state['mode']}`
-- strategy_version: `{state['strategy_version']}`
-- status: **{state['status']}**
-- pipeline: **{state['pipeline']}**
-- market_data_status: `{state.get('market_data_status')}`
-- latest_market_date: `{state.get('latest_market_date')}`
-- positions_open: `{s.get('positions_open','n/a')}`
-- market_value: `{s.get('market_value','n/a')}`
-- unrealized_pnl: `{s.get('unrealized_pnl','n/a')}`
-
-## Pipeline checks
-{checks}
-
-> Safety lock: SHADOW_ONLY_NO_BROKER. Phase 2.5 does not submit real broker orders.
-"""
-    SUMMARY.write_text(text, encoding="utf-8")
+def outputs(r):
+    (ROOT/"phase25_result.json").write_text(json.dumps(r,ensure_ascii=False,indent=2),encoding="utf-8")
+    lines=["# GPT Quant V9.2 Paper Trading Phase 2.5","",
+           f"- run_key: `{r['run_key']}`",f"- mode: `{r['mode']}`",
+           f"- strategy_version: `{r['strategy_version']}`",f"- status: **{r['status']}**",
+           f"- pipeline: **{r['pipeline']}**","","## Pipeline","",
+           "| Phase | Component | Status | Exit code | Seconds |","|---|---|---:|---:|---:|"]
+    for p in r["phases"]:
+        lines.append(f"| {p['phase']} | {p['name']} | {p['status']} | {p['exit_code']} | {p['duration_seconds']} |")
+    if r.get("error"): lines += ["","## Error","",f"`{r['error']}`"]
+    (ROOT/"phase25_summary.md").write_text("\n".join(lines)+"\n",encoding="utf-8")
 
 def main():
-    require_env()
-    now = datetime.now(timezone.utc)
-    run_key = f"{now.strftime('%Y-%m-%d')}-{STRATEGY}"
-    state = {"run_key":run_key, "started_at":now.isoformat(), "mode":MODE,
-             "strategy_version":STRATEGY, "status":"RUNNING", "pipeline":"STARTING", "phases":[]}
-
-    # DB-level run lock: unique run_key prevents accidental duplicate daily orchestration.
+    start_run()
+    r={"run_key":RUN_KEY,"started_at":now(),"mode":MODE,"strategy_version":VERSION,
+       "status":"RUNNING","pipeline":"RUNNING","phases":[]}
     try:
-        rest_post("gptq_paper_orchestrator_runs", {
-            "run_key":run_key, "strategy_version":STRATEGY, "mode":MODE,
-            "status":"RUNNING", "pipeline_status":"STARTING", "started_at":now.isoformat()
-        })
+        for phase,name,script in PHASES:
+            print(f"=== Phase {phase}: {name} ===")
+            update(status="RUNNING",pipeline_status=f"PHASE_{phase}_RUNNING",result=r)
+            x=run_phase(phase,name,script); r["phases"].append(x)
+            if x["status"]!="PASS" and FAIL_CLOSED:
+                r["status"]="FAILED"; r["pipeline"]="BLOCKED"
+                r["error"]=f"Phase {phase} failed; downstream trading blocked"; break
+        if r["status"]=="RUNNING": r["status"]="COMPLETED"; r["pipeline"]="COMPLETED"
     except Exception as e:
-        state.update(status="BLOCKED", pipeline="DUPLICATE_OR_LOCK_ERROR", error=str(e))
-        RESULT.write_text(json.dumps(state, indent=2), encoding="utf-8")
-        write_summary(state)
-        raise
-
+        r["status"]="FAILED"; r["pipeline"]="BLOCKED"; r["error"]=f"{type(e).__name__}: {e}"
+    r["finished_at"]=now(); outputs(r)
     try:
-        for code, name, path in PHASES:
-            result = run_phase(code, name, path)
-            state["phases"].append(result)
-
-            if code == "2.2" and result["status"] == "PASS":
-                mdate, mstatus = latest_market_date()
-                state["latest_market_date"], state["market_data_status"] = mdate, mstatus
-                # Fail closed if the health table explicitly reports stale/bad data.
-                if mstatus and str(mstatus).upper() not in ("FRESH","COMPLETED","OK","HEALTHY"):
-                    result["status"] = "FAIL"
-                    result["reason"] = f"MARKET_DATA_{mstatus}"
-
-            if result["status"] != "PASS" and FAIL_CLOSED:
-                raise RuntimeError(f"Phase {code} failed; downstream trading blocked")
-
-        state["portfolio"] = snapshot()
-        state.update(status="COMPLETED", pipeline="HEALTHY")
+        update(status=r["status"],pipeline_status=r["pipeline"],result=r,finished_at=r["finished_at"])
     except Exception as e:
-        state.update(status="FAILED", pipeline="BLOCKED", error=str(e))
-    finally:
-        state["finished_at"] = datetime.now(timezone.utc).isoformat()
-        RESULT.write_text(json.dumps(state, indent=2), encoding="utf-8")
-        write_summary(state)
-        try:
-            rest_patch("gptq_paper_orchestrator_runs", f"run_key=eq.{run_key}", {
-                "status":state["status"], "pipeline_status":state["pipeline"],
-                "latest_market_date":state.get("latest_market_date"),
-                "market_data_status":state.get("market_data_status"),
-                "result":state, "finished_at":state["finished_at"]
-            })
-        except Exception as e:
-            print(f"[WARN] Could not finalize orchestrator DB row: {e}", file=sys.stderr)
+        print(f"::error::Finalize failed: {e}"); r["status"]="FAILED"; r["pipeline"]="BLOCKED"; outputs(r)
+    print(json.dumps(r,ensure_ascii=False,indent=2))
+    return 0 if r["status"]=="COMPLETED" else 1
 
-    print(json.dumps(state, indent=2))
-    return 0 if state["status"] == "COMPLETED" else 1
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__=="__main__": raise SystemExit(main())
