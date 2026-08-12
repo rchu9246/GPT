@@ -1,51 +1,141 @@
 name: GPT Quant V9.2 Paper Trading Phase 2.6 - Automatic Daily Trading Cycle
+
 on:
   workflow_dispatch:
     inputs:
       strategy_version:
+        description: "V9 or V9.1"
         required: true
         default: "V9.1"
         type: choice
-        options: [V9, V9.1]
+        options:
+          - V9
+          - V9.1
+
   schedule:
+    # 14:35 Asia/Taipei = 06:35 UTC, Monday-Friday
     - cron: "35 6 * * 1-5"
-permissions: {contents: read}
+
+permissions:
+  contents: read
+
 concurrency:
   group: gpt-quant-v92-paper-trading-phase26
   cancel-in-progress: false
+
 jobs:
   automatic-daily-trading-cycle:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+
       PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
       PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+
       PAPER_SCORE_THRESHOLD: ${{ vars.PAPER_SCORE_THRESHOLD || '65' }}
       PAPER_INITIAL_CAPITAL: ${{ vars.PAPER_INITIAL_CAPITAL || '1000000' }}
       PAPER_POSITION_SIZE: ${{ vars.PAPER_POSITION_SIZE || '0.10' }}
       PAPER_MAX_SINGLE_POSITION: ${{ vars.PAPER_MAX_SINGLE_POSITION || '0.15' }}
+
       PHASE25_FAIL_CLOSED: "true"
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
-      - run: python -m pip install --upgrade pip requests
-      - name: Run Phase 2.6
-        run: python automation/v92/paper_trading_phase26_daily_cycle.py
-      - name: Publish summary
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install requests
+
+      - name: Validate Phase 2.6 environment
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${SUPABASE_URL:-}" || {
+            echo "::error::Missing SUPABASE_URL"
+            exit 1
+          }
+
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}" || {
+            echo "::error::Missing SUPABASE_SERVICE_ROLE_KEY"
+            exit 1
+          }
+
+          test -n "${FINMIND_TOKEN:-}" || {
+            echo "::error::Missing FINMIND_TOKEN"
+            exit 1
+          }
+
+          test -f automation/v92/paper_trading_phase26_daily_cycle.py || {
+            echo "::error::Missing Phase 2.6 daily cycle"
+            exit 1
+          }
+
+          test -f automation/v92/paper_trading_phase25_orchestrator.py || {
+            echo "::error::Missing Phase 2.5 orchestrator"
+            exit 1
+          }
+
+      # Phase 2.6.3 FIX:
+      # Child phases may write their own markdown to the current step's
+      # GITHUB_STEP_SUMMARY. We intentionally erase THIS STEP'S summary
+      # after the Python process finishes, while preserving the exit code.
+      # The next step publishes only phase26_summary.md.
+      - name: Run Phase 2.6 Daily Cycle
+        id: phase26
+        shell: bash
+        run: |
+          set +e
+
+          python automation/v92/paper_trading_phase26_daily_cycle.py
+          PHASE26_EXIT_CODE=$?
+
+          # Remove Phase 2.2 / 2.1 / 2.3 / 2.4 child summaries from
+          # this step's GitHub Actions summary.
+          : > "$GITHUB_STEP_SUMMARY"
+
+          exit "$PHASE26_EXIT_CODE"
+
+      # This is the ONLY step intended to publish the visible job summary.
+      - name: Publish Phase 2.6.3 Daily Dashboard Summary
         if: always()
-        run: test ! -f phase26_summary.md || cat phase26_summary.md >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+        shell: bash
+        run: |
+          if [ -f phase26_summary.md ]; then
+            cat phase26_summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "# GPT Quant V9.2 Paper Trading — Phase 2.6.3"
+              echo
+              echo "❌ phase26_summary.md was not generated."
+              echo
+              echo "- Check the **Run Phase 2.6 Daily Cycle** step."
+              echo "- Download the diagnostics artifact for phase25/phase26 logs."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload Phase 2.6 diagnostics
         if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: phase26-diagnostics-${{ github.run_id }}
           if-no-files-found: ignore
+          retention-days: 90
           path: |
             phase26_result.json
             phase26_summary.md
+            phase26_child_summaries.md
             phase25_result.json
             phase25_summary.md
             phase25_logs/
