@@ -1,0 +1,15 @@
+<!doctype html><meta charset="utf-8"><title>GPT Quant V9.2 Phase 2.6</title>
+<style>body{background:#08111f;color:#e8eef8;font:14px system-ui;padding:24px}main{max-width:1200px;margin:auto}.g{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.c{background:#101d30;border:1px solid #263a56;border-radius:12px;padding:16px;margin:10px 0}.v{font-size:25px;font-weight:700}.k{color:#93a7c0}input{padding:9px;width:300px}button{padding:9px}table{width:100%;border-collapse:collapse}td,th{padding:9px;border-bottom:1px solid #263a56;text-align:left}.ok{color:#6bdca4}</style>
+<main><h1>GPT Quant V9.2 Paper Trading Dashboard</h1><p>Phase 2.6 · Automatic Daily Trading Cycle · SHADOW ONLY / NO BROKER</p>
+<div class=c><input id=u placeholder="Supabase Project URL"><input id=k placeholder="Publishable / anon key"><button onclick=s()>Connect</button><p>不要輸入 service_role key。</p></div>
+<div class=g id=cards></div><div class=c><h3>Pipeline Health</h3><table id=p></table></div><div class=c><h3>Current Positions</h3><table id=pos></table></div></main>
+<script>
+u.value=localStorage.u||'';k.value=localStorage.k||'';const m=x=>Number(x||0).toLocaleString(undefined,{maximumFractionDigits:2});
+function s(){localStorage.u=u.value.trim().replace(/\/$/,'');localStorage.k=k.value.trim();load()}
+async function load(){if(!localStorage.u||!localStorage.k)return;let r=await fetch(localStorage.u+'/rest/v1/gptq_paper_dashboard_latest?select=*',{headers:{apikey:localStorage.k,Authorization:'Bearer '+localStorage.k}});let a=await r.json(),d=a[0];if(!d)return;
+let x=[['TOTAL EQUITY',m(d.equity)],['CASH',m(d.cash)],['MARKET VALUE',m(d.market_value)],['UNREALIZED P&L',m(d.unrealized_pnl)],['OPEN POSITIONS',d.positions_open],['ELIGIBLE SIGNALS',d.signals_eligible],['LATEST MARKET',d.latest_market_date],['ENGINE',d.pipeline_status]];
+cards.innerHTML=x.map(z=>`<div class=c><div class=k>${z[0]}</div><div class=v>${z[1]}</div></div>`).join('');
+let q=[['2.2 Market Data',d.phase22_status],['2.1 Signal Generation',d.phase21_status],['2.3 Signal Execution',d.phase23_status],['2.4 Position Management',d.phase24_status]];
+p.innerHTML='<tr><th>Stage</th><th>Status</th></tr>'+q.map(z=>`<tr><td>${z[0]}</td><td class=ok>${z[1]}</td></tr>`).join('');
+pos.innerHTML='<tr><th>Symbol</th><th>Decision</th><th>Reason</th><th>Last</th><th>P&L</th></tr>'+(d.positions||[]).map(z=>`<tr><td>${z.symbol}</td><td>${z.decision}</td><td>${z.reason}</td><td>${z.last_price}</td><td>${m(z.unrealized_pnl)}</td></tr>`).join('')}
+load()</script>
