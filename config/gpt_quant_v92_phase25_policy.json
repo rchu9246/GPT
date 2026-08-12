@@ -1,0 +1,19 @@
+{
+  "version": "2.5",
+  "name": "Automatic Trading Orchestrator",
+  "mode": "SHADOW_ONLY_NO_BROKER",
+  "phase_order": [
+    "2.2",
+    "2.1",
+    "2.3",
+    "2.4"
+  ],
+  "fail_closed": true,
+  "duplicate_daily_run_guard": true,
+  "real_broker_orders_enabled": false,
+  "requirements": {
+    "market_data_before_signals": true,
+    "signals_before_execution": true,
+    "execution_before_position_management": true
+  }
+}

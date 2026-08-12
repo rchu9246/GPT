@@ -1,0 +1,82 @@
+name: GPT Quant V9.2 Paper Trading Phase 2.5 - Automatic Trading Orchestrator
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: "V9 or V9.1"
+        required: true
+        default: "V9.1"
+        type: choice
+        options: [V9, V9.1]
+  schedule:
+    # 14:30 Asia/Taipei = 06:30 UTC, Monday-Friday.
+    - cron: "30 6 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-v92-paper-trading-phase25
+  cancel-in-progress: false
+
+jobs:
+  automatic-trading-orchestrator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+      PAPER_SCORE_THRESHOLD: ${{ vars.PAPER_SCORE_THRESHOLD || '65' }}
+      PAPER_INITIAL_CAPITAL: ${{ vars.PAPER_INITIAL_CAPITAL || '1000000' }}
+      PAPER_POSITION_SIZE: ${{ vars.PAPER_POSITION_SIZE || '0.10' }}
+      PAPER_MAX_SINGLE_POSITION: ${{ vars.PAPER_MAX_SINGLE_POSITION || '0.15' }}
+      PHASE25_FAIL_CLOSED: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate secrets and Phase 2.5 files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          test -n "${FINMIND_TOKEN:-}"
+          test -f automation/v92/paper_trading_phase25_orchestrator.py
+          test -f automation/v92/paper_trading_phase22_market_ingestion.py
+          test -f automation/v92/paper_trading_phase21_signal_engine.py
+          test -f automation/v92/paper_trading_phase23_signal_execution.py
+          test -f automation/v92/paper_trading_phase24_position_management.py
+
+      - name: Run Automatic Trading Orchestrator
+        run: python automation/v92/paper_trading_phase25_orchestrator.py
+
+      - name: Publish Phase 2.5 summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f phase25_summary.md ]; then
+            cat phase25_summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## GPT Quant V9.2 Paper Trading Phase 2.5" >> "$GITHUB_STEP_SUMMARY"
+            echo "Orchestrator did not produce phase25_summary.md." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload Phase 2.5 diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase25-diagnostics-${{ github.run_id }}
+          if-no-files-found: ignore
+          path: |
+            phase25_summary.md
+            phase25_result.json
+            phase25_logs/
