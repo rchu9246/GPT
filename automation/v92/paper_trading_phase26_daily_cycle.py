@@ -1,56 +1,314 @@
 #!/usr/bin/env python3
-import json,os,subprocess,sys,urllib.error,urllib.parse,urllib.request
-from datetime import datetime,timezone
+"""
+GPT Quant V9.2 Paper Trading Phase 2.6.1 Hotfix
+Automatic Daily Trading Cycle + Dashboard Snapshot
+
+Hotfix:
+- Fixes: AttributeError: 'list' object has no attribute 'get'
+- JSON log parser now accepts only dict/object summaries, not JSON arrays.
+- Keeps Phase 2.5 -> 2.2 -> 2.1 -> 2.3 -> 2.4 orchestration unchanged.
+- Keeps SHADOW_ONLY_NO_BROKER safety mode.
+"""
+
+import json
+import os
+import subprocess
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[2]; URL=os.environ["SUPABASE_URL"].rstrip("/"); KEY=os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-VER=os.getenv("PAPER_STRATEGY_VERSION","V9.1"); MODE="SHADOW_ONLY_NO_BROKER"; DATE=datetime.now(timezone.utc).astimezone().date().isoformat(); RUN_KEY=f"{DATE}-{VER}"
-def rest(method,table,query="",payload=None,prefer=None):
- u=f"{URL}/rest/v1/{table}"+(("?"+query) if query else ""); h={"apikey":KEY,"Authorization":f"Bearer {KEY}","Content-Type":"application/json"}
- if prefer:h["Prefer"]=prefer
- req=urllib.request.Request(u,data=None if payload is None else json.dumps(payload).encode(),headers=h,method=method)
- try:
-  with urllib.request.urlopen(req,timeout=30) as r:
-   s=r.read().decode(); return json.loads(s) if s else None
- except urllib.error.HTTPError as e: raise RuntimeError(f"HTTP {e.code}: {e.read().decode(errors='replace')}")
-def last_json(path):
- s=path.read_text(encoding="utf-8",errors="replace") if path.exists() else ""; d=json.JSONDecoder(); out=[]
- for i,c in enumerate(s):
-  if c in "[{":
-   try:
-    x,_=d.raw_decode(s[i:])
-    if isinstance(x,(dict,list)):out.append(x)
-   except:pass
- return out[-1] if out else {}
+
+ROOT = Path(__file__).resolve().parents[2]
+SUPABASE_URL = os.environ["SUPABASE_URL"].rstrip("/")
+SUPABASE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+
+STRATEGY_VERSION = os.getenv("PAPER_STRATEGY_VERSION", "V9.1")
+MODE = os.getenv("PAPER_TRADING_MODE", "SHADOW_ONLY_NO_BROKER")
+
+RUN_DATE = datetime.now(timezone.utc).astimezone().date().isoformat()
+RUN_KEY = f"{RUN_DATE}-{STRATEGY_VERSION}"
+
+PHASE25 = ROOT / "automation/v92/paper_trading_phase25_orchestrator.py"
+
+
+def rest(method, table, query="", payload=None, prefer=None):
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    if query:
+        url += "?" + query
+
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+    if prefer:
+        headers["Prefer"] = prefer
+
+    data = None if payload is None else json.dumps(payload).encode("utf-8")
+
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers=headers,
+        method=method,
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            raw = response.read().decode("utf-8")
+            return json.loads(raw) if raw else None
+
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"Supabase {method} {table}: HTTP {e.code}: {body}"
+        ) from e
+
+
+def last_json_object(path: Path):
+    """
+    Return the last valid JSON OBJECT found in a log.
+
+    Phase 2.6 v1.0 incorrectly accepted both dict and list:
+        isinstance(x, (dict, list))
+
+    This hotfix intentionally accepts dict only.
+    """
+    if not path.exists():
+        return {}
+
+    text = path.read_text(encoding="utf-8", errors="replace")
+    decoder = json.JSONDecoder()
+    objects = []
+
+    for index, char in enumerate(text):
+        if char != "{":
+            continue
+
+        try:
+            obj, _ = decoder.raw_decode(text[index:])
+        except Exception:
+            continue
+
+        if isinstance(obj, dict):
+            objects.append(obj)
+
+    return objects[-1] if objects else {}
+
+
+def upsert_snapshot(payload):
+    query = urllib.parse.urlencode({"on_conflict": "run_key"})
+
+    return rest(
+        "POST",
+        "gptq_paper_daily_snapshots",
+        query=query,
+        payload=payload,
+        prefer="resolution=merge-duplicates,return=representation",
+    )
+
+
+def require_dict(name, value):
+    if not isinstance(value, dict):
+        raise RuntimeError(
+            f"{name} summary parser returned {type(value).__name__}, expected dict"
+        )
+    return value
+
+
 def main():
- p=subprocess.run([sys.executable,str(ROOT/"automation/v92/paper_trading_phase25_orchestrator.py")],cwd=ROOT,env=os.environ.copy())
- if p.returncode: return p.returncode
- p25=json.loads((ROOT/"phase25_result.json").read_text(encoding="utf-8")); p21=last_json(ROOT/"phase25_logs/phase2_1.log"); p23=last_json(ROOT/"phase25_logs/phase2_3.log"); p24=last_json(ROOT/"phase25_logs/phase2_4.log")
- st={x.get("phase"):x.get("status") for x in p25.get("phases",[])}
- x={"run_key":RUN_KEY,"run_date":DATE,"strategy_version":VER,"mode":MODE,"status":p25.get("status"),"pipeline_status":p25.get("pipeline"),
- "phase22_status":st.get("2.2"),"phase21_status":st.get("2.1"),"phase23_status":st.get("2.3"),"phase24_status":st.get("2.4"),
- "latest_market_date":(p21.get("market_data") or {}).get("latest_market_date"),"signals_eligible":(p21.get("signal_engine") or {}).get("signals_eligible",0),
- "top_symbol":(p21.get("signal_engine") or {}).get("top_symbol"),"top_score":(p21.get("signal_engine") or {}).get("top_score"),
- "orders_created":p23.get("orders_created",0),"positions_open":p24.get("positions_open",0),"cash":p24.get("ending_cash",0),
- "market_value":p24.get("ending_market_value",0),"equity":p24.get("ending_equity",0),"realized_pnl":p24.get("realized_pnl_today",0),
- "unrealized_pnl":p24.get("unrealized_pnl",0),"positions":p24.get("decisions",[]),"top_candidates":p21.get("top_candidates",[]),
- "raw_summary":{"phase25":p25,"phase21":p21,"phase23":p23,"phase24":p24},"completed_at":datetime.now(timezone.utc).isoformat()}
- q=urllib.parse.urlencode({"on_conflict":"run_key"}); rest("POST","gptq_paper_daily_snapshots",q,x,"resolution=merge-duplicates,return=representation")
- (ROOT/"phase26_result.json").write_text(json.dumps(x,ensure_ascii=False,indent=2),encoding="utf-8")
- md=f"""# GPT Quant V9.2 Phase 2.6
-- status: **{x['status']}**
-- pipeline: **{x['pipeline_status']}**
-- equity: **{x['equity']}**
-- cash: **{x['cash']}**
-- market value: **{x['market_value']}**
-- positions: **{x['positions_open']}**
+    if MODE != "SHADOW_ONLY_NO_BROKER":
+        raise RuntimeError(
+            f"Safety lock: PAPER_TRADING_MODE must be SHADOW_ONLY_NO_BROKER, got {MODE}"
+        )
+
+    if not PHASE25.exists():
+        raise RuntimeError(f"Missing Phase 2.5 orchestrator: {PHASE25}")
+
+    print("=== GPT Quant V9.2 Phase 2.6.1 Hotfix ===")
+    print("=== Running Phase 2.5 automatic trading pipeline ===")
+
+    process = subprocess.run(
+        [sys.executable, str(PHASE25)],
+        cwd=ROOT,
+        env=os.environ.copy(),
+    )
+
+    if process.returncode != 0:
+        raise RuntimeError(
+            "Phase 2.5 failed; Phase 2.6.1 dashboard snapshot blocked"
+        )
+
+    phase25_result_path = ROOT / "phase25_result.json"
+    if not phase25_result_path.exists():
+        raise RuntimeError("Missing phase25_result.json")
+
+    phase25 = json.loads(
+        phase25_result_path.read_text(encoding="utf-8")
+    )
+
+    phase21 = require_dict(
+        "Phase 2.1",
+        last_json_object(ROOT / "phase25_logs/phase2_1.log"),
+    )
+
+    phase23 = require_dict(
+        "Phase 2.3",
+        last_json_object(ROOT / "phase25_logs/phase2_3.log"),
+    )
+
+    phase24 = require_dict(
+        "Phase 2.4",
+        last_json_object(ROOT / "phase25_logs/phase2_4.log"),
+    )
+
+    phase_status = {
+        row.get("phase"): row.get("status")
+        for row in phase25.get("phases", [])
+        if isinstance(row, dict)
+    }
+
+    market_data = phase21.get("market_data") or {}
+    signal_engine = phase21.get("signal_engine") or {}
+
+    snapshot = {
+        "run_key": RUN_KEY,
+        "run_date": RUN_DATE,
+        "strategy_version": STRATEGY_VERSION,
+        "mode": MODE,
+
+        "status": phase25.get("status", "UNKNOWN"),
+        "pipeline_status": phase25.get("pipeline", "UNKNOWN"),
+
+        "phase22_status": phase_status.get("2.2", "UNKNOWN"),
+        "phase21_status": phase_status.get("2.1", "UNKNOWN"),
+        "phase23_status": phase_status.get("2.3", "UNKNOWN"),
+        "phase24_status": phase_status.get("2.4", "UNKNOWN"),
+
+        "latest_market_date": market_data.get("latest_market_date"),
+
+        "signals_eligible": signal_engine.get("signals_eligible", 0),
+        "top_symbol": signal_engine.get("top_symbol"),
+        "top_score": signal_engine.get("top_score"),
+
+        "orders_created": phase23.get("orders_created", 0),
+        "positions_open": phase24.get(
+            "positions_open",
+            phase23.get("positions_open", 0),
+        ),
+
+        "cash": phase24.get(
+            "ending_cash",
+            phase23.get("ending_cash", 0),
+        ),
+
+        "market_value": phase24.get(
+            "ending_market_value",
+            phase23.get("market_value", 0),
+        ),
+
+        "equity": phase24.get(
+            "ending_equity",
+            phase23.get("ending_equity", 0),
+        ),
+
+        "realized_pnl": phase24.get(
+            "realized_pnl_today",
+            0,
+        ),
+
+        "unrealized_pnl": phase24.get(
+            "unrealized_pnl",
+            phase23.get("unrealized_pnl", 0),
+        ),
+
+        "positions": phase24.get("decisions", []),
+        "top_candidates": phase21.get("top_candidates", []),
+
+        "raw_summary": {
+            "phase25": phase25,
+            "phase21": phase21,
+            "phase23": phase23,
+            "phase24": phase24,
+        },
+
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    upsert_snapshot(snapshot)
+
+    result_path = ROOT / "phase26_result.json"
+    result_path.write_text(
+        json.dumps(snapshot, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    summary = f"""# GPT Quant V9.2 Paper Trading Phase 2.6.1
+
+- run_key: `{RUN_KEY}`
+- mode: `{MODE}`
+- status: **{snapshot['status']}**
+- pipeline: **{snapshot['pipeline_status']}**
+- latest_market_date: `{snapshot['latest_market_date']}`
+- eligible_signals: **{snapshot['signals_eligible']}**
+- orders_created: **{snapshot['orders_created']}**
+- positions_open: **{snapshot['positions_open']}**
+- cash: **{snapshot['cash']}**
+- market_value: **{snapshot['market_value']}**
+- equity: **{snapshot['equity']}**
+- realized_pnl: **{snapshot['realized_pnl']}**
+- unrealized_pnl: **{snapshot['unrealized_pnl']}**
+
+## Pipeline Health
 
 | Stage | Status |
 |---|---|
-| 2.2 Market Data | {x['phase22_status']} |
-| 2.1 Signal Generation | {x['phase21_status']} |
-| 2.3 Signal Execution | {x['phase23_status']} |
-| 2.4 Position Management | {x['phase24_status']} |
+| Phase 2.2 Market Data | {snapshot['phase22_status']} |
+| Phase 2.1 Signal Generation | {snapshot['phase21_status']} |
+| Phase 2.3 Signal Execution | {snapshot['phase23_status']} |
+| Phase 2.4 Position Management | {snapshot['phase24_status']} |
+
+## Hotfix
+
+`Phase 2.6.1 JSON object-only parser: ENABLED`
+
+> Safety mode remains SHADOW_ONLY_NO_BROKER.
 """
- (ROOT/"phase26_summary.md").write_text(md,encoding="utf-8"); print(json.dumps(x,ensure_ascii=False,indent=2))
- return 0 if x["status"]=="COMPLETED" and x["pipeline_status"]=="COMPLETED" else 1
-if __name__=="__main__":raise SystemExit(main())
+
+    (ROOT / "phase26_summary.md").write_text(
+        summary,
+        encoding="utf-8",
+    )
+
+    print(json.dumps(snapshot, ensure_ascii=False, indent=2))
+
+    success = (
+        snapshot["status"] == "COMPLETED"
+        and snapshot["pipeline_status"] == "COMPLETED"
+        and all(
+            snapshot[key] == "PASS"
+            for key in (
+                "phase22_status",
+                "phase21_status",
+                "phase23_status",
+                "phase24_status",
+            )
+        )
+    )
+
+    if not success:
+        raise RuntimeError(
+            "Phase 2.6.1 snapshot created, but pipeline health is not fully PASS"
+        )
+
+    print("Phase 2.6.1: COMPLETED")
+    print("Dashboard snapshot upsert: COMPLETED")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
