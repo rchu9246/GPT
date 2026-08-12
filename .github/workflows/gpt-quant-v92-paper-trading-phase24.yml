@@ -1,0 +1,70 @@
+name: GPT Quant V9.2 Paper Trading Phase 2.4 - Automatic Position Management
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: "V9 or V9.1"
+        required: true
+        default: "V9.1"
+        type: choice
+        options: [V9, V9.1]
+  schedule:
+    # After Phase 2.3 automatic entry execution.
+    # 14:25 Asia/Taipei = 06:25 UTC, Monday-Friday.
+    - cron: "25 6 * * 1-5"
+
+permissions:
+  contents: read
+
+jobs:
+  automatic-position-management:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+
+      PAPER_STOP_LOSS: ${{ vars.PAPER_STOP_LOSS || '0.05' }}
+      PAPER_TAKE_PROFIT: ${{ vars.PAPER_TAKE_PROFIT || '0.10' }}
+      PAPER_TRAILING_STOP: ${{ vars.PAPER_TRAILING_STOP || '0.06' }}
+      PAPER_MAX_HOLDING_DAYS: ${{ vars.PAPER_MAX_HOLDING_DAYS || '10' }}
+      PAPER_EXIT_SIGNAL_THRESHOLD: ${{ vars.PAPER_EXIT_SIGNAL_THRESHOLD || '50' }}
+
+      PAPER_SELL_SLIPPAGE_RATE: ${{ vars.PAPER_SELL_SLIPPAGE_RATE || '0.001' }}
+      PAPER_COMMISSION_RATE: ${{ vars.PAPER_COMMISSION_RATE || '0.001425' }}
+      PAPER_TRANSACTION_TAX_RATE: ${{ vars.PAPER_TRANSACTION_TAX_RATE || '0.003' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install requests
+          fi
+
+      - name: Validate configuration
+        run: |
+          test -n "$SUPABASE_URL" || { echo "::error::Missing SUPABASE_URL"; exit 1; }
+          test -n "$SUPABASE_SERVICE_ROLE_KEY" || { echo "::error::Missing SUPABASE_SERVICE_ROLE_KEY"; exit 1; }
+
+      - name: Manage paper positions
+        run: python automation/v92/paper_trading_phase24_position_management.py
+
+      - name: Upload position diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper-trading-phase24-position-management-${{ github.run_number }}
+          path: artifacts/paper_trading_phase24/
+          if-no-files-found: warn
+          retention-days: 90

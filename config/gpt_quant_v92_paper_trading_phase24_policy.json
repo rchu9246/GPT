@@ -1,0 +1,23 @@
+{
+  "version": "2.4",
+  "mode": "SHADOW_ONLY_NO_BROKER",
+  "purpose": "automatic mark-to-market and paper position exit management",
+  "defaults": {
+    "stop_loss": 0.05,
+    "take_profit": 0.1,
+    "trailing_stop": 0.06,
+    "max_holding_days": 10,
+    "exit_signal_threshold": 50,
+    "sell_slippage_rate": 0.001,
+    "commission_rate": 0.001425,
+    "transaction_tax_rate": 0.003
+  },
+  "exit_priority": [
+    "STOP_LOSS",
+    "TAKE_PROFIT",
+    "TRAILING_STOP",
+    "MAX_HOLDING_DAYS",
+    "SIGNAL_WEAKNESS"
+  ],
+  "broker_execution": false
+}
