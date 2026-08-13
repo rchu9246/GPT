@@ -1,0 +1,335 @@
+name: GPT Quant V9.2 Paper Trading Phase 2.7 - Production Monitoring + Go-Live Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: "V9 or V9.1"
+        required: true
+        default: "V9.1"
+        type: choice
+        options:
+          - V9
+          - V9.1
+  schedule:
+    # 14:40 Asia/Taipei = 06:40 UTC, Monday-Friday
+    - cron: "40 6 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-v92-paper-trading-phase27
+  cancel-in-progress: false
+
+jobs:
+  production-monitoring-go-live-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+
+      PAPER_SCORE_THRESHOLD: ${{ vars.PAPER_SCORE_THRESHOLD || '65' }}
+      PAPER_INITIAL_CAPITAL: ${{ vars.PAPER_INITIAL_CAPITAL || '1000000' }}
+      PAPER_POSITION_SIZE: ${{ vars.PAPER_POSITION_SIZE || '0.10' }}
+      PAPER_MAX_SINGLE_POSITION: ${{ vars.PAPER_MAX_SINGLE_POSITION || '0.15' }}
+
+      PHASE25_FAIL_CLOSED: "true"
+
+      # Go-Live Gate defaults
+      PHASE27_REQUIRED_PASS_DAYS: ${{ vars.PHASE27_REQUIRED_PASS_DAYS || '5' }}
+      PHASE27_MAX_MARKET_STALE_DAYS: ${{ vars.PHASE27_MAX_MARKET_STALE_DAYS || '3' }}
+      PHASE27_MIN_EQUITY: ${{ vars.PHASE27_MIN_EQUITY || '0' }}
+      PHASE27_MAX_OPEN_POSITIONS: ${{ vars.PAPER_MAX_OPEN_POSITIONS || '10' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install requests
+
+      - name: Validate Phase 2.7 environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_URL:-}" || { echo "::error::Missing SUPABASE_URL"; exit 1; }
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}" || { echo "::error::Missing SUPABASE_SERVICE_ROLE_KEY"; exit 1; }
+          test -n "${FINMIND_TOKEN:-}" || { echo "::error::Missing FINMIND_TOKEN"; exit 1; }
+          test -f automation/v92/paper_trading_phase26_daily_cycle.py || {
+            echo "::error::Missing automation/v92/paper_trading_phase26_daily_cycle.py"
+            exit 1
+          }
+
+      - name: Run Phase 2.6.4 Daily Cycle
+        id: phase26
+        shell: bash
+        run: |
+          set +e
+          python automation/v92/paper_trading_phase26_daily_cycle.py
+          RC=$?
+          : > "$GITHUB_STEP_SUMMARY"
+          echo "phase26_exit_code=$RC" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Phase 2.7 Production Monitoring + Alerting + Go-Live Gate
+        id: phase27
+        shell: bash
+        run: |
+          cat > /tmp/phase27.py <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.parse
+          import urllib.request
+          import urllib.error
+          from datetime import date, datetime, timezone
+
+          URL = os.environ["SUPABASE_URL"].rstrip("/")
+          KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+          VERSION = os.getenv("PAPER_STRATEGY_VERSION", "V9.1")
+          MODE = os.getenv("PAPER_TRADING_MODE", "SHADOW_ONLY_NO_BROKER")
+          REQUIRED = max(1, int(os.getenv("PHASE27_REQUIRED_PASS_DAYS", "5")))
+          MAX_STALE = max(0, int(os.getenv("PHASE27_MAX_MARKET_STALE_DAYS", "3")))
+          MIN_EQUITY = float(os.getenv("PHASE27_MIN_EQUITY", "0"))
+          MAX_POSITIONS = max(0, int(os.getenv("PHASE27_MAX_OPEN_POSITIONS", "10")))
+          PHASE26_RC = int("${{ steps.phase26.outputs.phase26_exit_code }}" or "1")
+
+          def request(table, query):
+              u = f"{URL}/rest/v1/{table}?{query}"
+              req = urllib.request.Request(u, headers={
+                  "apikey": KEY,
+                  "Authorization": f"Bearer {KEY}",
+                  "Accept": "application/json",
+              })
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as r:
+                      return json.loads(r.read().decode("utf-8") or "[]")
+              except urllib.error.HTTPError as e:
+                  body = e.read().decode("utf-8", errors="replace")
+                  raise RuntimeError(f"Supabase HTTP {e.code}: {body}") from e
+
+          def load_local():
+              try:
+                  with open("phase26_result.json", "r", encoding="utf-8") as f:
+                      v = json.load(f)
+                  if isinstance(v, list):
+                      return v[0] if v and isinstance(v[0], dict) else {}
+                  return v if isinstance(v, dict) else {}
+              except Exception:
+                  return {}
+
+          def fnum(v, default=0.0):
+              try: return float(v)
+              except (TypeError, ValueError): return default
+
+          def fint(v, default=0):
+              try: return int(v)
+              except (TypeError, ValueError): return default
+
+          def parse_day(v):
+              if not v: return None
+              try: return date.fromisoformat(str(v)[:10])
+              except ValueError: return None
+
+          local = load_local()
+
+          # Pull enough recent rows to establish a consecutive PASS streak.
+          q = urllib.parse.urlencode({
+              "select": "run_key,run_date,strategy_version,mode,status,pipeline_status,latest_market_date,"
+                        "signals_eligible,orders_created,positions_open,cash,market_value,equity,"
+                        "realized_pnl,unrealized_pnl,raw_summary,completed_at",
+              "strategy_version": f"eq.{VERSION}",
+              "mode": f"eq.{MODE}",
+              "order": "run_date.desc,completed_at.desc",
+              "limit": str(max(REQUIRED * 4, 20)),
+          })
+          rows = request("gptq_paper_daily_snapshots", q)
+
+          # One authoritative snapshot per run_date.
+          daily = []
+          seen = set()
+          for r in rows if isinstance(rows, list) else []:
+              d = str(r.get("run_date") or "")[:10]
+              if not d or d in seen:
+                  continue
+              seen.add(d)
+              daily.append(r)
+
+          current = daily[0] if daily else local
+          raw = current.get("raw_summary")
+          if not isinstance(raw, dict):
+              raw = local.get("raw_summary") if isinstance(local.get("raw_summary"), dict) else {}
+
+          integrity = raw.get("integrity_checks")
+          if not isinstance(integrity, dict):
+              integrity = local.get("integrity_checks")
+          if not isinstance(integrity, dict):
+              integrity = {}
+
+          latest_market = current.get("latest_market_date") or local.get("latest_market_date")
+          market_day = parse_day(latest_market)
+          run_day = parse_day(current.get("run_date") or local.get("run_date")) or date.today()
+          stale_days = (run_day - market_day).days if market_day else 999999
+
+          checks = {
+              "phase26_exit_zero": PHASE26_RC == 0,
+              "safety_mode_locked": MODE == "SHADOW_ONLY_NO_BROKER",
+              "status_completed": (current.get("status") or local.get("status")) == "COMPLETED",
+              "pipeline_completed": (current.get("pipeline_status") or local.get("pipeline")) == "COMPLETED",
+              "latest_market_date_present": market_day is not None,
+              "market_data_fresh": market_day is not None and stale_days <= MAX_STALE,
+              "equity_non_negative": fnum(current.get("equity", local.get("equity"))) >= MIN_EQUITY,
+              "positions_within_limit": 0 <= fint(current.get("positions_open", local.get("positions_open"))) <= MAX_POSITIONS,
+          }
+
+          # If 2.6.4 exported integrity checks, all must pass.
+          if integrity:
+              checks["phase26_integrity_all_pass"] = all(bool(v) for v in integrity.values())
+
+          current_pass = all(checks.values())
+
+          def historical_pass(r):
+              rr = r.get("raw_summary")
+              ri = rr.get("integrity_checks") if isinstance(rr, dict) else None
+              base = (
+                  r.get("status") == "COMPLETED"
+                  and r.get("pipeline_status") == "COMPLETED"
+                  and bool(r.get("latest_market_date"))
+                  and fnum(r.get("equity")) >= MIN_EQUITY
+                  and 0 <= fint(r.get("positions_open")) <= MAX_POSITIONS
+              )
+              if isinstance(ri, dict) and ri:
+                  base = base and all(bool(v) for v in ri.values())
+              return base
+
+          streak = 0
+          for i, r in enumerate(daily):
+              ok = current_pass if i == 0 else historical_pass(r)
+              if ok:
+                  streak += 1
+              else:
+                  break
+
+          alerts = []
+          for name, ok in checks.items():
+              if not ok:
+                  alerts.append(name)
+
+          if current_pass and streak >= REQUIRED:
+              gate = "GO_LIVE_READY"
+          elif current_pass:
+              gate = "OBSERVATION"
+          else:
+              gate = "BLOCKED"
+
+          result = {
+              "version": "2.7",
+              "checked_at": datetime.now(timezone.utc).isoformat(),
+              "strategy_version": VERSION,
+              "mode": MODE,
+              "monitor_status": "PASS" if current_pass else "FAIL",
+              "go_live_gate": gate,
+              "required_consecutive_pass_days": REQUIRED,
+              "consecutive_pass_days": streak,
+              "latest_market_date": latest_market,
+              "market_stale_days": stale_days if market_day else None,
+              "checks": checks,
+              "alerts": alerts,
+              "current_snapshot": {
+                  "run_key": current.get("run_key") or local.get("run_key"),
+                  "equity": current.get("equity", local.get("equity")),
+                  "cash": current.get("cash", local.get("cash")),
+                  "market_value": current.get("market_value", local.get("market_value")),
+                  "positions_open": current.get("positions_open", local.get("positions_open")),
+                  "signals_eligible": current.get("signals_eligible", local.get("eligible_signals")),
+                  "orders_created": current.get("orders_created", local.get("orders_created")),
+              },
+          }
+
+          with open("phase27_result.json", "w", encoding="utf-8") as f:
+              json.dump(result, f, ensure_ascii=False, indent=2)
+
+          icon = "✅" if current_pass else "❌"
+          gate_icon = "🟢" if gate == "GO_LIVE_READY" else ("🟡" if gate == "OBSERVATION" else "🔴")
+          lines = [
+              "# GPT Quant V9.2 Paper Trading — Phase 2.7",
+              "",
+              "## Production Monitoring + Alerting + Go-Live Gate",
+              "",
+              f"- Monitor: **{icon} {'PASS' if current_pass else 'FAIL'}**",
+              f"- Go-Live Gate: **{gate_icon} {gate}**",
+              f"- Safety mode: `{MODE}`",
+              f"- Strategy: `{VERSION}`",
+              f"- Consecutive PASS days: **{streak} / {REQUIRED}**",
+              f"- Latest market date: `{latest_market}`",
+              f"- Market stale days: `{stale_days if market_day else 'N/A'}`",
+              "",
+              "### Health Checks",
+              "",
+              "| Check | Result |",
+              "|---|---|",
+          ]
+          for name, ok in checks.items():
+              lines.append(f"| `{name}` | {'✅ PASS' if ok else '❌ FAIL'} |")
+
+          lines += ["", "### Alerts", ""]
+          if alerts:
+              for a in alerts:
+                  lines.append(f"- ❌ `{a}`")
+                  print(f"::error title=Phase 2.7 Alert::{a}")
+          else:
+              lines.append("- ✅ No active alerts.")
+
+          lines += [
+              "",
+              "### Gate Policy",
+              "",
+              f"`GO_LIVE_READY` requires **{REQUIRED} consecutive monitored trading days** with all safety/integrity checks passing.",
+              "",
+              "> This gate authorizes production **paper trading only**. "
+              "It does not enable broker connectivity or real-money order execution.",
+          ]
+
+          with open("phase27_summary.md", "w", encoding="utf-8", newline="\n") as f:
+              f.write("\n".join(lines) + "\n")
+
+          print(json.dumps(result, ensure_ascii=False, indent=2))
+          sys.exit(0 if current_pass else 1)
+          PY
+
+          set +e
+          python /tmp/phase27.py
+          RC=$?
+          cat phase27_summary.md >> "$GITHUB_STEP_SUMMARY"
+          exit "$RC"
+
+      - name: Upload Phase 2.7 diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase27-diagnostics-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 90
+          path: |
+            phase27_result.json
+            phase27_summary.md
+            phase26_result.json
+            phase26_summary.md
+            phase26_child_summaries.md
+            phase25_result.json
+            phase25_summary.md
+            phase25_logs/
