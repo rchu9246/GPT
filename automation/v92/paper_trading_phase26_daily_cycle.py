@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-GPT Quant V9.2 Paper Trading Phase 2.6.1 Hotfix
-Automatic Daily Trading Cycle + Dashboard Snapshot
+GPT Quant V9.2 Paper Trading Phase 2.7.2 Market Date Source-of-Truth Fix
+Automatic Daily Trading Cycle + Supabase Market Date Source-of-Truth
 
 Hotfix:
 - Fixes: AttributeError: 'list' object has no attribute 'get'
@@ -100,6 +100,50 @@ def last_json_object(path: Path):
     return objects[-1] if objects else {}
 
 
+
+def latest_market_date_source_of_truth():
+    """
+    Phase 2.7.2: resolve latest persisted market date directly from Supabase.
+    Never invent a date. Missing tables/columns are tolerated for compatibility.
+    """
+    candidates = [
+        ("market_data", "trade_date"),
+        ("market_data", "date"),
+        ("daily_market_data", "trade_date"),
+        ("daily_market_data", "date"),
+        ("stock_prices", "trade_date"),
+        ("stock_prices", "date"),
+        ("prices", "trade_date"),
+        ("prices", "date"),
+        ("signals", "trade_date"),
+        ("signals", "date"),
+    ]
+
+    for table, column in candidates:
+        try:
+            query = (
+                f"select={urllib.parse.quote(column)}"
+                f"&{urllib.parse.quote(column)}=not.is.null"
+                f"&order={urllib.parse.quote(column)}.desc"
+                "&limit=1"
+            )
+            rows = rest("GET", table, query=query)
+            if isinstance(rows, list) and rows:
+                row = rows[0]
+                if isinstance(row, dict) and row.get(column):
+                    print(
+                        f"[Phase 2.7.2] latest_market_date source: "
+                        f"{table}.{column}={row[column]}"
+                    )
+                    return str(row[column]), f"{table}.{column}"
+        except Exception as exc:
+            print(
+                f"[Phase 2.7.2] source skipped: {table}.{column}: "
+                f"{type(exc).__name__}"
+            )
+
+    return None, None
+
 def upsert_snapshot(payload):
     query = urllib.parse.urlencode({"on_conflict": "run_key"})
 
@@ -129,7 +173,7 @@ def main():
     if not PHASE25.exists():
         raise RuntimeError(f"Missing Phase 2.5 orchestrator: {PHASE25}")
 
-    print("=== GPT Quant V9.2 Phase 2.6.1 Hotfix ===")
+    print("=== GPT Quant V9.2 Phase 2.7.2 Source-of-Truth Fix ===")
     print("=== Running Phase 2.5 automatic trading pipeline ===")
 
     process = subprocess.run(
@@ -140,7 +184,7 @@ def main():
 
     if process.returncode != 0:
         raise RuntimeError(
-            "Phase 2.5 failed; Phase 2.6.1 dashboard snapshot blocked"
+            "Phase 2.5 failed; Phase 2.7.2 dashboard snapshot blocked"
         )
 
     phase25_result_path = ROOT / "phase25_result.json"
@@ -173,7 +217,18 @@ def main():
     }
 
     market_data = phase21.get("market_data") or {}
+    if not isinstance(market_data, dict):
+        market_data = {}
+
     signal_engine = phase21.get("signal_engine") or {}
+    if not isinstance(signal_engine, dict):
+        signal_engine = {}
+
+    persisted_market_date, market_date_source = latest_market_date_source_of_truth()
+    latest_market_date = (
+        persisted_market_date
+        or market_data.get("latest_market_date")
+    )
 
     snapshot = {
         "run_key": RUN_KEY,
@@ -189,7 +244,9 @@ def main():
         "phase23_status": phase_status.get("2.3", "UNKNOWN"),
         "phase24_status": phase_status.get("2.4", "UNKNOWN"),
 
-        "latest_market_date": market_data.get("latest_market_date"),
+        "latest_market_date": latest_market_date,
+        "market_date_source": market_date_source or "phase21.market_data",
+        "market_date_integrity": "PASS" if latest_market_date else "FAIL",
 
         "signals_eligible": signal_engine.get("signals_eligible", 0),
         "top_symbol": signal_engine.get("top_symbol"),
@@ -247,7 +304,7 @@ def main():
         encoding="utf-8",
     )
 
-    summary = f"""# GPT Quant V9.2 Paper Trading Phase 2.6.1
+    summary = f"""# GPT Quant V9.2 Paper Trading Phase 2.7.2
 
 - run_key: `{RUN_KEY}`
 - mode: `{MODE}`
@@ -274,7 +331,7 @@ def main():
 
 ## Hotfix
 
-`Phase 2.6.1 JSON object-only parser: ENABLED`
+`Phase 2.7.2 Supabase market-date source-of-truth: ENABLED`
 
 > Safety mode remains SHADOW_ONLY_NO_BROKER.
 """
@@ -289,6 +346,7 @@ def main():
     success = (
         snapshot["status"] == "COMPLETED"
         and snapshot["pipeline_status"] == "COMPLETED"
+        and snapshot["latest_market_date"] is not None
         and all(
             snapshot[key] == "PASS"
             for key in (
@@ -302,10 +360,10 @@ def main():
 
     if not success:
         raise RuntimeError(
-            "Phase 2.6.1 snapshot created, but pipeline health is not fully PASS"
+            "Phase 2.7.2 snapshot created, but pipeline/data integrity is not fully PASS"
         )
 
-    print("Phase 2.6.1: COMPLETED")
+    print("Phase 2.7.2: COMPLETED")
     print("Dashboard snapshot upsert: COMPLETED")
     return 0
 
