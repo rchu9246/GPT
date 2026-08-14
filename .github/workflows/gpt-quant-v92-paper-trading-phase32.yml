@@ -1,0 +1,78 @@
+﻿name: GPT Quant V9.2 Paper Trading Phase 3.2 - Production Validation + Promotion Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: "V9 or V9.1"
+        required: true
+        default: "V9.1"
+        type: choice
+        options:
+          - V9
+          - V9.1
+
+  schedule:
+    - cron: "0 7 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-v92-paper-trading-phase32
+  cancel-in-progress: false
+
+jobs:
+  production-validation-promotion-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+      PHASE32_REQUIRED_CONSECUTIVE_PASS_DAYS: "5"
+      PHASE32_MAX_MARKET_STALE_DAYS: "3"
+      PHASE32_MAX_DAILY_DRAWDOWN: "0.03"
+      PHASE32_SNAPSHOT_TABLE: gptq_paper_daily_snapshots
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Phase 3.2 environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_URL:-}" || { echo "::error::Missing SUPABASE_URL"; exit 1; }
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}" || { echo "::error::Missing SUPABASE_SERVICE_ROLE_KEY"; exit 1; }
+          test -f automation/v92/paper_trading_phase32_validation_promotion_gate.py || {
+            echo "::error::Missing Phase 3.2 Python file"
+            exit 1
+          }
+          if [ "${PAPER_TRADING_MODE}" != "SHADOW_ONLY_NO_BROKER" ]; then
+            echo "::error::Safety lock failed"
+            exit 1
+          fi
+
+      - name: Run Phase 3.2 Production Validation + Promotion Gate
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p phase32_logs
+          python automation/v92/paper_trading_phase32_validation_promotion_gate.py 2>&1 | tee phase32_logs/phase32.log
+
+      - name: Upload Phase 3.2 diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase32-production-validation-${{ github.run_id }}
+          path: phase32_logs/
+          if-no-files-found: warn
+          retention-days: 90
