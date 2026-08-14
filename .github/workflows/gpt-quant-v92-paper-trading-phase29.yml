@@ -1,0 +1,83 @@
+name: GPT Quant V9.2 Paper Trading Phase 2.9 - Production Paper Trading Operations
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: "V9 or V9.1"
+        required: true
+        default: "V9.1"
+        type: choice
+        options:
+          - V9
+          - V9.1
+  schedule:
+    # 14:45 Asia/Taipei = 06:45 UTC, Monday-Friday
+    - cron: "45 6 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-v92-paper-trading-phase29
+  cancel-in-progress: false
+
+jobs:
+  production-paper-trading-operations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+
+      PHASE29_REQUIRED_PASS_DAYS: ${{ vars.PHASE27_REQUIRED_PASS_DAYS || '5' }}
+      PHASE29_MAX_MARKET_STALE_DAYS: ${{ vars.PHASE27_MAX_MARKET_STALE_DAYS || '3' }}
+      PHASE29_MIN_EQUITY: ${{ vars.PHASE27_MIN_EQUITY || '0' }}
+      PHASE29_MAX_OPEN_POSITIONS: ${{ vars.PAPER_MAX_OPEN_POSITIONS || '10' }}
+      PHASE29_MAX_DAILY_DRAWDOWN: ${{ vars.PHASE29_MAX_DAILY_DRAWDOWN || '0.08' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Phase 2.9 environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_URL:-}" || { echo "::error::Missing SUPABASE_URL"; exit 1; }
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}" || { echo "::error::Missing SUPABASE_SERVICE_ROLE_KEY"; exit 1; }
+          test -f automation/v92/paper_trading_phase29_operations.py || {
+            echo "::error::Missing automation/v92/paper_trading_phase29_operations.py"
+            exit 1
+          }
+
+      - name: Run Phase 2.9 Production Paper Operations
+        shell: bash
+        run: |
+          set +e
+          python automation/v92/paper_trading_phase29_operations.py
+          RC=$?
+          if [ -f phase29_summary.md ]; then
+            cat phase29_summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$RC"
+
+      - name: Upload Phase 2.9 diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase29-operations-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 90
+          path: |
+            phase29_result.json
+            phase29_summary.md
