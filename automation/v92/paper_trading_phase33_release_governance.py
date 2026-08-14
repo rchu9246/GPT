@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-GPT Quant V9.2 Paper Trading Phase 3.3
-Production Promotion + Release Governance
+GPT Quant V9.2 Paper Trading Phase 3.3.1
+Production Promotion + Release Governance — Consistency Fix
 
 Purpose:
 - Read the current Phase 3.2 qualification state from the existing daily snapshots.
@@ -156,15 +156,27 @@ def row_checks(row):
 
 
 def consecutive_pass_days(rows):
+    """
+    Phase 3.3.1 consistency fix.
+
+    Use the same PASS-day source-of-truth as Phase 3.2:
+    - one snapshot per distinct run_date
+    - the snapshot itself must be PASS/COMPLETED/SUCCESS
+    - current-day market/risk/integrity checks remain separate promotion gates
+
+    This prevents Phase 3.2 and Phase 3.3 from reporting different streaks
+    for the same set of daily snapshots.
+    """
     count = 0
     dates = []
+
     for row in one_per_day(rows):
-        checks = row_checks(row)
-        if all(checks.values()):
+        if status_pass(row):
             count += 1
             dates.append(str(row.get("run_date"))[:10])
         else:
             break
+
     return count, dates
 
 
@@ -189,7 +201,7 @@ def build_result(rows):
     daily = one_per_day(rows)
     if not daily:
         return {
-            "version": "3.3",
+            "version": "3.3.1",
             "checked_at": now_iso(),
             "status": "FAIL",
             "promotion_state": "BLOCKED",
@@ -206,6 +218,13 @@ def build_result(rows):
     streak, streak_dates = consecutive_pass_days(rows)
     drawdown = daily_drawdown(rows)
     stale = market_stale_days(current)
+
+    print(
+        "[Phase 3.3.1] PASS-day source-of-truth: "
+        "distinct run_date + snapshot status PASS/COMPLETED/SUCCESS"
+    )
+    print(f"[Phase 3.3.1] Consecutive PASS days: {streak}")
+    print(f"[Phase 3.3.1] Streak dates: {streak_dates}")
 
     checks = row_checks(current)
     checks.update(
@@ -251,11 +270,12 @@ def build_result(rows):
         reason = "HUMAN_REJECTION_RECORDED"
 
     return {
-        "version": "3.3",
+        "version": "3.3.1",
         "checked_at": now_iso(),
         "strategy_version": STRATEGY_VERSION,
         "mode": MODE,
         "requested_action": ACTION,
+        "pass_day_source": "distinct_run_date_snapshot_status",
         "status": status,
         "promotion_state": promotion_state,
         "release_state": release_state,
@@ -295,7 +315,7 @@ def build_result(rows):
 
 def write_summary(result):
     lines = [
-        "# GPT Quant V9.2 Paper Trading — Phase 3.3",
+        "# GPT Quant V9.2 Paper Trading — Phase 3.3.1",
         "",
         "## Production Promotion + Release Governance",
         "",
@@ -303,6 +323,7 @@ def write_summary(result):
         f"- Promotion State: **{result.get('promotion_state')}**",
         f"- Release State: **{result.get('release_state')}**",
         f"- Requested Action: `{result.get('requested_action', ACTION)}`",
+        f"- PASS-day Source: `{result.get('pass_day_source', 'distinct_run_date_snapshot_status')}`",
         f"- Strategy: `{result.get('strategy_version', STRATEGY_VERSION)}`",
         f"- Trading Mode: `{result.get('mode', MODE)}`",
         f"- Consecutive PASS days: **{result.get('consecutive_pass_days', 0)} / {result.get('required_consecutive_pass_days', REQUIRED_PASS_DAYS)}**",
