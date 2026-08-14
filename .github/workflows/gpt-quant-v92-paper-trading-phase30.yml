@@ -1,0 +1,84 @@
+name: GPT Quant V9.2 Paper Trading Phase 3.0 - Production Paper Trading Control Center
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: "V9 or V9.1"
+        required: true
+        default: "V9.1"
+        type: choice
+        options:
+          - V9
+          - V9.1
+  schedule:
+    # 14:50 Asia/Taipei = 06:50 UTC, Monday-Friday
+    - cron: "50 6 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-v92-paper-trading-phase30
+  cancel-in-progress: false
+
+jobs:
+  production-paper-control-center:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+
+      PHASE30_REQUIRED_PASS_DAYS: ${{ vars.PHASE27_REQUIRED_PASS_DAYS || '5' }}
+      PHASE30_MAX_MARKET_STALE_DAYS: ${{ vars.PHASE27_MAX_MARKET_STALE_DAYS || '3' }}
+      PHASE30_MIN_EQUITY: ${{ vars.PHASE27_MIN_EQUITY || '0' }}
+      PHASE30_MAX_OPEN_POSITIONS: ${{ vars.PAPER_MAX_OPEN_POSITIONS || '10' }}
+      PHASE30_MAX_DAILY_DRAWDOWN: ${{ vars.PHASE29_MAX_DAILY_DRAWDOWN || '0.08' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Phase 3.0 environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_URL:-}" || { echo "::error::Missing SUPABASE_URL"; exit 1; }
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}" || { echo "::error::Missing SUPABASE_SERVICE_ROLE_KEY"; exit 1; }
+          test -f automation/v92/paper_trading_phase30_control_center.py || {
+            echo "::error::Missing automation/v92/paper_trading_phase30_control_center.py"
+            exit 1
+          }
+
+      - name: Build Phase 3.0 Control Center
+        shell: bash
+        run: |
+          set +e
+          python automation/v92/paper_trading_phase30_control_center.py
+          RC=$?
+          if [ -f phase30_summary.md ]; then
+            cat phase30_summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$RC"
+
+      - name: Upload Phase 3.0 Control Center
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase30-control-center-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 90
+          path: |
+            phase30_result.json
+            phase30_summary.md
+            dashboard/phase30_control_center.html
