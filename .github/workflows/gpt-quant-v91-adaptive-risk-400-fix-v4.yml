@@ -25,8 +25,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install requests
 
       - name: Run real Adaptive Risk with full diagnostics
         run: python automation/gpt_quant_v91_adaptive_risk_upsert_diagnostic_v4.py
