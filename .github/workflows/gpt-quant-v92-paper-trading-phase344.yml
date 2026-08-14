@@ -1,0 +1,146 @@
+name: GPT Quant V9.2 Paper Trading Phase 3.4.4 - Human Approval Gate + Release Authorization
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: "Strategy"
+        required: true
+        default: "V9.1"
+        type: choice
+        options:
+          - V9
+          - V9.1
+
+      action:
+        description: "Manual release-control action"
+        required: true
+        default: "evaluate"
+        type: choice
+        options:
+          - evaluate
+          - approve_production_paper
+          - revoke_production_paper
+
+      approver:
+        description: "Human approver identifier; required for approve/revoke"
+        required: false
+        default: ""
+        type: string
+
+      confirmation_text:
+        description: "Approve: APPROVE PRODUCTION PAPER | Revoke: REVOKE PRODUCTION PAPER"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-v92-phase344-human-approval-gate
+  cancel-in-progress: false
+
+jobs:
+  human-approval-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+
+      PHASE344_ACTION: ${{ inputs.action || 'evaluate' }}
+      PHASE344_APPROVER: ${{ inputs.approver || '' }}
+      PHASE344_CONFIRMATION_TEXT: ${{ inputs.confirmation_text || '' }}
+
+      PHASE343_REQUIRED_PASS_DAYS: "5"
+      PHASE34_REQUIRED_PASS_DAYS: "5"
+      PHASE34_MAX_MARKET_STALE_DAYS: "3"
+      PHASE34_MAX_DAILY_DRAWDOWN: "0.03"
+      PHASE34_MAX_OPEN_POSITIONS: "10"
+      PHASE34_SNAPSHOT_TABLE: gptq_paper_daily_snapshots
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Phase 3.4.4 environment
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${SUPABASE_URL:-}" || {
+            echo "::error::Missing SUPABASE_URL"
+            exit 1
+          }
+
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}" || {
+            echo "::error::Missing SUPABASE_SERVICE_ROLE_KEY"
+            exit 1
+          }
+
+          test "${PAPER_TRADING_MODE}" = "SHADOW_ONLY_NO_BROKER" || {
+            echo "::error::Safety mode violation"
+            exit 1
+          }
+
+          test -f automation/v92/paper_trading_phase34_human_approval_release.py
+          test -f automation/v92/paper_trading_phase342_qualification_state_fix.py
+          test -f automation/v92/paper_trading_phase343_approval_readiness.py
+          test -f automation/v92/paper_trading_phase344_human_approval_gate.py
+
+      - name: Validate manual approval input
+        if: ${{ inputs.action == 'approve_production_paper' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PHASE344_APPROVER:-}" || {
+            echo "::error::Approver is required."
+            exit 1
+          }
+          test "${PHASE344_CONFIRMATION_TEXT}" = "APPROVE PRODUCTION PAPER" || {
+            echo "::error::Approval confirmation phrase does not match."
+            exit 1
+          }
+
+      - name: Validate manual revocation input
+        if: ${{ inputs.action == 'revoke_production_paper' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PHASE344_APPROVER:-}" || {
+            echo "::error::Approver is required."
+            exit 1
+          }
+          test "${PHASE344_CONFIRMATION_TEXT}" = "REVOKE PRODUCTION PAPER" || {
+            echo "::error::Revocation confirmation phrase does not match."
+            exit 1
+          }
+
+      - name: Run Phase 3.4.4 Human Approval Gate
+        run: python automation/v92/paper_trading_phase344_human_approval_gate.py
+
+      - name: Upload Phase 3.4.4 audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase344-human-approval-gate-${{ github.run_id }}
+          path: |
+            phase34_result.json
+            phase34_summary.md
+            phase34_production_paper_release.json
+            phase34_release_revocation.json
+            phase342_output/
+            phase343_output/
+            phase344_output/
+          if-no-files-found: warn
+          retention-days: 90
