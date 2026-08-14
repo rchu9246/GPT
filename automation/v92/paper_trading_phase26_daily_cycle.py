@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-GPT Quant V9.2 Paper Trading Phase 2.7.2 Market Date Source-of-Truth Fix
-Automatic Daily Trading Cycle + Supabase Market Date Source-of-Truth
+GPT Quant V9.2 Paper Trading Phase 2.7.3 Schema-Compatible Snapshot Fix
+Automatic Daily Trading Cycle + Schema-Compatible Dashboard Snapshot
 
 Hotfix:
 - Fixes: AttributeError: 'list' object has no attribute 'get'
@@ -145,15 +145,56 @@ def latest_market_date_source_of_truth():
     return None, None
 
 def upsert_snapshot(payload):
-    query = urllib.parse.urlencode({"on_conflict": "run_key"})
+    """
+    Phase 2.7.3 schema-compatible snapshot upsert.
 
-    return rest(
-        "POST",
-        "gptq_paper_daily_snapshots",
-        query=query,
-        payload=payload,
-        prefer="resolution=merge-duplicates,return=representation",
-    )
+    Monitoring fields can exist in Python before the Supabase table has been
+    migrated. When PostgREST returns PGRST204 for an optional monitoring
+    column, remove only that optional field and retry the same upsert.
+
+    Core accounting/trading snapshot fields remain mandatory and are never
+    silently removed.
+    """
+    query = urllib.parse.urlencode({"on_conflict": "run_key"})
+    working = dict(payload)
+
+    optional_monitor_fields = {
+        "market_date_integrity",
+        "market_date_source",
+    }
+
+    while True:
+        try:
+            return rest(
+                "POST",
+                "gptq_paper_daily_snapshots",
+                query=query,
+                payload=working,
+                prefer="resolution=merge-duplicates,return=representation",
+            )
+        except RuntimeError as exc:
+            message = str(exc)
+
+            missing = None
+            marker = "Could not find the '"
+            suffix = "' column of 'gptq_paper_daily_snapshots'"
+
+            if marker in message and suffix in message:
+                missing = message.split(marker, 1)[1].split(suffix, 1)[0]
+
+            if (
+                missing
+                and missing in optional_monitor_fields
+                and missing in working
+            ):
+                print(
+                    "[Phase 2.7.3] Optional Supabase snapshot column "
+                    f"'{missing}' is unavailable; retrying without it."
+                )
+                working.pop(missing, None)
+                continue
+
+            raise
 
 
 def require_dict(name, value):
@@ -173,7 +214,7 @@ def main():
     if not PHASE25.exists():
         raise RuntimeError(f"Missing Phase 2.5 orchestrator: {PHASE25}")
 
-    print("=== GPT Quant V9.2 Phase 2.7.2 Source-of-Truth Fix ===")
+    print("=== GPT Quant V9.2 Phase 2.7.3 Schema-Compatible Snapshot Fix ===")
     print("=== Running Phase 2.5 automatic trading pipeline ===")
 
     process = subprocess.run(
@@ -304,7 +345,7 @@ def main():
         encoding="utf-8",
     )
 
-    summary = f"""# GPT Quant V9.2 Paper Trading Phase 2.7.2
+    summary = f"""# GPT Quant V9.2 Paper Trading Phase 2.7.3
 
 - run_key: `{RUN_KEY}`
 - mode: `{MODE}`
@@ -331,7 +372,7 @@ def main():
 
 ## Hotfix
 
-`Phase 2.7.2 Supabase market-date source-of-truth: ENABLED`
+`Phase 2.7.3 schema-compatible snapshot retry: ENABLED`
 
 > Safety mode remains SHADOW_ONLY_NO_BROKER.
 """
@@ -360,10 +401,10 @@ def main():
 
     if not success:
         raise RuntimeError(
-            "Phase 2.7.2 snapshot created, but pipeline/data integrity is not fully PASS"
+            "Phase 2.7.3 snapshot created, but pipeline/data integrity is not fully PASS"
         )
 
-    print("Phase 2.7.2: COMPLETED")
+    print("Phase 2.7.3: COMPLETED")
     print("Dashboard snapshot upsert: COMPLETED")
     return 0
 
