@@ -1,0 +1,141 @@
+name: GPT Quant V9.2 Paper Trading Phase 3.4 - Human Approval + Production Paper Release Control
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: "Strategy"
+        required: true
+        default: "V9.1"
+        type: choice
+        options:
+          - V9
+          - V9.1
+
+      action:
+        description: "Release-control action"
+        required: true
+        default: "evaluate"
+        type: choice
+        options:
+          - evaluate
+          - approve_production_paper
+          - revoke_production_paper
+
+      approver:
+        description: "Human approver name/identifier (required for approval)"
+        required: false
+        default: ""
+        type: string
+
+      approval_text:
+        description: "For approval enter exactly: APPROVE PRODUCTION PAPER"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-v92-paper-trading-phase34
+  cancel-in-progress: false
+
+jobs:
+  human-approval-production-paper-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+
+      PHASE34_ACTION: ${{ inputs.action || 'evaluate' }}
+      PHASE34_APPROVER: ${{ inputs.approver || '' }}
+      PHASE34_APPROVAL_TEXT: ${{ inputs.approval_text || '' }}
+
+      PHASE34_REQUIRED_PASS_DAYS: "5"
+      PHASE34_MAX_MARKET_STALE_DAYS: "3"
+      PHASE34_MAX_DAILY_DRAWDOWN: "0.03"
+      PHASE34_MAX_OPEN_POSITIONS: "10"
+      PHASE34_SNAPSHOT_TABLE: gptq_paper_daily_snapshots
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Phase 3.4 safety environment
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${SUPABASE_URL:-}" || {
+            echo "::error::Missing SUPABASE_URL"
+            exit 1
+          }
+
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}" || {
+            echo "::error::Missing SUPABASE_SERVICE_ROLE_KEY"
+            exit 1
+          }
+
+          test -f automation/v92/paper_trading_phase34_human_approval_release.py || {
+            echo "::error::Missing Phase 3.4 Python file"
+            exit 1
+          }
+
+          if [ "${PAPER_TRADING_MODE}" != "SHADOW_ONLY_NO_BROKER" ]; then
+            echo "::error::Safety mode violation"
+            exit 1
+          fi
+
+      - name: Validate explicit approval input
+        if: ${{ inputs.action == 'approve_production_paper' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${PHASE34_APPROVAL_TEXT}" != "APPROVE PRODUCTION PAPER" ]; then
+            echo "::error::Approval phrase does not match."
+            exit 1
+          fi
+
+          if [ -z "${PHASE34_APPROVER}" ]; then
+            echo "::error::Approver is required."
+            exit 1
+          fi
+
+      - name: Run Phase 3.4 release control
+        shell: bash
+        run: |
+          set +e
+
+          python automation/v92/paper_trading_phase34_human_approval_release.py
+          RC=$?
+
+          if [ -f phase34_summary.md ]; then
+            cat phase34_summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          exit "$RC"
+
+      - name: Upload Phase 3.4 audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase34-production-paper-release-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 90
+          path: |
+            phase34_result.json
+            phase34_summary.md
+            phase34_production_paper_release.json
+            phase34_release_revocation.json
