@@ -1,0 +1,14 @@
+{
+  "name": "GPT Quant V9.2 Phase 2.8 Single Deployment Pack",
+  "version": "2.8.0",
+  "files": [
+    ".github/workflows/gpt-quant-v92-paper-trading-phase28.yml",
+    "automation/v92/paper_trading_phase28_readiness.py",
+    "PHASE_2_8_INSTALL.md",
+    "PHASE_2_8_MANIFEST.json"
+  ],
+  "database_migration_required": false,
+  "broker_execution_enabled": false,
+  "real_money_enabled": false,
+  "required_observation_pass_days": 5
+}

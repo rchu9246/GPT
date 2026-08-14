@@ -1,0 +1,89 @@
+name: GPT Quant V9.2 Paper Trading Phase 2.8 - Production Readiness + Controlled Go-Live
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: "V9 or V9.1"
+        required: true
+        default: "V9.1"
+        type: choice
+        options:
+          - V9
+          - V9.1
+      action:
+        description: "Readiness check or arm Production PAPER"
+        required: true
+        default: "readiness_check"
+        type: choice
+        options:
+          - readiness_check
+          - arm_production_paper
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-v92-paper-trading-phase28
+  cancel-in-progress: false
+
+jobs:
+  production-readiness-controlled-go-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+
+      PHASE28_ACTION: ${{ inputs.action || 'readiness_check' }}
+      PHASE28_REQUIRED_PASS_DAYS: ${{ vars.PHASE27_REQUIRED_PASS_DAYS || '5' }}
+      PHASE28_MAX_MARKET_STALE_DAYS: ${{ vars.PHASE27_MAX_MARKET_STALE_DAYS || '3' }}
+      PHASE28_MIN_EQUITY: ${{ vars.PHASE27_MIN_EQUITY || '0' }}
+      PHASE28_MAX_OPEN_POSITIONS: ${{ vars.PAPER_MAX_OPEN_POSITIONS || '10' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Phase 2.8 environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_URL:-}" || { echo "::error::Missing SUPABASE_URL"; exit 1; }
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}" || { echo "::error::Missing SUPABASE_SERVICE_ROLE_KEY"; exit 1; }
+          test -f automation/v92/paper_trading_phase28_readiness.py || {
+            echo "::error::Missing automation/v92/paper_trading_phase28_readiness.py"
+            exit 1
+          }
+
+      - name: Run Phase 2.8 Production Readiness Gate
+        shell: bash
+        run: |
+          set +e
+          python automation/v92/paper_trading_phase28_readiness.py
+          RC=$?
+          if [ -f phase28_summary.md ]; then
+            cat phase28_summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$RC"
+
+      - name: Upload Phase 2.8 diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase28-readiness-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 90
+          path: |
+            phase28_result.json
+            phase28_summary.md
+            phase28_release_manifest.json
