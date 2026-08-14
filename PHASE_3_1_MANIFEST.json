@@ -1,0 +1,18 @@
+{
+  "name": "GPT Quant V9.2 Phase 3.1 Single Deployment Pack",
+  "version": "3.1.0",
+  "requires": [
+    "Phase 3.0"
+  ],
+  "database_migration_required": false,
+  "safety_mode": "SHADOW_ONLY_NO_BROKER",
+  "broker_execution_enabled": false,
+  "real_money_enabled": false,
+  "automatic_resume_enabled": false,
+  "files": [
+    ".github/workflows/gpt-quant-v92-paper-trading-phase31.yml",
+    "automation/v92/paper_trading_phase31_incident_guard.py",
+    "PHASE_3_1_INSTALL.md",
+    "PHASE_3_1_MANIFEST.json"
+  ]
+}
