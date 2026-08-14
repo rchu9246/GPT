@@ -1,0 +1,116 @@
+name: GPT Quant V9.2 Paper Trading Phase 3.3 - Production Promotion + Release Governance
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: "V9 or V9.1"
+        required: true
+        default: "V9.1"
+        type: choice
+        options:
+          - V9
+          - V9.1
+
+      action:
+        description: "Evaluate, approve, or reject Production PAPER release"
+        required: true
+        default: "evaluate"
+        type: choice
+        options:
+          - evaluate
+          - approve_release
+          - reject_release
+
+      approval_token:
+        description: "Required only for approve_release. Enter an explicit approval value."
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-v92-paper-trading-phase33
+  cancel-in-progress: false
+
+jobs:
+  production-promotion-release-governance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+
+      PHASE33_ACTION: ${{ inputs.action || 'evaluate' }}
+      PHASE33_APPROVAL_TOKEN: ${{ inputs.approval_token || '' }}
+
+      PHASE33_REQUIRED_PASS_DAYS: "5"
+      PHASE33_MAX_MARKET_STALE_DAYS: "3"
+      PHASE33_MAX_DAILY_DRAWDOWN: "0.03"
+      PHASE33_MAX_OPEN_POSITIONS: "10"
+      PHASE33_SNAPSHOT_TABLE: gptq_paper_daily_snapshots
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Phase 3.3 environment
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${SUPABASE_URL:-}" || {
+            echo "::error::Missing SUPABASE_URL"
+            exit 1
+          }
+
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}" || {
+            echo "::error::Missing SUPABASE_SERVICE_ROLE_KEY"
+            exit 1
+          }
+
+          test -f automation/v92/paper_trading_phase33_release_governance.py || {
+            echo "::error::Missing Phase 3.3 Python file"
+            exit 1
+          }
+
+          if [ "${PAPER_TRADING_MODE}" != "SHADOW_ONLY_NO_BROKER" ]; then
+            echo "::error::Safety lock failed"
+            exit 1
+          fi
+
+      - name: Run Phase 3.3 Promotion + Release Governance
+        shell: bash
+        run: |
+          set +e
+          python automation/v92/paper_trading_phase33_release_governance.py
+          RC=$?
+
+          if [ -f phase33_summary.md ]; then
+            cat phase33_summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          exit "$RC"
+
+      - name: Upload Phase 3.3 governance artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase33-release-governance-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 90
+          path: |
+            phase33_result.json
+            phase33_summary.md
+            phase33_release_manifest.json
