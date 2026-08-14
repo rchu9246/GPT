@@ -1,0 +1,76 @@
+name: GPT Quant V9.2 Paper Trading Phase 3.4.5 - Release Audit Ledger + Approval Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: "Strategy"
+        required: true
+        default: "V9.1"
+        type: choice
+        options:
+          - V9
+          - V9.1
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-v92-phase345-release-audit
+  cancel-in-progress: false
+
+jobs:
+  release-audit-ledger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+      PHASE344_ACTION: evaluate
+      PHASE344_APPROVER: ""
+      PHASE344_CONFIRMATION_TEXT: ""
+      PHASE343_REQUIRED_PASS_DAYS: "5"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Phase 3.4.5 environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          test "${PAPER_TRADING_MODE}" = "SHADOW_ONLY_NO_BROKER"
+          test -f automation/v92/paper_trading_phase34_human_approval_release.py
+          test -f automation/v92/paper_trading_phase343_approval_readiness.py
+          test -f automation/v92/paper_trading_phase344_human_approval_gate.py
+          test -f automation/v92/paper_trading_phase345_release_audit_ledger.py
+
+      - name: Refresh Phase 3.4.4 gate evidence
+        run: python automation/v92/paper_trading_phase344_human_approval_gate.py
+
+      - name: Build Phase 3.4.5 audit ledger
+        run: python automation/v92/paper_trading_phase345_release_audit_ledger.py
+
+      - name: Upload Phase 3.4.5 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase345-release-audit-${{ github.run_id }}
+          path: |
+            phase34_result.json
+            phase34_summary.md
+            phase343_output/
+            phase344_output/
+            phase345_output/
+          if-no-files-found: warn
+          retention-days: 90
