@@ -1,0 +1,66 @@
+name: GPT Quant Phase 3.4.2.1 - Market State Persistence Fix
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+  schedule:
+    # 09:17 UTC = 17:17 Taiwan time, weekdays.
+    # Runs after Phase 3.4.2 Daily Operations.
+    - cron: "17 9 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-phase3421-market-state-persistence
+  cancel-in-progress: false
+
+jobs:
+  market-state-persistence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+      PHASE3421_REQUIRED_PASS_DAYS: "5"
+      PHASE3421_SNAPSHOT_TABLE: gptq_paper_daily_snapshots
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          test -f automation/v92/paper_trading_phase3421_market_state_persistence_fix.py
+          grep -q SHADOW_ONLY_NO_BROKER automation/v92/paper_trading_phase3421_market_state_persistence_fix.py
+
+      - name: Run Phase 3.4.2.1 Market State Persistence Fix
+        run: python automation/v92/paper_trading_phase3421_market_state_persistence_fix.py
+
+      - name: Upload market-state evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3421-market-state-${{ github.run_id }}
+          path: |
+            phase3421_output/
+            phase342_output/phase342_market_state.json
+          if-no-files-found: warn
+          retention-days: 30
