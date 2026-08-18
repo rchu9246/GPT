@@ -1,3 +1,29 @@
+﻿$ErrorActionPreference = "Stop"
+
+Write-Host "============================================================"
+Write-Host " GPT Quant Phase 3.4.2.1"
+Write-Host " Market State Persistence Fix v4"
+Write-Host " Runtime Evidence Only"
+Write-Host "============================================================"
+
+$root = (Get-Location).Path
+$automationDir = Join-Path $root "automation\v92"
+$workflowDir = Join-Path $root ".github\workflows"
+
+New-Item -ItemType Directory -Force -Path $automationDir | Out-Null
+New-Item -ItemType Directory -Force -Path $workflowDir | Out-Null
+
+$pyPath = Join-Path $automationDir "paper_trading_phase3421_market_state_persistence_fix.py"
+$ymlPath = Join-Path $workflowDir "gpt-quant-v92-paper-trading-phase3421-market-state-persistence-fix.yml"
+
+if (Test-Path $pyPath) {
+    $backup = "$pyPath.pre_v4.bak"
+    if (-not (Test-Path $backup)) {
+        Copy-Item $pyPath $backup
+    }
+}
+
+$python = @'
 #!/usr/bin/env python3
 """
 GPT Quant V9.2 Paper Trading Phase 3.4.2.1
@@ -535,3 +561,97 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
+'@
+
+$workflow = @'
+name: GPT Quant Phase 3.4.2.1 - Market State Persistence Fix v4
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-phase3421-market-state-persistence-v4
+  cancel-in-progress: false
+
+jobs:
+  market-state-persistence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+      PHASE3421_REQUIRED_PASS_DAYS: "5"
+      PHASE3421_SNAPSHOT_TABLE: gptq_paper_daily_snapshots
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate v4 safety boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          test -f automation/v92/paper_trading_phase3421_market_state_persistence_fix.py
+          grep -q SHADOW_ONLY_NO_BROKER automation/v92/paper_trading_phase3421_market_state_persistence_fix.py
+          grep -q '"automatic_approval": False' automation/v92/paper_trading_phase3421_market_state_persistence_fix.py
+          grep -q '"broker_trading_enabled": False' automation/v92/paper_trading_phase3421_market_state_persistence_fix.py
+          grep -q '"real_money_trading_enabled": False' automation/v92/paper_trading_phase3421_market_state_persistence_fix.py
+          grep -q 'Documentation/example dates are' automation/v92/paper_trading_phase3421_market_state_persistence_fix.py
+
+      - name: Run Phase 3.4.2.1 v4 Runtime Evidence Only
+        run: python automation/v92/paper_trading_phase3421_market_state_persistence_fix.py
+
+      - name: Upload v4 market-state evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3421-market-state-v4-${{ github.run_id }}
+          path: |
+            phase3421_output/
+            phase342_output/phase342_market_state.json
+          if-no-files-found: warn
+          retention-days: 30
+'@
+
+[System.IO.File]::WriteAllText($pyPath, $python, [System.Text.UTF8Encoding]::new($false))
+[System.IO.File]::WriteAllText($ymlPath, $workflow, [System.Text.UTF8Encoding]::new($false))
+
+Write-Host ""
+Write-Host "============================================================"
+Write-Host " PHASE 3.4.2.1 v4 READY"
+Write-Host "============================================================"
+Write-Host "Overwritten:"
+Write-Host "  automation/v92/paper_trading_phase3421_market_state_persistence_fix.py"
+Write-Host "  .github/workflows/gpt-quant-v92-paper-trading-phase3421-market-state-persistence-fix.yml"
+Write-Host ""
+Write-Host "v4 changes:"
+Write-Host "  Documentation/README/GUIDE dates are BLOCKED as canonical sources"
+Write-Host "  Structured runtime JSON evidence only"
+Write-Host "  Supabase is fallback only"
+Write-Host "  Snapshot streak reader is schema-tolerant"
+Write-Host ""
+Write-Host "Safety:"
+Write-Host "  Release LOCKED"
+Write-Host "  Human approval REQUIRED"
+Write-Host "  Automatic approval DISABLED"
+Write-Host "  Broker trading DISABLED"
+Write-Host "  Real-money trading DISABLED"
