@@ -1,4 +1,4 @@
-name: GPT Quant Phase 3.4.2.1 - Market State Persistence Fix
+name: GPT Quant Phase 3.4.2.1 - Market State Persistence Fix v2
 
 on:
   workflow_dispatch:
@@ -8,16 +8,12 @@ on:
         required: true
         default: V9.1
         type: string
-  schedule:
-    # 09:17 UTC = 17:17 Taiwan time, weekdays.
-    # Runs after Phase 3.4.2 Daily Operations.
-    - cron: "17 9 * * 1-5"
 
 permissions:
   contents: read
 
 concurrency:
-  group: gpt-quant-phase3421-market-state-persistence
+  group: gpt-quant-phase3421-market-state-persistence-v2
   cancel-in-progress: false
 
 jobs:
@@ -42,7 +38,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Validate environment
+      - name: Validate v2 safety boundary
         shell: bash
         run: |
           set -euo pipefail
@@ -50,15 +46,18 @@ jobs:
           test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
           test -f automation/v92/paper_trading_phase3421_market_state_persistence_fix.py
           grep -q SHADOW_ONLY_NO_BROKER automation/v92/paper_trading_phase3421_market_state_persistence_fix.py
+          grep -q '"automatic_approval": False' automation/v92/paper_trading_phase3421_market_state_persistence_fix.py
+          grep -q '"broker_trading_enabled": False' automation/v92/paper_trading_phase3421_market_state_persistence_fix.py
+          grep -q '"real_money_trading_enabled": False' automation/v92/paper_trading_phase3421_market_state_persistence_fix.py
 
-      - name: Run Phase 3.4.2.1 Market State Persistence Fix
+      - name: Run Phase 3.4.2.1 v2 Market State Persistence Fix
         run: python automation/v92/paper_trading_phase3421_market_state_persistence_fix.py
 
-      - name: Upload market-state evidence
+      - name: Upload v2 market-state evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: phase3421-market-state-${{ github.run_id }}
+          name: phase3421-market-state-v2-${{ github.run_id }}
           path: |
             phase3421_output/
             phase342_output/phase342_market_state.json
