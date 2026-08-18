@@ -1,0 +1,62 @@
+name: GPT Quant Phase 3.4.2 - Production Paper Daily Operations
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+  schedule:
+    - cron: "15 9 * * 1-5" # 17:15 Taiwan, after Phase 3.4.1
+permissions:
+  contents: read
+concurrency:
+  group: gpt-quant-phase342-production-paper-daily
+  cancel-in-progress: false
+jobs:
+  production-paper-daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip requests
+      - name: Safety validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f automation/v92/paper_trading_phase34_human_approval_release.py
+          test -f automation/v92/paper_trading_phase341_daily_qualification.py
+          test -f automation/v92/paper_trading_phase342_daily_operations.py
+          grep -q SHADOW_ONLY_NO_BROKER automation/v92/paper_trading_phase342_daily_operations.py
+      - name: V9.1 Confidence Calibration
+        run: python automation/gpt_quant_v91_confidence_calibration.py
+      - name: V9.1 Adaptive Risk
+        run: python automation/gpt_quant_v91_adaptive_risk_manager.py --base-risk-budget "0.60"
+      - name: V9.1 Portfolio Optimizer
+        run: python automation/gpt_quant_v91_portfolio_optimizer.py --max-positions "10" --max-single-weight "0.10"
+      - name: V9.1 Paper Trading
+        run: python automation/gpt_quant_v91_paper_trading_engine.py --starting-equity "1000000"
+      - name: Phase 3.4.2 Daily Qualification + Release Guard
+        run: python automation/v92/paper_trading_phase342_daily_operations.py
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase342-production-paper-daily-${{ github.run_id }}
+          path: |
+            phase34_result.json
+            phase34_summary.md
+            phase341_output/
+            phase342_output/
+          if-no-files-found: warn
+          retention-days: 30
