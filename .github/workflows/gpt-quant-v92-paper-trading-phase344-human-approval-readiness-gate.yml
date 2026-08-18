@@ -1,0 +1,75 @@
+name: GPT Quant Phase 3.4.4 - Human Approval Readiness Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-phase344-human-approval-readiness
+  cancel-in-progress: false
+
+jobs:
+  human-approval-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+      PHASE3421_REQUIRED_PASS_DAYS: "5"
+      PHASE343_REQUIRED_PASS_DAYS: "5"
+      PHASE344_REQUIRED_PASS_DAYS: "5"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime dependency
+        run: python -m pip install --upgrade pip requests
+
+      - name: Validate Phase 3.4.4 safety boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          test -f automation/v92/paper_trading_phase3421_market_state_persistence_fix.py
+          test -f automation/v92/paper_trading_phase344_human_approval_readiness_gate.py
+          grep -q SHADOW_ONLY_NO_BROKER automation/v92/paper_trading_phase344_human_approval_readiness_gate.py
+          grep -q '"release_authorized": False' automation/v92/paper_trading_phase344_human_approval_readiness_gate.py
+          grep -q '"automatic_approval": False' automation/v92/paper_trading_phase344_human_approval_readiness_gate.py
+          grep -q '"broker_trading_enabled": False' automation/v92/paper_trading_phase344_human_approval_readiness_gate.py
+          grep -q '"real_money_trading_enabled": False' automation/v92/paper_trading_phase344_human_approval_readiness_gate.py
+
+      - name: Run Phase 3.4.4 Human Approval Readiness Gate
+        run: python automation/v92/paper_trading_phase344_human_approval_readiness_gate.py
+
+      - name: Upload Phase 3.4.4 readiness evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase344-human-approval-readiness-${{ github.run_id }}
+          path: |
+            phase3421_output/
+            phase342_output/
+            phase343_output/
+            phase344_output/
+          if-no-files-found: warn
+          retention-days: 30
