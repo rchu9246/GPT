@@ -1,3 +1,42 @@
+﻿$ErrorActionPreference = "Stop"
+
+Write-Host "============================================================"
+Write-Host " GPT Quant Phase 3.4.4.3 v3"
+Write-Host " Human Approval Workflow Safety Contract Alignment Fix"
+Write-Host "============================================================"
+
+$root = (Get-Location).Path
+$workflowDir = Join-Path $root ".github\workflows"
+$automationDir = Join-Path $root "automation\v92"
+
+New-Item -ItemType Directory -Force -Path $workflowDir | Out-Null
+New-Item -ItemType Directory -Force -Path $automationDir | Out-Null
+
+$workflowPath = Join-Path $workflowDir "gpt-quant-v92-paper-trading-phase344-human-approval-readiness-gate.yml"
+$gatePath = Join-Path $automationDir "paper_trading_phase344_human_approval_readiness_gate.py"
+$bridgePath = Join-Path $automationDir "paper_trading_phase3443_runtime_canonical_state_reconstruction.py"
+$marketBridgePath = Join-Path $automationDir "paper_trading_phase3421_market_state_persistence_fix.py"
+
+if (-not (Test-Path $gatePath)) {
+    throw "Missing Phase 3.4.4 gate: $gatePath"
+}
+
+if (-not (Test-Path $bridgePath)) {
+    throw "Missing Phase 3.4.4.3 v2 runtime reconstruction bridge: $bridgePath"
+}
+
+if (-not (Test-Path $marketBridgePath)) {
+    throw "Missing Phase 3.4.2.1 market bridge: $marketBridgePath"
+}
+
+if (Test-Path $workflowPath) {
+    $backup = "$workflowPath.pre3443v3.bak"
+    if (-not (Test-Path $backup)) {
+        Copy-Item $workflowPath $backup
+    }
+}
+
+$workflow = @'
 name: GPT Quant Phase 3.4.4 - Human Approval Readiness Gate
 
 on:
@@ -144,3 +183,37 @@ jobs:
             phase344_output/
           if-no-files-found: warn
           retention-days: 30
+'@
+
+[System.IO.File]::WriteAllText(
+    $workflowPath,
+    $workflow,
+    [System.Text.UTF8Encoding]::new($false)
+)
+
+Write-Host ""
+Write-Host "============================================================"
+Write-Host " PHASE 3.4.4.3 v3 READY"
+Write-Host "============================================================"
+Write-Host "Overwritten:"
+Write-Host "  .github/workflows/gpt-quant-v92-paper-trading-phase344-human-approval-readiness-gate.yml"
+Write-Host ""
+Write-Host "Alignment:"
+Write-Host "  Old safety grep contract REMOVED"
+Write-Host "  Phase 3.4.4 now validates the v2 runtime reconstruction engine"
+Write-Host "  Gate executes same-runner canonical reconstruction"
+Write-Host "  Runtime output is validated after execution"
+Write-Host ""
+Write-Host "Safety:"
+Write-Host "  Release LOCKED"
+Write-Host "  Release authorization DISABLED"
+Write-Host "  Release locked before human approval = YES"
+Write-Host "  Human approval REQUIRED"
+Write-Host "  Automatic approval DISABLED"
+Write-Host "  Broker trading DISABLED"
+Write-Host "  Real-money trading DISABLED"
+Write-Host ""
+Write-Host "Next:"
+Write-Host "  GitHub Desktop -> Commit -> Push origin"
+Write-Host "  Actions -> GPT Quant Phase 3.4.4 - Human Approval Readiness Gate"
+Write-Host "  Run workflow"
