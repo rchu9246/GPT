@@ -1,14 +1,4 @@
 #!/usr/bin/env python3
-"""
-GPT Quant V9.2 Paper Trading Phase 3.4.4
-Human Approval Readiness Gate
-Patched by Phase 3.4.4.3 Canonical State Bridge Fix.
-
-Authoritative readiness source:
-  phase3442_output/phase3442_sync.json
-
-This gate NEVER authorizes release and NEVER enables broker/live-money trading.
-"""
 from __future__ import annotations
 
 import json
@@ -16,20 +6,18 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SYNC_JSON = ROOT / "phase3442_output/phase3442_sync.json"
-OUT = ROOT / "phase344_output"
-OUT.mkdir(exist_ok=True)
 
 STRATEGY = os.getenv("PAPER_STRATEGY_VERSION", "V9.1")
 MODE = "SHADOW_ONLY_NO_BROKER"
 REQUIRED_PASS_DAYS = int(os.getenv("PHASE344_REQUIRED_PASS_DAYS", "5"))
 
+SYNC_JSON = ROOT / "phase3442_output/phase3442_sync.json"
+OUT = ROOT / "phase344_output"
+OUT.mkdir(exist_ok=True)
+
 def load_json(path: Path):
     if not path.exists():
-        raise RuntimeError(
-            f"Missing Phase 3.4.4.2 canonical sync evidence: {path}. "
-            "Run Phase 3.4.4.2 first."
-        )
+        raise RuntimeError(f"Missing canonical sync evidence: {path}")
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise RuntimeError(f"Invalid JSON object: {path}")
@@ -42,40 +30,51 @@ def main():
     sync = load_json(SYNC_JSON)
 
     if sync.get("status") != "PASS":
-        raise RuntimeError("Phase 3.4.4.2 sync is not PASS")
+        raise RuntimeError("Phase 3.4.4.2 synchronization status is not PASS")
+
     if sync.get("canonical_source_valid") is not True:
-        raise RuntimeError("Canonical source invalid")
+        raise RuntimeError("Phase 3.4.4.2 canonical source is invalid")
 
     pass_days = sync.get("consecutive_pass_days")
-    latest_market_date = sync.get("latest_market_date")
-    market_stale_days = sync.get("market_stale_days")
-
     if pass_days is None:
         raise RuntimeError("Missing consecutive_pass_days")
-    if latest_market_date is None or market_stale_days is None:
-        raise RuntimeError("Missing canonical market state")
 
     pass_days = int(pass_days)
     required = int(sync.get("required_pass_days") or REQUIRED_PASS_DAYS)
     remaining = max(required - pass_days, 0)
+
+    latest_market_date = sync.get("latest_market_date")
+    market_stale_days = sync.get("market_stale_days")
+
+    if latest_market_date is None or market_stale_days is None:
+        raise RuntimeError("Missing canonical market state")
+
     qualified = pass_days >= required
 
+    qualification_state = "QUALIFIED" if qualified else "OBSERVATION"
+    approval_readiness = "READY_FOR_HUMAN_APPROVAL" if qualified else "NOT_READY"
+    gate_state = "OPEN_FOR_HUMAN_REVIEW" if qualified else "CLOSED_WAITING_FOR_QUALIFICATION"
+
     result = {
-        "version": "3.4.4+3.4.4.3",
+        "version": "3.4.4.3",
         "status": "PASS",
         "strategy_version": STRATEGY,
         "trading_mode": MODE,
+
         "bridge_contract": "PHASE3442_CANONICAL_SYNC_TO_PHASE344_GATE",
-        "qualification_state": "QUALIFIED" if qualified else "OBSERVATION",
-        "approval_readiness": "READY_FOR_HUMAN_APPROVAL" if qualified else "NOT_READY",
-        "human_approval_gate_state": "OPEN_FOR_HUMAN_REVIEW" if qualified else "CLOSED_WAITING_FOR_QUALIFICATION",
+        "qualification_state": qualification_state,
+        "approval_readiness": approval_readiness,
+        "human_approval_gate_state": gate_state,
+
         "pass_day_source": sync.get("pass_day_source") or "distinct_run_date_snapshot_status",
         "consecutive_pass_days": pass_days,
         "required_pass_days": required,
         "remaining_pass_days": remaining,
+
         "latest_market_date": latest_market_date,
         "market_stale_days": market_stale_days,
         "canonical_source_valid": True,
+
         "release_state": "LOCKED",
         "release_authorized": False,
         "release_locked_before_human_approval": True,
@@ -93,17 +92,17 @@ def main():
     )
 
     summary = [
-        "# GPT Quant V9.2 Paper Trading - Phase 3.4.4",
+        "# GPT Quant V9.2 Paper Trading - Phase 3.4.4.3",
         "",
-        "## Human Approval Readiness Gate",
+        "## Human Approval Gate Canonical State Bridge Fix",
         "",
         "- Status: **PASS**",
         f"- Strategy: `{STRATEGY}`",
         f"- Trading Mode: `{MODE}`",
         f"- Bridge Contract: **{result['bridge_contract']}**",
-        f"- Qualification State: **{result['qualification_state']}**",
-        f"- Approval Readiness: **{result['approval_readiness']}**",
-        f"- Human Approval Gate: **{result['human_approval_gate_state']}**",
+        f"- Qualification State: **{qualification_state}**",
+        f"- Approval Readiness: **{approval_readiness}**",
+        f"- Human Approval Gate: **{gate_state}**",
         f"- PASS-day Source: `{result['pass_day_source']}`",
         f"- Consecutive PASS days: **{pass_days} / {required}**",
         f"- Remaining PASS days: **{remaining}**",
@@ -121,7 +120,7 @@ def main():
         "- Automatic approval: **DISABLED**",
         "- Broker trading: **DISABLED**",
         "- Real-money trading: **DISABLED**",
-        "- This gate NEVER authorizes release.",
+        "- This bridge never authorizes release.",
     ]
 
     (OUT / "phase344_readiness.md").write_text(

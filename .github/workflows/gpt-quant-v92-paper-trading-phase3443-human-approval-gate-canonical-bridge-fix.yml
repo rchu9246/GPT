@@ -1,0 +1,71 @@
+name: GPT Quant Phase 3.4.4.3 - Human Approval Gate Canonical State Bridge Fix
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-phase3443-human-approval-gate-bridge
+  cancel-in-progress: false
+
+jobs:
+  human-approval-gate-bridge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+      PHASE344_REQUIRED_PASS_DAYS: "5"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Phase 3.4.4.3 safety boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f automation/v92/paper_trading_phase3443_human_approval_gate_canonical_bridge_fix.py
+          test -f automation/v92/paper_trading_phase344_human_approval_readiness_gate.py
+          grep -q PHASE3442_CANONICAL_SYNC_TO_PHASE344_GATE automation/v92/paper_trading_phase3443_human_approval_gate_canonical_bridge_fix.py
+          grep -q '"release_state": "LOCKED"' automation/v92/paper_trading_phase3443_human_approval_gate_canonical_bridge_fix.py
+          grep -q '"release_authorized": False' automation/v92/paper_trading_phase3443_human_approval_gate_canonical_bridge_fix.py
+          grep -q '"broker_trading_enabled": False' automation/v92/paper_trading_phase3443_human_approval_gate_canonical_bridge_fix.py
+          grep -q '"real_money_trading_enabled": False' automation/v92/paper_trading_phase3443_human_approval_gate_canonical_bridge_fix.py
+
+      - name: Validate Phase 3.4.4 gate patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q PHASE3442_CANONICAL_SYNC_TO_PHASE344_GATE automation/v92/paper_trading_phase344_human_approval_readiness_gate.py
+          grep -q '"release_authorized": False' automation/v92/paper_trading_phase344_human_approval_readiness_gate.py
+          grep -q '"broker_trading_enabled": False' automation/v92/paper_trading_phase344_human_approval_readiness_gate.py
+          grep -q '"real_money_trading_enabled": False' automation/v92/paper_trading_phase344_human_approval_readiness_gate.py
+
+      - name: Run Phase 3.4.4.3 Human Approval Gate Canonical State Bridge Fix
+        run: python automation/v92/paper_trading_phase3443_human_approval_gate_canonical_bridge_fix.py
+
+      - name: Upload Phase 3.4.4.3 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3443-human-approval-gate-bridge-${{ github.run_id }}
+          path: |
+            phase344_output/
+          if-no-files-found: warn
+          retention-days: 30
