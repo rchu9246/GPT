@@ -1,0 +1,78 @@
+name: GPT Quant Phase 3.4.3 - Production Paper Evidence + 5-Day Qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+  schedule:
+    # 09:20 UTC = 17:20 Taiwan time, weekdays.
+    # Runs after Phase 3.4.2 Production Paper Daily Operations at 17:15.
+    - cron: "20 9 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-phase343-production-paper-evidence
+  cancel-in-progress: false
+
+jobs:
+  production-paper-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+      PHASE342_REQUIRED_PASS_DAYS: "5"
+      PHASE343_REQUIRED_PASS_DAYS: "5"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime dependency
+        run: python -m pip install --upgrade pip requests
+
+      - name: Validate Phase 3.4.3 safety boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          test -f automation/v92/paper_trading_phase342_qualification_state_fix.py
+          test -f automation/v92/paper_trading_phase343_approval_readiness.py
+          test -f automation/v92/paper_trading_phase343_production_evidence.py
+          grep -q 'SHADOW_ONLY_NO_BROKER' automation/v92/paper_trading_phase343_production_evidence.py
+          grep -q '"automatic_approval": False' automation/v92/paper_trading_phase343_production_evidence.py
+          grep -q '"broker_execution_enabled": False' automation/v92/paper_trading_phase343_production_evidence.py
+          grep -q '"real_money_enabled": False' automation/v92/paper_trading_phase343_production_evidence.py
+
+      - name: Run Phase 3.4.3 Production Paper Evidence
+        run: python automation/v92/paper_trading_phase343_production_evidence.py
+
+      - name: Upload Phase 3.4.3 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase343-production-paper-evidence-${{ github.run_id }}
+          path: |
+            phase34_result.json
+            phase34_summary.md
+            phase342_output/
+            phase343_output/
+            phase343_evidence_output/
+          if-no-files-found: warn
+          retention-days: 30
