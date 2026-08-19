@@ -1,0 +1,198 @@
+﻿name: GPT Quant Phase 3.4.8.1 - Canonical Signal Source Runtime Bridge
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+
+      approver:
+        description: Human approver/operator ID for same-run gate reconstruction
+        required: true
+        default: rchu9246
+        type: string
+
+      score_threshold:
+        description: Minimum canonical signal score
+        required: true
+        default: "65"
+        type: string
+
+      max_candidates:
+        description: Maximum canonical signals bridged per run
+        required: true
+        default: "3"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-phase3481-canonical-signal-runtime-bridge
+  cancel-in-progress: false
+
+jobs:
+  canonical-signal-runtime-bridge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+
+      PHASE3421_REQUIRED_PASS_DAYS: "5"
+      PHASE344_REQUIRED_PASS_DAYS: "5"
+      PHASE345_REQUIRED_PASS_DAYS: "5"
+      PHASE346_REQUIRED_PASS_DAYS: "5"
+
+      PHASE3481_SCORE_THRESHOLD: ${{ inputs.score_threshold || '65' }}
+      PHASE3481_MAX_CANDIDATES: ${{ inputs.max_candidates || '3' }}
+
+      PHASE348_SCORE_THRESHOLD: ${{ inputs.score_threshold || '65' }}
+      PHASE348_MAX_CANDIDATES: ${{ inputs.max_candidates || '3' }}
+      PHASE348_INITIAL_CASH: "1000000"
+      PHASE348_MAX_POSITION_PCT: "0.20"
+      PHASE348_ROUND_LOT: "1000"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime dependency
+        run: python -m pip install --upgrade pip requests
+
+      - name: Validate Phase 3.4.8.1 safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+
+          test -f automation/v92/paper_trading_phase3481_canonical_signal_source_runtime_bridge.py
+          test -f automation/v92/paper_trading_phase348_canonical_market_signal_to_paper_execution_bridge.py
+          test -f automation/v92/paper_trading_phase346_production_paper_runtime_execution_gate.py
+
+          grep -q 'REAL_SOURCE_ONLY_NO_SYNTHETIC_NO_BROKER_NO_REAL_MONEY' \
+            automation/v92/paper_trading_phase3481_canonical_signal_source_runtime_bridge.py
+
+          grep -q '"synthetic_fallback_allowed": False' \
+            automation/v92/paper_trading_phase3481_canonical_signal_source_runtime_bridge.py
+
+          grep -q '"synthetic_evidence_present": False' \
+            automation/v92/paper_trading_phase3481_canonical_signal_source_runtime_bridge.py
+
+          grep -q '"broker_api_used": False' \
+            automation/v92/paper_trading_phase3481_canonical_signal_source_runtime_bridge.py
+
+          grep -q '"broker_order_submission_enabled": False' \
+            automation/v92/paper_trading_phase3481_canonical_signal_source_runtime_bridge.py
+
+          grep -q '"real_money_trading_enabled": False' \
+            automation/v92/paper_trading_phase3481_canonical_signal_source_runtime_bridge.py
+
+          echo "Phase 3.4.8.1 safety contract: PASS"
+
+      - name: Execute Phase 3.4.8.1 runtime source bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python automation/v92/paper_trading_phase3481_canonical_signal_source_runtime_bridge.py \
+            --approver "${{ inputs.approver }}"
+
+      - name: Validate Phase 3.4.8.1 output
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f phase3481_output/phase3481_runtime_bridge.json
+          test -f phase3481_output/canonical_signals.json
+          test -f phase3481_output/canonical_market_prices.json
+          test -f phase348_output/phase348_execution.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          bridge = json.loads(
+              Path("phase3481_output/phase3481_runtime_bridge.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          phase348 = json.loads(
+              Path("phase348_output/phase348_execution.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          assert bridge["version"] == "3.4.8.1", bridge
+          assert bridge["status"] == "PASS", bridge
+          assert bridge["runtime_execution_gate"] == "OPEN", bridge
+
+          assert bridge["synthetic_fallback_allowed"] is False, bridge
+          assert bridge["synthetic_evidence_present"] is False, bridge
+          assert bridge["broker_api_used"] is False, bridge
+          assert bridge["broker_credentials_used"] is False, bridge
+          assert bridge["broker_order_submission_enabled"] is False, bridge
+          assert bridge["real_money_trading_enabled"] is False, bridge
+          assert bridge["live_money_release_authorized"] is False, bridge
+
+          assert phase348["status"] == "PASS", phase348
+          assert phase348["synthetic_fallback_allowed"] is False, phase348
+          assert phase348["synthetic_evidence_present"] is False, phase348
+
+          if bridge["paper_orders_created"] > 0:
+              assert bridge["canonical_signals_found"] > 0, bridge
+              assert bridge["canonical_signals_with_real_price"] > 0, bridge
+              assert (
+                  bridge["phase348_execution_state"]
+                  == "REAL_CANONICAL_EVIDENCE_EXECUTED"
+              ), bridge
+              assert bridge["simulated_fills"] == bridge["paper_orders_created"], bridge
+          else:
+              assert bridge["phase348_execution_state"] in {
+                  "NO_CANONICAL_SIGNAL_ZERO_ORDERS",
+                  "NO_REAL_MARKET_PRICE_ZERO_ORDERS",
+                  "REAL_EVIDENCE_BUT_ZERO_SIZED_ORDERS",
+              }, bridge
+
+          for order in phase348.get("orders", []):
+              assert order["synthetic_evidence"] is False, order
+              assert order["broker_submitted"] is False, order
+              assert order["real_money"] is False, order
+
+          print("Phase 3.4.8.1 output validation: PASS")
+          PY
+
+      - name: Upload Phase 3.4.8.1 runtime bridge evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3481-runtime-source-bridge-${{ github.run_id }}
+          path: |
+            phase3421_output/
+            phase342_output/
+            phase3442_output/
+            phase344_output/
+            phase345_output/
+            phase3451_output/
+            phase346_output/
+            phase348_output/
+            phase3481_output/
+          if-no-files-found: warn
+          retention-days: 90
