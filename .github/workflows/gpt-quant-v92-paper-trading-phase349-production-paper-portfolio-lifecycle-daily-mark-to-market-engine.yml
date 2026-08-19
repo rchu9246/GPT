@@ -1,0 +1,182 @@
+﻿name: GPT Quant Phase 3.4.9 - Production Paper Portfolio Lifecycle Daily Mark-to-Market Engine
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+
+      approver:
+        description: Human approver/operator ID
+        required: true
+        default: rchu9246
+        type: string
+
+      portfolio_id:
+        description: Persistent paper portfolio ID
+        required: true
+        default: V92_PRODUCTION_PAPER_V91
+        type: string
+
+      initial_cash:
+        description: Initial paper cash
+        required: true
+        default: "1000000"
+        type: string
+
+  schedule:
+    - cron: "35 8 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-phase349-production-paper-portfolio
+  cancel-in-progress: false
+
+jobs:
+  production-paper-portfolio-lifecycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+
+      PHASE349_PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+      PHASE349_INITIAL_CASH: ${{ inputs.initial_cash || '1000000' }}
+
+      PHASE348451_SCORE_THRESHOLD: "65"
+      PHASE348451_MAX_CANDIDATES: "3"
+      PHASE348451_MAX_ROWS_PER_TABLE: "5000"
+
+      PHASE348_SCORE_THRESHOLD: "65"
+      PHASE348_MAX_CANDIDATES: "3"
+      PHASE348_INITIAL_CASH: "1000000"
+      PHASE348_MAX_POSITION_PCT: "0.20"
+      PHASE348_ROUND_LOT: "1000"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime dependencies
+        run: python -m pip install --upgrade pip requests
+
+      - name: Validate Phase 3.4.9 safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+
+          test -f automation/v92/paper_trading_phase349_production_paper_portfolio_lifecycle_daily_mark_to_market_engine.py
+          test -f automation/v92/paper_trading_phase34846_zero_eligible_canonical_runtime_completion_daily_paper_cycle.py
+          test -f supabase/PHASE349_PRODUCTION_PAPER_PORTFOLIO_LIFECYCLE.sql
+
+          grep -q 'PHASE349_PRODUCTION_PAPER_PORTFOLIO_LIFECYCLE_DAILY_MARK_TO_MARKET_ENGINE' \
+            automation/v92/paper_trading_phase349_production_paper_portfolio_lifecycle_daily_mark_to_market_engine.py
+
+          grep -q '"synthetic_market_data": False' \
+            automation/v92/paper_trading_phase349_production_paper_portfolio_lifecycle_daily_mark_to_market_engine.py
+
+          grep -q '"fake_prices_allowed": False' \
+            automation/v92/paper_trading_phase349_production_paper_portfolio_lifecycle_daily_mark_to_market_engine.py
+
+          grep -q '"broker_order_submission_enabled": False' \
+            automation/v92/paper_trading_phase349_production_paper_portfolio_lifecycle_daily_mark_to_market_engine.py
+
+          grep -q '"real_money_trading_enabled": False' \
+            automation/v92/paper_trading_phase349_production_paper_portfolio_lifecycle_daily_mark_to_market_engine.py
+
+          echo "Phase 3.4.9 safety contract: PASS"
+
+      - name: Execute Phase 3.4.9 portfolio lifecycle + MTM
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APPROVER="${{ inputs.approver }}"
+          if [ -z "${APPROVER}" ]; then
+            APPROVER="github-actions"
+          fi
+
+          python automation/v92/paper_trading_phase349_production_paper_portfolio_lifecycle_daily_mark_to_market_engine.py \
+            --approver "${APPROVER}"
+
+      - name: Validate Phase 3.4.9 output
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f phase349_output/phase349_portfolio_lifecycle_mtm.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(
+              Path("phase349_output/phase349_portfolio_lifecycle_mtm.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          assert data["version"] == "3.4.9", data
+          assert data["status"] == "PASS", data
+          assert data["portfolio_id"], data
+          assert data["cash"] >= 0, data
+          assert data["nav"] >= 0, data
+
+          assert data["synthetic_market_data"] is False, data
+          assert data["synthetic_fallback_allowed"] is False, data
+          assert data["synthetic_evidence_present"] is False, data
+          assert data["fake_prices_allowed"] is False, data
+          assert data["broker_api_used"] is False, data
+          assert data["broker_credentials_used"] is False, data
+          assert data["broker_order_submission_enabled"] is False, data
+          assert data["real_money_trading_enabled"] is False, data
+          assert data["live_money_release_authorized"] is False, data
+          assert data["fail_closed_policy"] is True, data
+
+          if data["canonical_runtime_state"] == "NO_ELIGIBLE_V91_SIGNAL_ZERO_ORDERS":
+              assert data["fills_applied"] == 0, data
+
+          print("Phase 3.4.9 output validation: PASS")
+          PY
+
+      - name: Upload Phase 3.4.9 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase349-paper-portfolio-${{ github.run_id }}
+          path: |
+            phase21_output/
+            phase3421_output/
+            phase342_output/
+            phase3442_output/
+            phase344_output/
+            phase345_output/
+            phase3451_output/
+            phase346_output/
+            phase348_output/
+            phase348451_output/
+            phase348453_output/
+            phase34846_output/
+            phase349_output/
+          if-no-files-found: warn
+          retention-days: 90
