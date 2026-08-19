@@ -1,0 +1,196 @@
+﻿name: GPT Quant Phase 3.4.8.4.5 - V9.1 Signal Engine Runtime Market Data Input Canonical Wiring Fix
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+
+      approver:
+        description: Human approver/operator ID
+        required: true
+        default: rchu9246
+        type: string
+
+      score_threshold:
+        description: Minimum eligible V9.1 signal score
+        required: true
+        default: "65"
+        type: string
+
+      max_candidates:
+        description: Maximum eligible V9.1 signals per run
+        required: true
+        default: "3"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-phase34845-runtime-market-data-canonical-wiring
+  cancel-in-progress: false
+
+jobs:
+  runtime-market-data-canonical-wiring:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+
+      PHASE3421_REQUIRED_PASS_DAYS: "5"
+      PHASE344_REQUIRED_PASS_DAYS: "5"
+      PHASE345_REQUIRED_PASS_DAYS: "5"
+      PHASE346_REQUIRED_PASS_DAYS: "5"
+
+      PHASE34845_SCORE_THRESHOLD: ${{ inputs.score_threshold || '65' }}
+      PHASE34845_MAX_CANDIDATES: ${{ inputs.max_candidates || '3' }}
+      PHASE34845_MAX_MARKET_ROWS: "5000"
+
+      PHASE348_SCORE_THRESHOLD: ${{ inputs.score_threshold || '65' }}
+      PHASE348_MAX_CANDIDATES: ${{ inputs.max_candidates || '3' }}
+      PHASE348_INITIAL_CASH: "1000000"
+      PHASE348_MAX_POSITION_PCT: "0.20"
+      PHASE348_ROUND_LOT: "1000"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime dependencies
+        run: python -m pip install --upgrade pip requests
+
+      - name: Validate Phase 3.4.8.4.5 safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+
+          test -f automation/v92/paper_trading_phase34845_v91_signal_engine_runtime_market_data_input_canonical_wiring_fix.py
+          test -f automation/v92/paper_trading_phase21_signal_engine.py
+          test -f automation/v92/paper_trading_phase348_canonical_market_signal_to_paper_execution_bridge.py
+
+          grep -q 'REAL_MARKET_DATA_INPUT_ONLY_ZERO_SYNTHETIC_ZERO_BROKER_ZERO_REAL_MONEY' \
+            automation/v92/paper_trading_phase34845_v91_signal_engine_runtime_market_data_input_canonical_wiring_fix.py
+
+          grep -q '"synthetic_market_data": False' \
+            automation/v92/paper_trading_phase34845_v91_signal_engine_runtime_market_data_input_canonical_wiring_fix.py
+
+          grep -q '"fake_prices_allowed": False' \
+            automation/v92/paper_trading_phase34845_v91_signal_engine_runtime_market_data_input_canonical_wiring_fix.py
+
+          grep -q '"broker_order_submission_enabled": False' \
+            automation/v92/paper_trading_phase34845_v91_signal_engine_runtime_market_data_input_canonical_wiring_fix.py
+
+          grep -q '"real_money_trading_enabled": False' \
+            automation/v92/paper_trading_phase34845_v91_signal_engine_runtime_market_data_input_canonical_wiring_fix.py
+
+          echo "Phase 3.4.8.4.5 safety contract: PASS"
+
+      - name: Execute Phase 3.4.8.4.5 runtime market-data wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python automation/v92/paper_trading_phase34845_v91_signal_engine_runtime_market_data_input_canonical_wiring_fix.py \
+            --approver "${{ inputs.approver }}"
+
+      - name: Validate Phase 3.4.8.4.5 output
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f phase34845_output/phase34845_market_input_wiring_fix.json
+          test -f phase34845_output/canonical_market_input.json
+          test -f phase34845_output/signal_engine_market_input_capture.json
+          test -f phase34845_output/canonical_signals.runtime.json
+          test -f phase34845_output/canonical_market_prices.runtime.json
+          test -f phase348_output/phase348_execution.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(
+              Path("phase34845_output/phase34845_market_input_wiring_fix.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          capture = json.loads(
+              Path("phase34845_output/signal_engine_market_input_capture.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          assert data["version"] == "3.4.8.4.5", data
+          assert data["status"] == "PASS", data
+          assert data["runtime_execution_gate"] == "OPEN", data
+
+          assert data["market_data_source"], data
+          assert data["rows_scanned"] > 0, data
+          assert data["stocks_with_history"] > 0, data
+
+          assert data["synthetic_market_data"] is False, data
+          assert data["synthetic_fallback_allowed"] is False, data
+          assert data["synthetic_evidence_present"] is False, data
+          assert data["fake_prices_allowed"] is False, data
+          assert data["broker_api_used"] is False, data
+          assert data["broker_credentials_used"] is False, data
+          assert data["broker_order_submission_enabled"] is False, data
+          assert data["real_money_trading_enabled"] is False, data
+          assert data["live_money_release_authorized"] is False, data
+          assert data["fail_closed_policy"] is True, data
+
+          assert capture["synthetic_market_data"] is False, capture
+          assert capture["synthetic_evidence_present"] is False, capture
+
+          if data["reported_signals_eligible"] > 0:
+              assert data["eligible_v91_signals"] > 0, data
+              assert data["signals_persisted"] > 0, data
+
+          if data["paper_orders_created"] > 0:
+              assert data["signals_persisted"] > 0, data
+              assert data["prices_persisted"] > 0, data
+              assert data["execution_state"] == "REAL_CANONICAL_EVIDENCE_EXECUTED", data
+              assert data["simulated_fills"] == data["paper_orders_created"], data
+
+          print("Phase 3.4.8.4.5 output validation: PASS")
+          PY
+
+      - name: Upload Phase 3.4.8.4.5 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase34845-runtime-market-data-wiring-${{ github.run_id }}
+          path: |
+            phase21_output/
+            phase3421_output/
+            phase342_output/
+            phase3442_output/
+            phase344_output/
+            phase345_output/
+            phase3451_output/
+            phase346_output/
+            phase348_output/
+            phase34845_output/
+          if-no-files-found: warn
+          retention-days: 90
