@@ -1,0 +1,195 @@
+﻿name: GPT Quant Phase 3.4.7 - Production Paper Simulated Execution Engine
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+
+      approver:
+        description: Human approver/operator ID for same-run gate reconstruction
+        required: true
+        default: rchu9246
+        type: string
+
+      initial_cash:
+        description: Production Paper initial cash
+        required: true
+        default: "1000000"
+        type: string
+
+      max_position_pct:
+        description: Max capital allocation per new paper position
+        required: true
+        default: "0.20"
+        type: string
+
+      max_new_positions:
+        description: Max new paper positions per run
+        required: true
+        default: "3"
+        type: string
+
+      score_threshold:
+        description: Minimum signal score for paper execution
+        required: true
+        default: "65"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-phase347-production-paper-simulated-execution
+  cancel-in-progress: false
+
+jobs:
+  production-paper-simulated-execution:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+
+      PHASE3421_REQUIRED_PASS_DAYS: "5"
+      PHASE344_REQUIRED_PASS_DAYS: "5"
+      PHASE345_REQUIRED_PASS_DAYS: "5"
+      PHASE346_REQUIRED_PASS_DAYS: "5"
+
+      PHASE347_INITIAL_CASH: ${{ inputs.initial_cash || '1000000' }}
+      PHASE347_MAX_POSITION_PCT: ${{ inputs.max_position_pct || '0.20' }}
+      PHASE347_MAX_NEW_POSITIONS: ${{ inputs.max_new_positions || '3' }}
+      PHASE347_SCORE_THRESHOLD: ${{ inputs.score_threshold || '65' }}
+      PHASE347_ROUND_LOT: "1000"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime dependency
+        run: python -m pip install --upgrade pip requests
+
+      - name: Validate Phase 3.4.7 safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+
+          test -f automation/v92/paper_trading_phase347_production_paper_simulated_execution_engine.py
+          test -f automation/v92/paper_trading_phase346_production_paper_runtime_execution_gate.py
+
+          grep -q 'PAPER_SIMULATION_ONLY_ZERO_BROKER_ZERO_REAL_MONEY' \
+            automation/v92/paper_trading_phase347_production_paper_simulated_execution_engine.py
+
+          grep -q '"broker_api_used": False' \
+            automation/v92/paper_trading_phase347_production_paper_simulated_execution_engine.py
+
+          grep -q '"broker_credentials_used": False' \
+            automation/v92/paper_trading_phase347_production_paper_simulated_execution_engine.py
+
+          grep -q '"broker_order_submission_enabled": False' \
+            automation/v92/paper_trading_phase347_production_paper_simulated_execution_engine.py
+
+          grep -q '"real_money_trading_enabled": False' \
+            automation/v92/paper_trading_phase347_production_paper_simulated_execution_engine.py
+
+          echo "Phase 3.4.7 safety contract: PASS"
+
+      - name: Execute Phase 3.4.7 simulated execution
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python automation/v92/paper_trading_phase347_production_paper_simulated_execution_engine.py \
+            --approver "${{ inputs.approver }}"
+
+      - name: Validate Phase 3.4.7 output
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f phase347_output/phase347_execution.json
+          test -f phase347_output/phase347_orders.json
+          test -f phase347_output/phase347_fills.json
+          test -f phase347_output/phase347_positions.json
+          test -f phase347_output/phase347_portfolio.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(
+              Path("phase347_output/phase347_execution.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          assert data["version"] == "3.4.7", data
+          assert data["status"] == "PASS", data
+          assert data["runtime_execution_gate"] == "OPEN", data
+          assert data["paper_execution_authorized"] is True, data
+          assert data["production_paper_release_state"] == "ACTIVE", data
+
+          assert data["paper_orders_created"] >= 0, data
+          assert data["simulated_fills"] >= 0, data
+          assert data["open_positions"] >= 0, data
+
+          assert data["broker_api_used"] is False, data
+          assert data["broker_credentials_used"] is False, data
+          assert data["broker_order_submission_enabled"] is False, data
+          assert data["real_money_trading_enabled"] is False, data
+          assert data["live_money_release_authorized"] is False, data
+          assert data["fail_closed_policy"] is True, data
+          assert data["fail_closed_triggered"] is False, data
+
+          portfolio = data["portfolio"]
+          assert portfolio["initial_cash"] > 0, portfolio
+          assert portfolio["cash"] >= 0, portfolio
+          assert portfolio["market_value"] >= 0, portfolio
+          assert portfolio["nav"] >= 0, portfolio
+
+          for order in data["orders"]:
+              assert order["broker_submitted"] is False, order
+              assert order["real_money"] is False, order
+              assert order["order_type"] == "PAPER_MARKET", order
+
+          for fill in data["fills"]:
+              assert fill["broker_submitted"] is False, fill
+              assert fill["real_money"] is False, fill
+              assert fill["execution_venue"] == "GPT_QUANT_PAPER_SIMULATOR", fill
+
+          print("Phase 3.4.7 output validation: PASS")
+          PY
+
+      - name: Upload Phase 3.4.7 simulated execution evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase347-simulated-execution-${{ github.run_id }}
+          path: |
+            phase3421_output/
+            phase342_output/
+            phase3442_output/
+            phase344_output/
+            phase345_output/
+            phase3451_output/
+            phase346_output/
+            phase347_output/
+          if-no-files-found: warn
+          retention-days: 90
