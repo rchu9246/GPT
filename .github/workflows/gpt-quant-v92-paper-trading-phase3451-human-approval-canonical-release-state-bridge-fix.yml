@@ -1,0 +1,185 @@
+﻿name: GPT Quant Phase 3.4.5.1 - Human Approval Canonical Release State Bridge Fix
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+
+      decision:
+        description: Human decision
+        required: true
+        type: choice
+        options:
+          - REJECT
+          - APPROVE
+        default: REJECT
+
+      approver:
+        description: Human approver name or operator ID
+        required: true
+        type: string
+
+      confirmation:
+        description: For APPROVE type exactly "I APPROVE PRODUCTION PAPER ONLY"; for REJECT type exactly "I REJECT PRODUCTION PAPER"
+        required: true
+        type: string
+
+      note:
+        description: Optional approval/rejection note
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-phase3451-human-approval-canonical-release-bridge
+  cancel-in-progress: false
+
+jobs:
+  human-approval-canonical-release-bridge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+
+      PHASE3421_REQUIRED_PASS_DAYS: "5"
+      PHASE344_REQUIRED_PASS_DAYS: "5"
+      PHASE345_REQUIRED_PASS_DAYS: "5"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime dependency
+        run: python -m pip install --upgrade pip requests
+
+      - name: Validate Phase 3.4.5.1 safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+
+          test -f automation/v92/paper_trading_phase3451_human_approval_canonical_release_state_bridge_fix.py
+          test -f automation/v92/paper_trading_phase3443_runtime_canonical_state_reconstruction.py
+
+          grep -q 'PRODUCTION_PAPER_ONLY_NO_BROKER_NO_REAL_MONEY' \
+            automation/v92/paper_trading_phase3451_human_approval_canonical_release_state_bridge_fix.py
+
+          grep -q '"automatic_approval": False' \
+            automation/v92/paper_trading_phase3451_human_approval_canonical_release_state_bridge_fix.py
+
+          grep -q '"broker_trading_enabled": False' \
+            automation/v92/paper_trading_phase3451_human_approval_canonical_release_state_bridge_fix.py
+
+          grep -q '"broker_order_submission_enabled": False' \
+            automation/v92/paper_trading_phase3451_human_approval_canonical_release_state_bridge_fix.py
+
+          grep -q '"real_money_trading_enabled": False' \
+            automation/v92/paper_trading_phase3451_human_approval_canonical_release_state_bridge_fix.py
+
+          grep -q '"live_money_release_authorized": False' \
+            automation/v92/paper_trading_phase3451_human_approval_canonical_release_state_bridge_fix.py
+
+          echo "Phase 3.4.5.1 safety contract: PASS"
+
+      - name: Execute Phase 3.4.5.1 human approval bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python automation/v92/paper_trading_phase3451_human_approval_canonical_release_state_bridge_fix.py \
+            --decision "${{ inputs.decision }}" \
+            --approver "${{ inputs.approver }}" \
+            --confirmation "${{ inputs.confirmation }}" \
+            --note "${{ inputs.note }}"
+
+      - name: Validate Phase 3.4.5.1 output
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f phase3451_output/phase3451_decision.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(
+              Path("phase3451_output/phase3451_decision.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          assert data["version"] == "3.4.5.1", data
+          assert data["status"] == "PASS", data
+          assert data["canonical_source_valid"] is True, data
+          assert data["canonical_gate_eligible"] is True, data
+          assert data["qualification_state"] == "QUALIFIED", data
+          assert data["approval_readiness"] == "READY_FOR_HUMAN_APPROVAL", data
+          assert data["human_approval_gate_state"] == "OPEN_FOR_HUMAN_REVIEW", data
+
+          # These are intentionally hard-disabled even after APPROVE.
+          assert data["automatic_approval"] is False, data
+          assert data["broker_trading_enabled"] is False, data
+          assert data["broker_order_submission_enabled"] is False, data
+          assert data["real_money_trading_enabled"] is False, data
+          assert data["live_money_release_authorized"] is False, data
+          assert data["fail_closed_policy"] is True, data
+          assert data["fail_closed_triggered"] is False, data
+
+          if data["human_decision"] == "APPROVE":
+              assert data["human_approval_recorded"] is True, data
+              assert data["human_rejection_recorded"] is False, data
+              assert data["production_paper_release_state"] == "ACTIVE", data
+              assert data["production_paper_activation_authorized"] is True, data
+              assert (
+                  data["release_transition"]
+                  == "LOCKED_TO_ACTIVE_BY_EXPLICIT_HUMAN_APPROVAL"
+              ), data
+          else:
+              assert data["human_approval_recorded"] is False, data
+              assert data["human_rejection_recorded"] is True, data
+              assert data["production_paper_release_state"] == "LOCKED", data
+              assert data["production_paper_activation_authorized"] is False, data
+              assert (
+                  data["release_transition"]
+                  == "LOCKED_TO_LOCKED_BY_EXPLICIT_HUMAN_REJECTION"
+              ), data
+
+          print("Phase 3.4.5.1 output validation: PASS")
+          PY
+
+      - name: Upload Phase 3.4.5.1 approval evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3451-human-approval-bridge-${{ github.run_id }}
+          path: |
+            phase3421_output/
+            phase342_output/
+            phase3442_output/
+            phase344_output/
+            phase345_output/
+            phase3451_output/
+          if-no-files-found: warn
+          retention-days: 90
