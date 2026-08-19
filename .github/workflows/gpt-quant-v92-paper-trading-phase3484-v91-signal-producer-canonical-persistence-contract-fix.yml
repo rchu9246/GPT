@@ -1,0 +1,177 @@
+﻿name: GPT Quant Phase 3.4.8.4 - V9.1 Signal Producer Canonical Persistence Contract Fix
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+
+      approver:
+        description: Human approver/operator ID
+        required: true
+        default: rchu9246
+        type: string
+
+      score_threshold:
+        description: Minimum eligible canonical signal score
+        required: true
+        default: "65"
+        type: string
+
+      max_candidates:
+        description: Maximum eligible signals per run
+        required: true
+        default: "3"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-phase3484-v91-producer-contract-fix
+  cancel-in-progress: false
+
+jobs:
+  v91-producer-contract-fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+
+      PHASE3421_REQUIRED_PASS_DAYS: "5"
+      PHASE344_REQUIRED_PASS_DAYS: "5"
+      PHASE345_REQUIRED_PASS_DAYS: "5"
+      PHASE346_REQUIRED_PASS_DAYS: "5"
+
+      PHASE3484_SCORE_THRESHOLD: ${{ inputs.score_threshold || '65' }}
+      PHASE3484_MAX_CANDIDATES: ${{ inputs.max_candidates || '3' }}
+
+      PHASE3483_SCORE_THRESHOLD: ${{ inputs.score_threshold || '65' }}
+      PHASE3483_MAX_CANDIDATES: ${{ inputs.max_candidates || '3' }}
+      PHASE3483_INITIAL_CASH: "1000000"
+      PHASE3483_MAX_POSITION_PCT: "0.20"
+      PHASE3483_ROUND_LOT: "1000"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime dependency
+        run: python -m pip install --upgrade pip requests
+
+      - name: Validate Phase 3.4.8.4 safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+
+          test -f automation/v92/paper_trading_phase3484_v91_signal_producer_canonical_persistence_contract_fix.py
+          test -f automation/v92/paper_trading_phase3483_canonical_signal_producer_persistence_runtime_wiring_fix.py
+
+          grep -q 'REAL_V91_PRODUCER_ONLY_ZERO_SYNTHETIC_ZERO_BROKER_ZERO_REAL_MONEY' \
+            automation/v92/paper_trading_phase3484_v91_signal_producer_canonical_persistence_contract_fix.py
+
+          grep -q '"synthetic_fallback_allowed": False' \
+            automation/v92/paper_trading_phase3484_v91_signal_producer_canonical_persistence_contract_fix.py
+
+          grep -q '"broker_order_submission_enabled": False' \
+            automation/v92/paper_trading_phase3484_v91_signal_producer_canonical_persistence_contract_fix.py
+
+          grep -q '"real_money_trading_enabled": False' \
+            automation/v92/paper_trading_phase3484_v91_signal_producer_canonical_persistence_contract_fix.py
+
+          echo "Phase 3.4.8.4 safety contract: PASS"
+
+      - name: Execute Phase 3.4.8.4 producer contract fix
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python automation/v92/paper_trading_phase3484_v91_signal_producer_canonical_persistence_contract_fix.py \
+            --approver "${{ inputs.approver }}"
+
+      - name: Validate Phase 3.4.8.4 output
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f phase3484_output/phase3484_contract_fix.json
+          test -f phase3484_output/phase3484_normalized_v91_signals.json
+          test -f phase3483_output/phase3483_wiring_fix.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(
+              Path("phase3484_output/phase3484_contract_fix.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          assert data["version"] == "3.4.8.4", data
+          assert data["status"] == "PASS", data
+          assert data["synthetic_fallback_allowed"] is False, data
+          assert data["synthetic_evidence_present"] is False, data
+          assert data["broker_api_used"] is False, data
+          assert data["broker_credentials_used"] is False, data
+          assert data["broker_order_submission_enabled"] is False, data
+          assert data["real_money_trading_enabled"] is False, data
+          assert data["live_money_release_authorized"] is False, data
+          assert data["fail_closed_policy"] is True, data
+
+          if data["eligible_v91_signals_found"] > 0:
+              assert data["rows_prepared"] > 0, data
+              assert data["rows_roundtrip_eligible"] > 0, data
+
+          if data["paper_orders_created"] > 0:
+              assert data["rows_roundtrip_eligible"] > 0, data
+              assert data["phase3483_signals_persisted"] > 0, data
+              assert data["phase3483_prices_persisted"] > 0, data
+              assert data["phase3483_execution_state"] == "REAL_CANONICAL_EVIDENCE_EXECUTED", data
+              assert data["simulated_fills"] == data["paper_orders_created"], data
+          else:
+              assert data["phase3483_execution_state"] in {
+                  "NO_CANONICAL_SIGNAL_ZERO_ORDERS",
+                  "NO_REAL_MARKET_PRICE_ZERO_ORDERS",
+                  "REAL_EVIDENCE_BUT_ZERO_SIZED_ORDERS",
+              }, data
+
+          print("Phase 3.4.8.4 output validation: PASS")
+          PY
+
+      - name: Upload Phase 3.4.8.4 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3484-v91-producer-contract-${{ github.run_id }}
+          path: |
+            phase3421_output/
+            phase342_output/
+            phase3442_output/
+            phase344_output/
+            phase345_output/
+            phase3451_output/
+            phase346_output/
+            phase348_output/
+            phase3483_output/
+            phase3484_output/
+          if-no-files-found: warn
+          retention-days: 90
