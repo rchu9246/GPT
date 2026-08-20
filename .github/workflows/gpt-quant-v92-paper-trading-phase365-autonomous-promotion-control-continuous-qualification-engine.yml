@@ -1,0 +1,75 @@
+name: GPT Quant Phase 3.6.5 - Production Paper Autonomous Promotion Control Continuous Qualification Engine
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+      portfolio_id:
+        description: Persistent paper portfolio ID
+        required: true
+        default: V92_PRODUCTION_PAPER_V91
+        type: string
+  schedule:
+    # 12:00 UTC = 20:00 Asia/Taipei
+    - cron: "0 12 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase365-production-paper-continuous-qualification
+  cancel-in-progress: false
+
+jobs:
+  autonomous-promotion-control-continuous-qualification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Compile Phase 3.6.5
+        shell: bash
+        run: |
+          python -m py_compile automation/v92/paper_trading_phase365_autonomous_promotion_control_continuous_qualification_engine.py
+
+      - name: Run Phase 3.6.5
+        shell: bash
+        run: |
+          mkdir -p artifacts/phase365
+          python automation/v92/paper_trading_phase365_autonomous_promotion_control_continuous_qualification_engine.py \
+            --strategy-version "$STRATEGY_VERSION" \
+            --portfolio-id "$PORTFOLIO_ID" \
+            | tee artifacts/phase365/summary.md
+
+      - name: Publish job summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase365/summary.md ]; then
+            cat artifacts/phase365/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload Phase 3.6.5 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase365-continuous-qualification-evidence
+          path: artifacts/phase365/
+          if-no-files-found: warn
+          retention-days: 30
