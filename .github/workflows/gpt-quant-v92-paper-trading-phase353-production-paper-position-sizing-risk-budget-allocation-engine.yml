@@ -1,0 +1,199 @@
+﻿name: GPT Quant Phase 3.5.3 - Production Paper Position Sizing Risk Budget Allocation Engine
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+
+      portfolio_id:
+        description: Persistent paper portfolio ID
+        required: true
+        default: V92_PRODUCTION_PAPER_V91
+        type: string
+
+      base_risk_budget_pct:
+        description: Maximum portfolio market-value budget for paper positions
+        required: true
+        default: "0.60"
+        type: string
+
+      max_position_pct:
+        description: Maximum NAV concentration per symbol
+        required: true
+        default: "0.20"
+        type: string
+
+      max_candidates:
+        description: Maximum new paper candidates
+        required: true
+        default: "3"
+        type: string
+
+  schedule:
+    - cron: "35 9 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-phase353-production-paper-position-sizing
+  cancel-in-progress: false
+
+jobs:
+  production-paper-position-sizing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+
+      PHASE353_PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+      PHASE352_PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+      PHASE351_PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+
+      PHASE351_MIN_HISTORY: "5"
+
+      PHASE353_BASE_RISK_BUDGET_PCT: ${{ inputs.base_risk_budget_pct || '0.60' }}
+      PHASE353_MAX_POSITION_PCT: ${{ inputs.max_position_pct || '0.20' }}
+      PHASE353_MAX_CANDIDATES: ${{ inputs.max_candidates || '3' }}
+      PHASE353_ROUND_LOT: "1000"
+      PHASE353_SCORE_THRESHOLD: "65"
+
+      PHASE352_CAUTION_DRAWDOWN: "-0.05"
+      PHASE352_REDUCE_DRAWDOWN: "-0.10"
+      PHASE352_HALT_DRAWDOWN: "-0.15"
+      PHASE352_CAUTION_DAILY_LOSS: "-0.025"
+      PHASE352_HALT_DAILY_LOSS: "-0.05"
+      PHASE352_MAX_EXPOSURE_CAUTION: "0.80"
+      PHASE352_MAX_EXPOSURE_HALT: "0.95"
+      PHASE352_MAX_CONCENTRATION_CAUTION: "0.35"
+      PHASE352_MAX_CONCENTRATION_HALT: "0.50"
+      PHASE352_CONSECUTIVE_LOSS_CAUTION: "3"
+      PHASE352_CONSECUTIVE_LOSS_HALT: "5"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime dependencies
+        run: python -m pip install --upgrade pip requests
+
+      - name: Validate Phase 3.5.3 safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+
+          test -f automation/v92/paper_trading_phase353_production_paper_position_sizing_risk_budget_allocation_engine.py
+          test -f automation/v92/paper_trading_phase352_production_paper_risk_governance_drawdown_guard_engine.py
+          test -f supabase/PHASE353_PRODUCTION_PAPER_POSITION_SIZING_RISK_BUDGET.sql
+
+          grep -q 'PHASE353_PRODUCTION_PAPER_POSITION_SIZING_RISK_BUDGET_ALLOCATION_ENGINE' \
+            automation/v92/paper_trading_phase353_production_paper_position_sizing_risk_budget_allocation_engine.py
+
+          grep -q 'PAPER_HALT' \
+            automation/v92/paper_trading_phase353_production_paper_position_sizing_risk_budget_allocation_engine.py
+
+          grep -q '"synthetic_market_data": False' \
+            automation/v92/paper_trading_phase353_production_paper_position_sizing_risk_budget_allocation_engine.py
+
+          grep -q '"synthetic_signals": False' \
+            automation/v92/paper_trading_phase353_production_paper_position_sizing_risk_budget_allocation_engine.py
+
+          grep -q '"broker_order_submission_enabled": False' \
+            automation/v92/paper_trading_phase353_production_paper_position_sizing_risk_budget_allocation_engine.py
+
+          grep -q '"real_money_trading_enabled": False' \
+            automation/v92/paper_trading_phase353_production_paper_position_sizing_risk_budget_allocation_engine.py
+
+          echo "Phase 3.5.3 safety contract: PASS"
+
+      - name: Execute Phase 3.5.3 position sizing
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python automation/v92/paper_trading_phase353_production_paper_position_sizing_risk_budget_allocation_engine.py
+
+      - name: Validate Phase 3.5.3 output
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f phase353_output/phase353_position_sizing.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(
+              Path("phase353_output/phase353_position_sizing.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          assert data["version"] == "3.5.3", data
+          assert data["status"] == "PASS", data
+
+          assert data["risk_state"] in {
+              "INSUFFICIENT_HISTORY_VALID_STATE",
+              "NORMAL",
+              "CAUTION",
+              "RISK_REDUCED",
+              "PAPER_HALT",
+          }, data
+
+          assert data["nav"] > 0, data
+          assert data["cash"] >= 0, data
+          assert data["total_allocated_capital"] >= 0, data
+          assert data["remaining_risk_budget"] >= 0, data
+          assert data["total_allocated_capital"] <= data["max_new_capital"] + 0.01, data
+
+          if data["risk_state"] == "PAPER_HALT":
+              assert data["new_paper_entries_authorized"] is False, data
+              assert data["total_allocated_capital"] == 0, data
+
+          if data["new_paper_entries_authorized"] is False:
+              assert data["total_allocated_capital"] == 0, data
+
+          assert data["synthetic_market_data"] is False, data
+          assert data["synthetic_signals"] is False, data
+          assert data["fake_prices_allowed"] is False, data
+          assert data["broker_api_used"] is False, data
+          assert data["broker_credentials_used"] is False, data
+          assert data["broker_order_submission_enabled"] is False, data
+          assert data["real_money_trading_enabled"] is False, data
+          assert data["live_money_release_authorized"] is False, data
+          assert data["fail_closed_policy"] is True, data
+
+          print("Phase 3.5.3 output validation: PASS")
+          PY
+
+      - name: Upload Phase 3.5.3 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase353-production-paper-position-sizing-${{ github.run_id }}
+          path: |
+            phase350_output/
+            phase351_output/
+            phase352_output/
+            phase353_output/
+          if-no-files-found: warn
+          retention-days: 90
