@@ -1,0 +1,205 @@
+﻿name: GPT Quant Phase 3.6.0 - Production Paper Daily Master Orchestrator
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+
+      approver:
+        description: Human approver/operator ID
+        required: true
+        default: rchu9246
+        type: string
+
+      portfolio_id:
+        description: Persistent paper portfolio ID
+        required: true
+        default: V92_PRODUCTION_PAPER_V91
+        type: string
+
+  schedule:
+    - cron: "30 10 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-phase360-production-paper-daily-master
+  cancel-in-progress: false
+
+jobs:
+  production-paper-daily-master:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+
+      PHASE360_PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+      PHASE350_PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+      PHASE351_PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+      PHASE352_PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+      PHASE353_PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+      PHASE354_PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+      PHASE355_PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+
+      PHASE351_MIN_HISTORY: "5"
+
+      PHASE353_BASE_RISK_BUDGET_PCT: "0.60"
+      PHASE353_MAX_POSITION_PCT: "0.20"
+      PHASE353_MAX_CANDIDATES: "3"
+      PHASE353_ROUND_LOT: "1000"
+      PHASE353_SCORE_THRESHOLD: "65"
+
+      PHASE352_CAUTION_DRAWDOWN: "-0.05"
+      PHASE352_REDUCE_DRAWDOWN: "-0.10"
+      PHASE352_HALT_DRAWDOWN: "-0.15"
+      PHASE352_CAUTION_DAILY_LOSS: "-0.025"
+      PHASE352_HALT_DAILY_LOSS: "-0.05"
+      PHASE352_MAX_EXPOSURE_CAUTION: "0.80"
+      PHASE352_MAX_EXPOSURE_HALT: "0.95"
+      PHASE352_MAX_CONCENTRATION_CAUTION: "0.35"
+      PHASE352_MAX_CONCENTRATION_HALT: "0.50"
+      PHASE352_CONSECUTIVE_LOSS_CAUTION: "3"
+      PHASE352_CONSECUTIVE_LOSS_HALT: "5"
+
+      PHASE348451_SCORE_THRESHOLD: "65"
+      PHASE348451_MAX_CANDIDATES: "3"
+      PHASE348451_MAX_ROWS_PER_TABLE: "5000"
+
+      PHASE348_SCORE_THRESHOLD: "65"
+      PHASE348_MAX_CANDIDATES: "3"
+      PHASE348_INITIAL_CASH: "1000000"
+      PHASE348_MAX_POSITION_PCT: "0.20"
+      PHASE348_ROUND_LOT: "1000"
+
+      PHASE349_INITIAL_CASH: "1000000"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime dependencies
+        run: python -m pip install --upgrade pip requests
+
+      - name: Validate Phase 3.6.0 master contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+
+          test -f automation/v92/paper_trading_phase360_production_paper_daily_master_orchestrator.py
+          test -f supabase/PHASE360_PRODUCTION_PAPER_DAILY_MASTER_ORCHESTRATOR.sql
+
+          for f in \
+            automation/v92/paper_trading_phase350_production_paper_daily_orchestrator_persistent_performance_ledger.py \
+            automation/v92/paper_trading_phase351_production_paper_performance_analytics_risk_metrics_engine.py \
+            automation/v92/paper_trading_phase352_production_paper_risk_governance_drawdown_guard_engine.py \
+            automation/v92/paper_trading_phase353_production_paper_position_sizing_risk_budget_allocation_engine.py \
+            automation/v92/paper_trading_phase354_production_paper_order_intent_simulated_execution_lifecycle_engine.py \
+            automation/v92/paper_trading_phase355_production_paper_position_reconciliation_execution_settlement_engine.py \
+            automation/v92/paper_trading_phase356_eod_accounting_portfolio_ledger_finalization_engine.py
+          do
+            test -f "$f"
+          done
+
+          grep -q 'PHASE360_PRODUCTION_PAPER_DAILY_MASTER_ORCHESTRATOR' \
+            automation/v92/paper_trading_phase360_production_paper_daily_master_orchestrator.py
+
+          grep -q '"broker_order_submission_enabled": False' \
+            automation/v92/paper_trading_phase360_production_paper_daily_master_orchestrator.py
+
+          grep -q '"real_money_trading_enabled": False' \
+            automation/v92/paper_trading_phase360_production_paper_daily_master_orchestrator.py
+
+          echo "Phase 3.6.0 master contract: PASS"
+
+      - name: Execute Phase 3.6.0 daily master orchestrator
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APPROVER="${{ inputs.approver }}"
+          if [ -z "${APPROVER}" ]; then
+            APPROVER="github-actions"
+          fi
+
+          python automation/v92/paper_trading_phase360_production_paper_daily_master_orchestrator.py \
+            --approver "${APPROVER}"
+
+      - name: Validate Phase 3.6.0 output
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f phase360_output/phase360_master_cycle.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(
+              Path("phase360_output/phase360_master_cycle.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          assert data["version"] == "3.6.0", data
+          assert data["status"] == "PASS", data
+          assert data["final_state"] in {
+              "DAILY_MASTER_CYCLE_COMPLETED",
+              "PAPER_HALT_COMPLETED",
+          }, data
+
+          assert len(data["stages"]) == 7, data
+          assert all(x["status"] == "PASS" for x in data["stages"]), data
+
+          assert data["cash"] >= 0, data
+          assert data["nav"] >= 0, data
+
+          assert data["synthetic_market_data"] is False, data
+          assert data["synthetic_signals"] is False, data
+          assert data["fake_prices_allowed"] is False, data
+          assert data["broker_api_used"] is False, data
+          assert data["broker_credentials_used"] is False, data
+          assert data["broker_order_submission_enabled"] is False, data
+          assert data["real_money_trading_enabled"] is False, data
+          assert data["live_money_release_authorized"] is False, data
+          assert data["fail_closed_policy"] is True, data
+
+          print("Phase 3.6.0 output validation: PASS")
+          PY
+
+      - name: Upload Phase 3.6.0 master evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase360-production-paper-daily-master-${{ github.run_id }}
+          path: |
+            phase350_output/
+            phase351_output/
+            phase352_output/
+            phase353_output/
+            phase354_output/
+            phase355_output/
+            phase360_output/
+          if-no-files-found: warn
+          retention-days: 90
