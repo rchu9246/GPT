@@ -1,0 +1,218 @@
+﻿name: GPT Quant Phase 3.6.3 - Production Paper Autonomous Observability SLA Engine
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+
+      approver:
+        description: Human approver/operator ID
+        required: true
+        default: github-actions
+        type: string
+
+      portfolio_id:
+        description: Persistent paper portfolio ID
+        required: true
+        default: V92_PRODUCTION_PAPER_V91
+        type: string
+
+  schedule:
+    - cron: "15 11 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-phase363-production-paper-autonomous-observability
+  cancel-in-progress: false
+
+jobs:
+  autonomous-observability-sla:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+
+      PHASE363_PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+      PHASE362_PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+      PHASE361_PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+      PHASE360_PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+
+      PHASE363_APPROVER: ${{ inputs.approver || 'github-actions' }}
+
+      PHASE363_MAX_CYCLE_SECONDS: "120"
+      PHASE363_MIN_SUCCESS_RATE_7D: "95"
+      PHASE363_MAX_RECOVERY_RATE_7D: "25"
+      PHASE363_MAX_INCIDENTS_7D: "0"
+
+      PHASE362_MAX_ATTEMPTS: "2"
+      PHASE362_RETRY_DELAY_SECONDS: "10"
+
+      PHASE351_MIN_HISTORY: "5"
+
+      PHASE353_BASE_RISK_BUDGET_PCT: "0.60"
+      PHASE353_MAX_POSITION_PCT: "0.20"
+      PHASE353_MAX_CANDIDATES: "3"
+      PHASE353_ROUND_LOT: "1000"
+      PHASE353_SCORE_THRESHOLD: "65"
+
+      PHASE352_CAUTION_DRAWDOWN: "-0.05"
+      PHASE352_REDUCE_DRAWDOWN: "-0.10"
+      PHASE352_HALT_DRAWDOWN: "-0.15"
+      PHASE352_CAUTION_DAILY_LOSS: "-0.025"
+      PHASE352_HALT_DAILY_LOSS: "-0.05"
+      PHASE352_MAX_EXPOSURE_CAUTION: "0.80"
+      PHASE352_MAX_EXPOSURE_HALT: "0.95"
+      PHASE352_MAX_CONCENTRATION_CAUTION: "0.35"
+      PHASE352_MAX_CONCENTRATION_HALT: "0.50"
+      PHASE352_CONSECUTIVE_LOSS_CAUTION: "3"
+      PHASE352_CONSECUTIVE_LOSS_HALT: "5"
+
+      PHASE348451_SCORE_THRESHOLD: "65"
+      PHASE348451_MAX_CANDIDATES: "3"
+      PHASE348451_MAX_ROWS_PER_TABLE: "5000"
+
+      PHASE348_SCORE_THRESHOLD: "65"
+      PHASE348_MAX_CANDIDATES: "3"
+      PHASE348_INITIAL_CASH: "1000000"
+      PHASE348_MAX_POSITION_PCT: "0.20"
+      PHASE348_ROUND_LOT: "1000"
+
+      PHASE349_INITIAL_CASH: "1000000"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime dependencies
+        run: python -m pip install --upgrade pip requests
+
+      - name: Validate Phase 3.6.3 observability/SLA contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+
+          test -f automation/v92/paper_trading_phase363_production_paper_autonomous_observability_sla_engine.py
+          test -f automation/v92/paper_trading_phase362_production_paper_autonomous_health_monitoring_incident_audit_engine.py
+          test -f supabase/PHASE363_PRODUCTION_PAPER_AUTONOMOUS_OBSERVABILITY_SLA_ENGINE.sql
+
+          grep -q 'PHASE363_PRODUCTION_PAPER_AUTONOMOUS_OBSERVABILITY_SLA_ENGINE' \
+            automation/v92/paper_trading_phase363_production_paper_autonomous_observability_sla_engine.py
+
+          grep -q 'SLA_PASS' \
+            automation/v92/paper_trading_phase363_production_paper_autonomous_observability_sla_engine.py
+
+          grep -q 'SLA_WARN' \
+            automation/v92/paper_trading_phase363_production_paper_autonomous_observability_sla_engine.py
+
+          grep -q 'SLA_BREACH' \
+            automation/v92/paper_trading_phase363_production_paper_autonomous_observability_sla_engine.py
+
+          grep -q '"broker_order_submission_enabled": False' \
+            automation/v92/paper_trading_phase363_production_paper_autonomous_observability_sla_engine.py
+
+          grep -q '"real_money_trading_enabled": False' \
+            automation/v92/paper_trading_phase363_production_paper_autonomous_observability_sla_engine.py
+
+          echo "Phase 3.6.3 observability/SLA contract: PASS"
+
+      - name: Execute Phase 3.6.3 observability/SLA
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APPROVER="${{ inputs.approver }}"
+          if [ -z "${APPROVER}" ]; then
+            APPROVER="github-actions"
+          fi
+
+          python automation/v92/paper_trading_phase363_production_paper_autonomous_observability_sla_engine.py \
+            --approver "${APPROVER}"
+
+      - name: Validate Phase 3.6.3 output
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f phase363_output/phase363_observability_sla.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(
+              Path("phase363_output/phase363_observability_sla.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          assert data["version"] == "3.6.3", data
+          assert data["sla_status"] in {
+              "SLA_PASS",
+              "SLA_WARN",
+              "SLA_BREACH",
+          }, data
+
+          assert 0 <= data["sla_score"] <= 100, data
+          assert 0 <= data["success_rate_7d"] <= 100, data
+          assert 0 <= data["recovery_rate_7d"] <= 100, data
+          assert data["incident_count_7d"] >= 0, data
+          assert data["successful_streak_days"] >= 0, data
+
+          assert data["synthetic_market_data"] is False, data
+          assert data["synthetic_signals"] is False, data
+          assert data["fake_prices_allowed"] is False, data
+          assert data["broker_api_used"] is False, data
+          assert data["broker_credentials_used"] is False, data
+          assert data["broker_order_submission_enabled"] is False, data
+          assert data["real_money_trading_enabled"] is False, data
+          assert data["live_money_release_authorized"] is False, data
+          assert data["fail_closed_policy"] is True, data
+
+          if data["sla_status"] == "SLA_BREACH":
+              raise SystemExit("SLA breach requires operator review")
+
+          assert data["status"] == "PASS", data
+
+          print("Phase 3.6.3 output validation: PASS")
+          PY
+
+      - name: Upload Phase 3.6.3 observability evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase363-production-paper-observability-${{ github.run_id }}
+          path: |
+            phase350_output/
+            phase351_output/
+            phase352_output/
+            phase353_output/
+            phase354_output/
+            phase355_output/
+            phase360_output/
+            phase361_output/
+            phase362_output/
+            phase363_output/
+          if-no-files-found: warn
+          retention-days: 90
