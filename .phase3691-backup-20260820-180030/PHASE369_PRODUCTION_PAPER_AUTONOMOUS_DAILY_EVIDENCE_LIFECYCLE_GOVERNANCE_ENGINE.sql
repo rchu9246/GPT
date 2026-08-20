@@ -146,12 +146,9 @@ alter table public.paper_daily_lifecycle_evidence_v92 enable row level security;
 alter table public.paper_daily_lifecycle_evidence_audit_v92 enable row level security;
 
 comment on table public.paper_daily_lifecycle_evidence_v92 is
-'GPT Quant V9.2 Phase 3.6.9 canonical daily autonomous lifecycle evidence state. Paper-only and fail-closed.';
+'GPT Quant V9.2 Phase 3.6.9 durable daily autonomous Production Paper evidence and lifecycle governance state.';
 
 comment on table public.paper_daily_lifecycle_evidence_audit_v92 is
-'GPT Quant V9.2 Phase 3.6.9 immutable-style lifecycle evidence audit with SHA256 chain.';
-
--- Ask PostgREST to reload schema metadata after DDL.
-notify pgrst, 'reload schema';
+'GPT Quant V9.2 Phase 3.6.9 immutable-style daily lifecycle evidence audit with SHA256 chaining.';
 
 commit;

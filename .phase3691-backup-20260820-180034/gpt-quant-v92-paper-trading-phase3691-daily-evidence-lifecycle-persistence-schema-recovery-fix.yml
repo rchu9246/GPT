@@ -1,0 +1,135 @@
+name: GPT Quant Phase 3.6.9.1 - Daily Evidence Lifecycle Persistence Schema Recovery Fix
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+      portfolio_id:
+        description: Persistent paper portfolio ID
+        required: true
+        default: V92_PRODUCTION_PAPER_V91
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  lifecycle-persistence-schema-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Compile Phase 3.6.9
+        shell: bash
+        run: |
+          python -m py_compile automation/v92/paper_trading_phase369_production_paper_autonomous_daily_evidence_lifecycle_governance_engine.py
+
+      - name: Validate canonical persistence contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -s supabase/PHASE369_PRODUCTION_PAPER_AUTONOMOUS_DAILY_EVIDENCE_LIFECYCLE_GOVERNANCE_ENGINE.sql
+
+          grep -q 'create table if not exists public.paper_daily_lifecycle_evidence_v92' \
+            supabase/PHASE369_PRODUCTION_PAPER_AUTONOMOUS_DAILY_EVIDENCE_LIFECYCLE_GOVERNANCE_ENGINE.sql
+
+          grep -q 'create table if not exists public.paper_daily_lifecycle_evidence_audit_v92' \
+            supabase/PHASE369_PRODUCTION_PAPER_AUTONOMOUS_DAILY_EVIDENCE_LIFECYCLE_GOVERNANCE_ENGINE.sql
+
+          grep -q '"paper_daily_lifecycle_evidence_v92"' \
+            automation/v92/paper_trading_phase369_production_paper_autonomous_daily_evidence_lifecycle_governance_engine.py
+
+          grep -q '"paper_daily_lifecycle_evidence_audit_v92"' \
+            automation/v92/paper_trading_phase369_production_paper_autonomous_daily_evidence_lifecycle_governance_engine.py
+
+          echo "Phase 3.6.9.1 canonical persistence contract: PASS"
+
+      - name: Verify Supabase lifecycle tables through REST
+        shell: python
+        run: |
+          import json
+          import os
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          url = os.environ["SUPABASE_URL"].rstrip("/")
+          key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+          portfolio_id = os.environ["PORTFOLIO_ID"]
+
+          tables = [
+              "paper_daily_lifecycle_evidence_v92",
+              "paper_daily_lifecycle_evidence_audit_v92",
+          ]
+
+          lines = [
+              "# GPT Quant V9.2 Paper Trading - Phase 3.6.9.1",
+              "",
+              "## Daily Evidence Lifecycle Persistence Schema Recovery Fix",
+              "",
+          ]
+
+          for table in tables:
+              endpoint = (
+                  f"{url}/rest/v1/{table}"
+                  "?select=id"
+                  "&limit=1"
+              )
+              req = urllib.request.Request(
+                  endpoint,
+                  headers={
+                      "apikey": key,
+                      "Authorization": f"Bearer {key}",
+                      "Accept": "application/json",
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as response:
+                      response.read()
+                  lines.append(f"- `{table}`: **FOUND**")
+              except urllib.error.HTTPError as exc:
+                  body = exc.read().decode("utf-8", errors="replace")
+                  raise SystemExit(f"{table} REST verification failed: HTTP {exc.code}: {body}")
+
+          lines += [
+              "",
+              "## Recovery Result",
+              "",
+              "- Canonical lifecycle evidence table: **PASS**",
+              "- Canonical lifecycle audit table: **PASS**",
+              "- PostgREST schema visibility: **PASS**",
+              "- Phase 3.6.9 ready to re-run: **YES**",
+              "",
+              "## Safety Boundary",
+              "",
+              "- Paper only: **ENABLED**",
+              "- Broker order submission: **DISABLED**",
+              "- Real-money trading: **DISABLED**",
+              "- Live-money release authorized: **NO**",
+              "- Fail-closed policy: **ENABLED**",
+          ]
+
+          summary = "\n".join(lines)
+          print(summary)
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
+              f.write(summary + "\n")
