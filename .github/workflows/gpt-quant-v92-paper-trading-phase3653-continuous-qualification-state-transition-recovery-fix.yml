@@ -1,0 +1,89 @@
+name: GPT Quant Phase 3.6.5.3 - Continuous Qualification State Transition Recovery Fix
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+      portfolio_id:
+        description: Persistent paper portfolio ID
+        required: true
+        default: V92_PRODUCTION_PAPER_V91
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  qualification-state-transition-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Compile Phase 3.6.5.3
+        shell: bash
+        run: |
+          python -m py_compile automation/v92/paper_trading_phase3653_continuous_qualification_state_transition_recovery_fix.py
+
+      - name: Validate recovery safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          grep -q 'CANONICAL_REVALIDATION_RECOVERY_ALLOWED' \
+            automation/v92/paper_trading_phase3653_continuous_qualification_state_transition_recovery_fix.py
+
+          grep -q 'broker_order_submission_enabled": False' \
+            automation/v92/paper_trading_phase3653_continuous_qualification_state_transition_recovery_fix.py
+
+          grep -q 'real_money_trading_enabled": False' \
+            automation/v92/paper_trading_phase3653_continuous_qualification_state_transition_recovery_fix.py
+
+          grep -q 'live_money_release_authorized": False' \
+            automation/v92/paper_trading_phase3653_continuous_qualification_state_transition_recovery_fix.py
+
+          echo "Phase 3.6.5.3 recovery safety contract: PASS"
+
+      - name: Execute Phase 3.6.5.3
+        shell: bash
+        run: |
+          mkdir -p artifacts/phase3653
+
+          python automation/v92/paper_trading_phase3653_continuous_qualification_state_transition_recovery_fix.py \
+            --strategy-version "$STRATEGY_VERSION" \
+            --portfolio-id "$PORTFOLIO_ID" \
+            | tee artifacts/phase3653/summary.md
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase3653/summary.md ]; then
+            cat artifacts/phase3653/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3653-state-transition-recovery-evidence
+          path: artifacts/phase3653/
+          if-no-files-found: warn
+          retention-days: 30
