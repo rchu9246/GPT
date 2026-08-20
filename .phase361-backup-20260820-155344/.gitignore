@@ -6,8 +6,3 @@ dist
 *.log
 
 _backup_before_v7_*/
-__pycache__/
-*.pyc
-*.pyo
-.pytest_cache/
-.mypy_cache/
