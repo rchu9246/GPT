@@ -1,0 +1,110 @@
+name: GPT Quant Phase 3.7.2 - Production Paper Observation Daily Automation Acceptance Promotion Controller
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+      portfolio_id:
+        description: Persistent paper portfolio ID
+        required: true
+        default: V92_PRODUCTION_PAPER_V91
+        type: string
+
+  schedule:
+    # 13:45 UTC = 21:45 Asia/Taipei, weekdays.
+    # Runs after Phase 3.7.1 readiness monitor at 13:30 UTC.
+    - cron: "45 13 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase372-production-paper-acceptance-promotion
+  cancel-in-progress: false
+
+jobs:
+  observation-daily-automation-acceptance-promotion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Compile Phase 3.7.2
+        shell: bash
+        run: |
+          python -m py_compile automation/v92/paper_trading_phase372_production_paper_observation_daily_automation_acceptance_promotion_controller.py
+
+      - name: Validate Phase 3.7.2 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+
+          grep -q 'PHASE372_PRODUCTION_PAPER_OBSERVATION_DAILY_AUTOMATION_ACCEPTANCE_PROMOTION_CONTROLLER' \
+            automation/v92/paper_trading_phase372_production_paper_observation_daily_automation_acceptance_promotion_controller.py
+
+          grep -q '"paper_observation_acceptance_readiness_v92"' \
+            automation/v92/paper_trading_phase372_production_paper_observation_daily_automation_acceptance_promotion_controller.py
+
+          grep -q '"paper_operations_observation_validation_v92"' \
+            automation/v92/paper_trading_phase372_production_paper_observation_daily_automation_acceptance_promotion_controller.py
+
+          grep -q '"paper_daily_lifecycle_evidence_v92"' \
+            automation/v92/paper_trading_phase372_production_paper_observation_daily_automation_acceptance_promotion_controller.py
+
+          grep -q '"broker_order_submission_enabled": False' \
+            automation/v92/paper_trading_phase372_production_paper_observation_daily_automation_acceptance_promotion_controller.py
+
+          grep -q '"real_money_trading_enabled": False' \
+            automation/v92/paper_trading_phase372_production_paper_observation_daily_automation_acceptance_promotion_controller.py
+
+          grep -q 'Real-money promotion authority: \*\*NOT PRESENT IN THIS PHASE\*\*' \
+            automation/v92/paper_trading_phase372_production_paper_observation_daily_automation_acceptance_promotion_controller.py
+
+          echo "Phase 3.7.2 acceptance promotion controller contract: PASS"
+
+      - name: Execute Phase 3.7.2
+        shell: bash
+        run: |
+          mkdir -p artifacts/phase372
+
+          python automation/v92/paper_trading_phase372_production_paper_observation_daily_automation_acceptance_promotion_controller.py \
+            --strategy-version "$STRATEGY_VERSION" \
+            --portfolio-id "$PORTFOLIO_ID" \
+            | tee artifacts/phase372/summary.md
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase372/summary.md ]; then
+            cat artifacts/phase372/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase372-paper-acceptance-promotion-control
+          path: artifacts/phase372/
+          if-no-files-found: warn
+          retention-days: 120
