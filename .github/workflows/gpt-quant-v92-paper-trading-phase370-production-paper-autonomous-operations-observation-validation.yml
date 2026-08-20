@@ -1,0 +1,110 @@
+name: GPT Quant Phase 3.7.0 - Production Paper Autonomous Operations Observation Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+      portfolio_id:
+        description: Persistent paper portfolio ID
+        required: true
+        default: V92_PRODUCTION_PAPER_V91
+        type: string
+
+  schedule:
+    # 13:15 UTC = 21:15 Asia/Taipei, weekdays.
+    # Runs after Phase 3.6.9 evidence lifecycle governance at 13:00 UTC.
+    - cron: "15 13 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase370-production-paper-observation-validation
+  cancel-in-progress: false
+
+jobs:
+  production-paper-observation-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+
+      PHASE370_MIN_OBSERVATION_DAYS: "20"
+      PHASE370_MIN_PASS_RATE: "0.95"
+      PHASE370_MAX_DRAWDOWN_PCT: "0.15"
+      PHASE370_MAX_SAFETY_REVOCATION_DAYS: "0"
+      PHASE370_MAX_CHAIN_BREAKS: "0"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Compile Phase 3.7.0
+        shell: bash
+        run: |
+          python -m py_compile automation/v92/paper_trading_phase370_production_paper_autonomous_operations_observation_validation.py
+
+      - name: Validate Phase 3.7.0 observation contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+
+          grep -q 'PHASE370_PRODUCTION_PAPER_AUTONOMOUS_OPERATIONS_OBSERVATION_VALIDATION' \
+            automation/v92/paper_trading_phase370_production_paper_autonomous_operations_observation_validation.py
+
+          grep -q '"paper_daily_lifecycle_evidence_v92"' \
+            automation/v92/paper_trading_phase370_production_paper_autonomous_operations_observation_validation.py
+
+          grep -q '"broker_order_submission_enabled": False' \
+            automation/v92/paper_trading_phase370_production_paper_autonomous_operations_observation_validation.py
+
+          grep -q '"real_money_trading_enabled": False' \
+            automation/v92/paper_trading_phase370_production_paper_autonomous_operations_observation_validation.py
+
+          grep -q '"live_money_release_authorized": False' \
+            automation/v92/paper_trading_phase370_production_paper_autonomous_operations_observation_validation.py
+
+          echo "Phase 3.7.0 observation + validation contract: PASS"
+
+      - name: Execute Phase 3.7.0
+        shell: bash
+        run: |
+          mkdir -p artifacts/phase370
+
+          python automation/v92/paper_trading_phase370_production_paper_autonomous_operations_observation_validation.py \
+            --strategy-version "$STRATEGY_VERSION" \
+            --portfolio-id "$PORTFOLIO_ID" \
+            | tee artifacts/phase370/summary.md
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase370/summary.md ]; then
+            cat artifacts/phase370/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase370-production-paper-observation-validation
+          path: artifacts/phase370/
+          if-no-files-found: warn
+          retention-days: 120
