@@ -1,0 +1,12 @@
+﻿name: GPT Quant Phase 3.5.6 - Production Paper EOD Accounting Portfolio Ledger Finalization
+on:
+  workflow_dispatch:
+jobs:
+  eod-ledger:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python automation/v92/paper_trading_phase356_eod_accounting_portfolio_ledger_finalization_engine.py
