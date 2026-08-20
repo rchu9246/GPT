@@ -1,0 +1,208 @@
+﻿name: GPT Quant Phase 3.6.2 - Production Paper Autonomous Health Monitoring Incident Audit Engine
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+
+      approver:
+        description: Human approver/operator ID
+        required: true
+        default: github-actions
+        type: string
+
+      portfolio_id:
+        description: Persistent paper portfolio ID
+        required: true
+        default: V92_PRODUCTION_PAPER_V91
+        type: string
+
+  schedule:
+    - cron: "0 11 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpt-quant-phase362-production-paper-autonomous-health
+  cancel-in-progress: false
+
+jobs:
+  autonomous-health-monitoring:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+
+      PAPER_TRADING_MODE: SHADOW_ONLY_NO_BROKER
+      PAPER_STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+
+      PHASE362_PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+      PHASE361_PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+      PHASE360_PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+
+      PHASE362_APPROVER: ${{ inputs.approver || 'github-actions' }}
+      PHASE362_MAX_ATTEMPTS: "2"
+      PHASE362_RETRY_DELAY_SECONDS: "10"
+
+      PHASE351_MIN_HISTORY: "5"
+
+      PHASE353_BASE_RISK_BUDGET_PCT: "0.60"
+      PHASE353_MAX_POSITION_PCT: "0.20"
+      PHASE353_MAX_CANDIDATES: "3"
+      PHASE353_ROUND_LOT: "1000"
+      PHASE353_SCORE_THRESHOLD: "65"
+
+      PHASE352_CAUTION_DRAWDOWN: "-0.05"
+      PHASE352_REDUCE_DRAWDOWN: "-0.10"
+      PHASE352_HALT_DRAWDOWN: "-0.15"
+      PHASE352_CAUTION_DAILY_LOSS: "-0.025"
+      PHASE352_HALT_DAILY_LOSS: "-0.05"
+      PHASE352_MAX_EXPOSURE_CAUTION: "0.80"
+      PHASE352_MAX_EXPOSURE_HALT: "0.95"
+      PHASE352_MAX_CONCENTRATION_CAUTION: "0.35"
+      PHASE352_MAX_CONCENTRATION_HALT: "0.50"
+      PHASE352_CONSECUTIVE_LOSS_CAUTION: "3"
+      PHASE352_CONSECUTIVE_LOSS_HALT: "5"
+
+      PHASE348451_SCORE_THRESHOLD: "65"
+      PHASE348451_MAX_CANDIDATES: "3"
+      PHASE348451_MAX_ROWS_PER_TABLE: "5000"
+
+      PHASE348_SCORE_THRESHOLD: "65"
+      PHASE348_MAX_CANDIDATES: "3"
+      PHASE348_INITIAL_CASH: "1000000"
+      PHASE348_MAX_POSITION_PCT: "0.20"
+      PHASE348_ROUND_LOT: "1000"
+
+      PHASE349_INITIAL_CASH: "1000000"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime dependencies
+        run: python -m pip install --upgrade pip requests
+
+      - name: Validate Phase 3.6.2 health-monitoring contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+
+          test -f automation/v92/paper_trading_phase362_production_paper_autonomous_health_monitoring_incident_audit_engine.py
+          test -f automation/v92/paper_trading_phase361_production_paper_autonomous_daily_operations_failure_recovery.py
+          test -f supabase/PHASE362_PRODUCTION_PAPER_AUTONOMOUS_HEALTH_MONITORING_INCIDENT_AUDIT_ENGINE.sql
+
+          grep -q 'PHASE362_PRODUCTION_PAPER_AUTONOMOUS_HEALTH_MONITORING_INCIDENT_AUDIT_ENGINE' \
+            automation/v92/paper_trading_phase362_production_paper_autonomous_health_monitoring_incident_audit_engine.py
+
+          grep -q 'HEALTHY' \
+            automation/v92/paper_trading_phase362_production_paper_autonomous_health_monitoring_incident_audit_engine.py
+
+          grep -q 'DEGRADED' \
+            automation/v92/paper_trading_phase362_production_paper_autonomous_health_monitoring_incident_audit_engine.py
+
+          grep -q 'INCIDENT' \
+            automation/v92/paper_trading_phase362_production_paper_autonomous_health_monitoring_incident_audit_engine.py
+
+          grep -q '"broker_order_submission_enabled": False' \
+            automation/v92/paper_trading_phase362_production_paper_autonomous_health_monitoring_incident_audit_engine.py
+
+          grep -q '"real_money_trading_enabled": False' \
+            automation/v92/paper_trading_phase362_production_paper_autonomous_health_monitoring_incident_audit_engine.py
+
+          echo "Phase 3.6.2 health-monitoring contract: PASS"
+
+      - name: Execute Phase 3.6.2 autonomous health monitoring
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APPROVER="${{ inputs.approver }}"
+          if [ -z "${APPROVER}" ]; then
+            APPROVER="github-actions"
+          fi
+
+          python automation/v92/paper_trading_phase362_production_paper_autonomous_health_monitoring_incident_audit_engine.py \
+            --approver "${APPROVER}"
+
+      - name: Validate Phase 3.6.2 output
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f phase362_output/phase362_health_monitoring.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(
+              Path("phase362_output/phase362_health_monitoring.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          assert data["version"] == "3.6.2", data
+          assert data["health_status"] in {
+              "HEALTHY",
+              "DEGRADED",
+              "INCIDENT",
+          }, data
+
+          assert 0 <= data["health_score"] <= 100, data
+          assert data["checks_passed"] >= 0, data
+          assert data["checks_failed"] >= 0, data
+
+          assert data["synthetic_market_data"] is False, data
+          assert data["synthetic_signals"] is False, data
+          assert data["fake_prices_allowed"] is False, data
+          assert data["broker_api_used"] is False, data
+          assert data["broker_credentials_used"] is False, data
+          assert data["broker_order_submission_enabled"] is False, data
+          assert data["real_money_trading_enabled"] is False, data
+          assert data["live_money_release_authorized"] is False, data
+          assert data["fail_closed_policy"] is True, data
+
+          if data["health_status"] == "INCIDENT":
+              raise SystemExit("Critical health incident reported")
+
+          assert data["status"] == "PASS", data
+
+          print("Phase 3.6.2 output validation: PASS")
+          PY
+
+      - name: Upload Phase 3.6.2 health evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase362-production-paper-health-${{ github.run_id }}
+          path: |
+            phase350_output/
+            phase351_output/
+            phase352_output/
+            phase353_output/
+            phase354_output/
+            phase355_output/
+            phase360_output/
+            phase361_output/
+            phase362_output/
+          if-no-files-found: warn
+          retention-days: 90
