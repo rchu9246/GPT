@@ -1,0 +1,77 @@
+name: GPT Quant Phase 3.6.5.2 - Health SLA Canonical Evidence Bridge Fix
+
+on:
+  workflow_dispatch:
+    inputs:
+      portfolio_id:
+        description: Persistent paper portfolio ID
+        required: true
+        default: V92_PRODUCTION_PAPER_V91
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  health-sla-canonical-evidence-bridge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Compile Phase 3.6.5.1 and 3.6.5.2
+        shell: bash
+        run: |
+          python -m py_compile automation/v92/paper_trading_phase3651_continuous_qualification_canonical_input_alignment_fix.py
+          python -m py_compile automation/v92/paper_trading_phase3652_health_sla_canonical_evidence_bridge_fix.py
+
+      - name: Validate patched canonical source names
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          grep -q 'paper_system_health_v92' \
+            automation/v92/paper_trading_phase3651_continuous_qualification_canonical_input_alignment_fix.py
+
+          grep -q 'paper_observability_daily_v92' \
+            automation/v92/paper_trading_phase3651_continuous_qualification_canonical_input_alignment_fix.py
+
+          echo "Canonical source-name alignment: PASS"
+
+      - name: Run Phase 3.6.5.2 bridge diagnostic
+        shell: bash
+        run: |
+          mkdir -p artifacts/phase3652
+
+          python automation/v92/paper_trading_phase3652_health_sla_canonical_evidence_bridge_fix.py \
+            --portfolio-id "$PORTFOLIO_ID" \
+            | tee artifacts/phase3652/summary.md
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase3652/summary.md ]; then
+            cat artifacts/phase3652/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3652-health-sla-canonical-bridge
+          path: artifacts/phase3652/
+          if-no-files-found: warn
+          retention-days: 30

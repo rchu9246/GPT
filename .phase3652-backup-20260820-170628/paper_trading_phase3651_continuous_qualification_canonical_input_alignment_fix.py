@@ -271,11 +271,11 @@ def main() -> int:
         ("readiness_date", "cycle_date", "created_at", "updated_at")
     )
     health_row, health_err = select_latest(
-        sb, "paper_system_health_v92", args.portfolio_id,
+        sb, "paper_health_monitoring_v92", args.portfolio_id,
         ("health_date", "cycle_date", "created_at", "updated_at")
     )
     sla_row, sla_err = select_latest(
-        sb, "paper_observability_daily_v92", args.portfolio_id,
+        sb, "paper_observability_sla_v92", args.portfolio_id,
         ("sla_date", "cycle_date", "created_at", "updated_at")
     )
     master_row, master_err = select_latest(
