@@ -88,42 +88,6 @@ def latest(sb: Supabase, table: str, portfolio_id: str, order_column: str) -> Op
     rows = sb.get(table, query)
     return rows[0] if rows else None
 
-def latest_compatible(
-    sb: Supabase,
-    candidates: List[tuple[str, str]],
-    portfolio_id: str,
-) -> tuple[Optional[Dict[str, Any]], Optional[str], List[str]]:
-    """
-    Read the first compatible canonical table.
-
-    candidates:
-        [(table_name, order_column), ...]
-
-    A missing-table PostgREST 404 is treated as a compatibility miss.
-    Other errors still fail closed and are re-raised.
-    """
-    compatibility_notes: List[str] = []
-
-    for table, order_column in candidates:
-        try:
-            row = latest(sb, table, portfolio_id, order_column)
-            compatibility_notes.append(f"SUPERVISION_TABLE_SELECTED:{table}")
-            return row, table, compatibility_notes
-        except RuntimeError as exc:
-            message = str(exc)
-            missing_table = (
-                "HTTP 404" in message
-                or "PGRST205" in message
-                or "Could not find the table" in message
-            )
-            if missing_table:
-                compatibility_notes.append(f"SUPERVISION_TABLE_MISSING:{table}")
-                continue
-            raise
-
-    compatibility_notes.append("SUPERVISION_CANONICAL_TABLE_NOT_FOUND")
-    return None, None, compatibility_notes
-
 def row_date(row: Optional[Dict[str, Any]], *names: str) -> Optional[str]:
     if not row:
         return None
@@ -275,14 +239,7 @@ def main() -> int:
 
     sb = Supabase(url, key)
 
-    supervision, supervision_table, supervision_compatibility_notes = latest_compatible(
-        sb,
-        [
-            ("paper_runtime_supervision_state_v92", "supervision_date"),
-            ("paper_runtime_supervision_v92", "supervision_date"),
-        ],
-        args.portfolio_id,
-    )
+    supervision = latest(sb, "paper_runtime_supervision_v92", args.portfolio_id, "supervision_date")
     controller = latest(sb, "paper_daily_autonomous_controller_v92", args.portfolio_id, "controller_date")
     lifecycle = latest(sb, "paper_daily_lifecycle_evidence_v92", args.portfolio_id, "evidence_date")
     observation = latest(sb, "paper_operations_observation_validation_v92", args.portfolio_id, "observation_date")
@@ -290,9 +247,6 @@ def main() -> int:
     promotion = latest(sb, "paper_acceptance_promotion_control_v92", args.portfolio_id, "promotion_date")
 
     result = diagnose(supervision, controller, lifecycle, observation, readiness, promotion)
-    result["supervision_table"] = supervision_table
-    result["supervision_compatibility_notes"] = supervision_compatibility_notes
-    result["reasons"].extend(supervision_compatibility_notes)
 
     evidence_doc = {
         "contract": CONTRACT,
@@ -300,9 +254,6 @@ def main() -> int:
         "strategy_version": args.strategy_version,
         "diagnostic_date": args.diagnostic_date,
         "result": result,
-        "canonical_sources": {
-            "runtime_supervision_table": result.get("supervision_table"),
-        },
         "safety": {
             "paper_only": True,
             "broker_api_used": False,
@@ -380,7 +331,6 @@ def main() -> int:
     print()
     print("## Canonical State Snapshot")
     print()
-    print(f"- Runtime Supervision Table: **{result.get('supervision_table') or 'NOT_FOUND'}**")
     for name in ("supervision", "controller", "lifecycle", "observation", "readiness", "promotion"):
         print(f"- {name.title()}: **{result['states'][name]}** (date `{result['dates'][name] or 'MISSING'}`)")
     print()
