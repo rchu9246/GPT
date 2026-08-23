@@ -1,0 +1,75 @@
+name: GPT Quant Phase 3.7.2.6.1 V3 - Reconstruction Audit Schema Recovery Verify
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase37261-v3-reconstruction-audit-schema-recovery
+  cancel-in-progress: false
+
+jobs:
+  reconstruction-audit-schema-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Compile Phase 3.7.2.6.1 V3 verifier
+        shell: bash
+        run: |
+          python -m py_compile automation/v92/paper_trading_phase37261_v3_reconstruction_audit_schema_recovery_verify.py
+
+      - name: Validate V3 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+
+          grep -q 'PHASE37261_V3_RECONSTRUCTION_AUDIT_SCHEMA_RECOVERY' \
+            automation/v92/paper_trading_phase37261_v3_reconstruction_audit_schema_recovery_verify.py
+
+          grep -q 'paper_post_recovery_activation_master_cycle_reconstruction_audit_v92' \
+            automation/v92/paper_trading_phase37261_v3_reconstruction_audit_schema_recovery_verify.py
+
+          echo "Phase 3.7.2.6.1 V3 schema recovery verifier contract: PASS"
+
+      - name: Verify PostgREST schema visibility
+        shell: bash
+        run: |
+          mkdir -p artifacts/phase37261-v3
+
+          python automation/v92/paper_trading_phase37261_v3_reconstruction_audit_schema_recovery_verify.py \
+            | tee artifacts/phase37261-v3/summary.md
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase37261-v3/summary.md ]; then
+            cat artifacts/phase37261-v3/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase37261-v3-reconstruction-audit-schema-recovery
+          path: artifacts/phase37261-v3/
+          if-no-files-found: warn
+          retention-days: 120
