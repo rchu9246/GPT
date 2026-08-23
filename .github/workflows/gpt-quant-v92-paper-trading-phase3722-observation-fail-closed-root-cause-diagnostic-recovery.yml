@@ -1,0 +1,95 @@
+name: GPT Quant Phase 3.7.2.2 - Observation FAIL_CLOSED Root Cause Diagnostic Recovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+      portfolio_id:
+        description: Persistent paper portfolio ID
+        required: true
+        default: V92_PRODUCTION_PAPER_V91
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase3722-observation-fail-closed-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  fail-closed-root-cause-diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Compile Phase 3.7.2.2
+        shell: bash
+        run: |
+          python -m py_compile automation/v92/paper_trading_phase3722_observation_fail_closed_root_cause_diagnostic_recovery.py
+
+      - name: Validate diagnostic safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+
+          grep -q 'PHASE3722_OBSERVATION_FAIL_CLOSED_ROOT_CAUSE_DIAGNOSTIC_RECOVERY' \
+            automation/v92/paper_trading_phase3722_observation_fail_closed_root_cause_diagnostic_recovery.py
+
+          grep -q '"historical_rewrite_allowed": False' \
+            automation/v92/paper_trading_phase3722_observation_fail_closed_root_cause_diagnostic_recovery.py
+
+          grep -q '"broker_order_submission_enabled": False' \
+            automation/v92/paper_trading_phase3722_observation_fail_closed_root_cause_diagnostic_recovery.py
+
+          grep -q '"real_money_trading_enabled": False' \
+            automation/v92/paper_trading_phase3722_observation_fail_closed_root_cause_diagnostic_recovery.py
+
+          echo "Phase 3.7.2.2 diagnostic safety contract: PASS"
+
+      - name: Execute Phase 3.7.2.2
+        shell: bash
+        run: |
+          mkdir -p artifacts/phase3722
+
+          python automation/v92/paper_trading_phase3722_observation_fail_closed_root_cause_diagnostic_recovery.py \
+            --strategy-version "$STRATEGY_VERSION" \
+            --portfolio-id "$PORTFOLIO_ID" \
+            | tee artifacts/phase3722/summary.md
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase3722/summary.md ]; then
+            cat artifacts/phase3722/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3722-fail-closed-diagnostic
+          path: artifacts/phase3722/
+          if-no-files-found: warn
+          retention-days: 120
