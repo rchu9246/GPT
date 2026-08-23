@@ -1,0 +1,96 @@
+name: GPT Quant Phase 3.7.2.4 - True Safety Violation Evidence Forensics Recovery Eligibility
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+      portfolio_id:
+        description: Persistent paper portfolio ID
+        required: true
+        default: V92_PRODUCTION_PAPER_V91
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase3724-true-safety-violation-forensics
+  cancel-in-progress: false
+
+jobs:
+  true-safety-violation-forensics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Compile Phase 3.7.2.4
+        shell: bash
+        run: |
+          python -m py_compile automation/v92/paper_trading_phase3724_true_safety_violation_evidence_forensics_and_recovery_eligibility.py
+
+      - name: Validate forensic safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+
+          grep -q 'PHASE3724_TRUE_SAFETY_VIOLATION_EVIDENCE_FORENSICS_AND_RECOVERY_ELIGIBILITY' \
+            automation/v92/paper_trading_phase3724_true_safety_violation_evidence_forensics_and_recovery_eligibility.py
+
+          grep -q '"historical_rewrite_allowed": False' \
+            automation/v92/paper_trading_phase3724_true_safety_violation_evidence_forensics_and_recovery_eligibility.py
+
+          grep -q '"broker_order_submission_enabled": False' \
+            automation/v92/paper_trading_phase3724_true_safety_violation_evidence_forensics_and_recovery_eligibility.py
+
+          grep -q '"real_money_trading_enabled": False' \
+            automation/v92/paper_trading_phase3724_true_safety_violation_evidence_forensics_and_recovery_eligibility.py
+
+          echo "Phase 3.7.2.4 forensic safety contract: PASS"
+
+      - name: Execute Phase 3.7.2.4
+        shell: bash
+        run: |
+          mkdir -p artifacts/phase3724
+
+          python automation/v92/paper_trading_phase3724_true_safety_violation_evidence_forensics_and_recovery_eligibility.py \
+            --strategy-version "$STRATEGY_VERSION" \
+            --portfolio-id "$PORTFOLIO_ID" \
+            | tee artifacts/phase3724/summary.md
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase3724/summary.md ]; then
+            cat artifacts/phase3724/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload forensic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3724-true-safety-violation-forensics
+          path: artifacts/phase3724/
+          if-no-files-found: warn
+          retention-days: 120
