@@ -1,3 +1,5 @@
+# PHASE37261_V631_RECONSTRUCTION_RUNTIME_CANONICAL_AUDIT_BRIDGE_FIX
+# Preferred audit relation: phase37261_reconstruction_audit_v92
 from __future__ import annotations
 
 import argparse
@@ -321,6 +323,7 @@ def main() -> int:
     audit_table_used = insert_compatible_audit(
         sb,
         [
+            "phase37261_reconstruction_audit_v92",
             "paper_post_recovery_activation_master_cycle_reconstruction_audit_v92",
         ],
         dict(audit, created_at=datetime.now(timezone.utc).isoformat()),
