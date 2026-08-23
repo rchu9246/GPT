@@ -1,0 +1,99 @@
+name: GPT Quant Phase 3.7.2.5 - Stale Legacy Safety State Controlled Canonical Recovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+      portfolio_id:
+        description: Persistent paper portfolio ID
+        required: true
+        default: V92_PRODUCTION_PAPER_V91
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase3725-controlled-canonical-recovery
+  cancel-in-progress: false
+
+jobs:
+  stale-legacy-safety-controlled-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Compile Phase 3.7.2.5
+        shell: bash
+        run: |
+          python -m py_compile automation/v92/paper_trading_phase3725_stale_legacy_safety_state_controlled_canonical_recovery.py
+
+      - name: Validate controlled-recovery safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+
+          grep -q 'PHASE3725_STALE_LEGACY_SAFETY_STATE_CONTROLLED_CANONICAL_RECOVERY' \
+            automation/v92/paper_trading_phase3725_stale_legacy_safety_state_controlled_canonical_recovery.py
+
+          grep -q 'RECOVERY_ELIGIBLE_STALE_OR_LEGACY' \
+            automation/v92/paper_trading_phase3725_stale_legacy_safety_state_controlled_canonical_recovery.py
+
+          grep -q '"historical_rewrite_allowed": False' \
+            automation/v92/paper_trading_phase3725_stale_legacy_safety_state_controlled_canonical_recovery.py
+
+          grep -q '"broker_order_submission_enabled": False' \
+            automation/v92/paper_trading_phase3725_stale_legacy_safety_state_controlled_canonical_recovery.py
+
+          grep -q '"real_money_trading_enabled": False' \
+            automation/v92/paper_trading_phase3725_stale_legacy_safety_state_controlled_canonical_recovery.py
+
+          echo "Phase 3.7.2.5 controlled recovery safety contract: PASS"
+
+      - name: Execute Phase 3.7.2.5
+        shell: bash
+        run: |
+          mkdir -p artifacts/phase3725
+
+          python automation/v92/paper_trading_phase3725_stale_legacy_safety_state_controlled_canonical_recovery.py \
+            --strategy-version "$STRATEGY_VERSION" \
+            --portfolio-id "$PORTFOLIO_ID" \
+            | tee artifacts/phase3725/summary.md
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase3725/summary.md ]; then
+            cat artifacts/phase3725/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3725-controlled-canonical-recovery
+          path: artifacts/phase3725/
+          if-no-files-found: warn
+          retention-days: 120
