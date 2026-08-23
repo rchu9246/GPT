@@ -1,0 +1,77 @@
+name: GPT Quant Phase 3.7.2.6.1 V6 - Canonical Audit Table PostgREST Exposure Recovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase37261-v6-postgrest-exposure-recovery
+  cancel-in-progress: false
+
+jobs:
+  canonical-audit-postgrest-exposure-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Compile V6 verifier
+        shell: bash
+        run: |
+          python -m py_compile automation/v92/paper_trading_phase37261_v6_canonical_audit_table_postgrest_exposure_recovery_verify.py
+
+      - name: Validate V6 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+
+          FILE="automation/v92/paper_trading_phase37261_v6_canonical_audit_table_postgrest_exposure_recovery_verify.py"
+
+          grep -q 'PHASE37261_V6_CANONICAL_AUDIT_TABLE_POSTGREST_EXPOSURE_RECOVERY' "$FILE"
+          grep -q 'paper_post_recovery_activation_master_cycle_reconstruction_audit_v92' "$FILE"
+          grep -q 'BROKER_ORDER_SUBMISSION_ENABLED = False' "$FILE"
+          grep -q 'REAL_MONEY_TRADING_ENABLED = False' "$FILE"
+          grep -q 'HISTORICAL_REWRITE_ALLOWED = False' "$FILE"
+
+          echo "Phase 3.7.2.6.1 V6 verifier contract: PASS"
+
+      - name: Verify canonical audit PostgREST exposure
+        shell: bash
+        run: |
+          mkdir -p artifacts/phase37261-v6
+
+          python automation/v92/paper_trading_phase37261_v6_canonical_audit_table_postgrest_exposure_recovery_verify.py \
+            | tee artifacts/phase37261-v6/summary.md
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase37261-v6/summary.md ]; then
+            cat artifacts/phase37261-v6/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase37261-v6-postgrest-exposure-recovery
+          path: artifacts/phase37261-v6/
+          if-no-files-found: warn
+          retention-days: 120
