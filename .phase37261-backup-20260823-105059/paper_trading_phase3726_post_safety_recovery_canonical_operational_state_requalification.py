@@ -30,14 +30,12 @@ QUALIFICATION_TABLES = [
 ]
 
 ACTIVATION_TABLES = [
-    ("paper_post_recovery_activation_state_v92", "activation_date"),
     ("paper_autonomous_operational_activation_v92", "activation_date"),
     ("paper_operational_activation_v92", "activation_date"),
     ("paper_activation_state_v92", "activation_date"),
 ]
 
 MASTER_CYCLE_TABLES = [
-    ("paper_post_recovery_master_cycle_v92", "run_date"),
     ("paper_daily_master_cycle_v92", "run_date"),
     ("paper_production_daily_master_cycle_v92", "run_date"),
     ("paper_master_cycle_v92", "run_date"),
