@@ -92,45 +92,6 @@ def latest(sb: Supabase, table: str, portfolio_id: str, order_column: str) -> Op
     rows = sb.get(table, query)
     return rows[0] if rows else None
 
-def insert_compatible_audit(
-    sb: Supabase,
-    candidates: List[str],
-    payload: Dict[str, Any],
-) -> str:
-    """
-    Insert an immutable-style audit row into the first compatible table.
-
-    A PostgREST missing-table error is treated as a schema compatibility miss.
-    Any other error remains fail-closed.
-    """
-    compatibility_errors: List[str] = []
-
-    for table in candidates:
-        try:
-            sb.request(
-                "POST",
-                table,
-                payload=payload,
-                prefer="return=minimal",
-            )
-            return table
-        except RuntimeError as exc:
-            message = str(exc)
-            missing_table = (
-                "HTTP 404" in message
-                or "PGRST205" in message
-                or "Could not find the table" in message
-            )
-            if missing_table:
-                compatibility_errors.append(f"AUDIT_TABLE_MISSING:{table}")
-                continue
-            raise
-
-    raise RuntimeError(
-        "No compatible reconstruction audit table found: "
-        + ", ".join(compatibility_errors)
-    )
-
 def supervision_state(row: Optional[Dict[str, Any]]) -> str:
     if not row:
         return "MISSING"
@@ -318,13 +279,11 @@ def main() -> int:
         audit,
         "portfolio_id,reconstruction_date",
     )
-    audit_table_used = insert_compatible_audit(
-        sb,
-        [
-            "paper_post_recovery_activation_master_cycle_reconstruction_audit_v92",
-            "paper_post_recovery_activation_master_cycle_reconstruction_audit",
-        ],
-        dict(audit, created_at=datetime.now(timezone.utc).isoformat()),
+    sb.request(
+        "POST",
+        "paper_post_recovery_activation_master_cycle_reconstruction_audit_v92",
+        payload=dict(audit, created_at=datetime.now(timezone.utc).isoformat()),
+        prefer="return=minimal",
     )
 
     print("# GPT Quant V9.2 Paper Trading - Phase 3.7.2.6.1")
@@ -358,7 +317,6 @@ def main() -> int:
     print("- Live-money release authorized: **NO**")
     print("- Fail-closed policy: **ENABLED**")
     print("- Historical evidence rewrite: **DISABLED**")
-    print(f"- Audit Table Used: **{audit_table_used}**")
     print()
     print("## Next")
     print()
