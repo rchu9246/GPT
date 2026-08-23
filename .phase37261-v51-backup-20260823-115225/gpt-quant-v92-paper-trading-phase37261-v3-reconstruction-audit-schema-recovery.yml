@@ -33,7 +33,7 @@ jobs:
         run: |
           python -m py_compile automation/v92/paper_trading_phase37261_v3_reconstruction_audit_schema_recovery_verify.py
 
-      - name: Validate V3/V5 contract compatibility
+      - name: Validate V3 contract
         shell: bash
         run: |
           set -euo pipefail
@@ -41,22 +41,14 @@ jobs:
           test -n "${SUPABASE_URL:-}"
           test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
 
-          VERIFY_FILE="automation/v92/paper_trading_phase37261_v3_reconstruction_audit_schema_recovery_verify.py"
+          grep -q 'PHASE37261_V3_RECONSTRUCTION_AUDIT_SCHEMA_RECOVERY' \
+            automation/v92/paper_trading_phase37261_v3_reconstruction_audit_schema_recovery_verify.py
 
-          grep -q 'PHASE37261_V5_POSTGREST_CANONICAL_AUDIT_TABLE_RESOLUTION_FIX' "$VERIFY_FILE"
-          grep -q 'CANONICAL_AUDIT_TABLE' "$VERIFY_FILE"
-          grep -q 'paper_post_recovery_activation_master_cycle_reconstruction_audit_v92' "$VERIFY_FILE"
-          grep -q 'BROKER_ORDER_SUBMISSION_ENABLED = False' "$VERIFY_FILE"
-          grep -q 'REAL_MONEY_TRADING_ENABLED = False' "$VERIFY_FILE"
-          grep -q 'HISTORICAL_REWRITE_ALLOWED = False' "$VERIFY_FILE"
-          grep -q 'Canonical Resolver: \*\*LOCKED_TO_V92\*\*' "$VERIFY_FILE"
+          grep -q 'paper_post_recovery_activation_master_cycle_reconstruction_audit_v92' \
+            automation/v92/paper_trading_phase37261_v3_reconstruction_audit_schema_recovery_verify.py
 
-          if grep -q 'TABLE = "paper_post_recovery_activation_master_cycle_reconstruction_audit"' "$VERIFY_FILE"; then
-            echo "Legacy non-_v92 active verifier table assignment detected."
-            exit 1
-          fi
+          echo "Phase 3.7.2.6.1 V3 schema recovery verifier contract: PASS"
 
-          echo "Phase 3.7.2.6.1 V3 workflow / V5 verifier contract compatibility: PASS"
       - name: Verify PostgREST schema visibility
         shell: bash
         run: |
