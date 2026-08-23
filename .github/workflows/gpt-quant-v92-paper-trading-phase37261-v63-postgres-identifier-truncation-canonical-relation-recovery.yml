@@ -1,0 +1,29 @@
+﻿name: GPT Quant Phase 3.7.2.6.1 V6.3 - PostgreSQL Identifier Truncation Canonical Relation Recovery
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  canonical-relation-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Compile V6.3
+        run: python -m py_compile automation/v92/paper_trading_phase37261_v63_postgres_identifier_truncation_canonical_relation_recovery_verify.py
+      - name: Verify V6.3 canonical PostgREST endpoint
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: python automation/v92/paper_trading_phase37261_v63_postgres_identifier_truncation_canonical_relation_recovery_verify.py
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase37261-v63-evidence
+          path: artifacts/phase37261-v63/
+          if-no-files-found: warn
