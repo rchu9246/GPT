@@ -322,6 +322,7 @@ def main() -> int:
         sb,
         [
             "paper_post_recovery_activation_master_cycle_reconstruction_audit_v92",
+            "paper_post_recovery_activation_master_cycle_reconstruction_audit",
         ],
         dict(audit, created_at=datetime.now(timezone.utc).isoformat()),
     )
@@ -357,7 +358,6 @@ def main() -> int:
     print("- Live-money release authorized: **NO**")
     print("- Fail-closed policy: **ENABLED**")
     print("- Historical evidence rewrite: **DISABLED**")
-    print("- Canonical Audit Table: **paper_post_recovery_activation_master_cycle_reconstruction_audit_v92**")
     print(f"- Audit Table Used: **{audit_table_used}**")
     print()
     print("## Next")
