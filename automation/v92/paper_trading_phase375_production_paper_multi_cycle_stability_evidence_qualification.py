@@ -148,7 +148,10 @@ def active(row: Dict[str, Any]) -> bool:
     if not row:
         return False
     hay = upper_values(row)
-    return any(s in hay for s in [
+
+    # Canonical compatibility vocabulary.
+    # Keep fail-closed semantics: any explicit BLOCK_STATES token wins.
+    ready_tokens = [
         "ACTIVE",
         "CONTINUE_ACTIVE",
         "CONTINUE_WITH_OBSERVATION",
@@ -156,7 +159,21 @@ def active(row: Dict[str, Any]) -> bool:
         "READY",
         "PASS",
         "ENABLED",
-    ]) and not blocked(row)
+        "RUNTIME_SUPERVISION_READY",
+        "RUNTIME_SUPERVISION_ACTIVE",
+        "RUNTIME_SUPERVISION_OPERATIONAL",
+        "RUNTIME_CANONICAL_READY",
+        "RUNTIME_CANONICAL_ACTIVE",
+        "PRODUCTION_PAPER_RUNTIME_READY",
+        "PRODUCTION_PAPER_RUNTIME_ACTIVE",
+        "PRODUCTION_PAPER_ACTIVE",
+        "GO_LIVE_PAPER_ACTIVE",
+        "DAILY_CYCLE_OPERATIONAL_PASS",
+        "DAILY_CYCLE_NO_TRADE_VALID",
+        "FIRST_CYCLE_OPERATIONAL_PASS",
+        "FIRST_CYCLE_NO_TRADE_VALID",
+    ]
+    return any(token in hay for token in ready_tokens) and not blocked(row)
 
 def latest(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     if not rows:
@@ -254,7 +271,10 @@ def main() -> int:
 
     activation_ok = bool(latest(act_rows)) and active(latest(act_rows))
     master_ok = bool(latest(mst_rows)) and not blocked(latest(mst_rows))
-    runtime_ok = bool(latest(run_rows)) and active(latest(run_rows))
+    runtime_row = latest(run_rows)
+    runtime_ok = bool(runtime_row) and active(runtime_row)
+    runtime_state = extract_state(runtime_row)
+    runtime_text = upper_values(runtime_row) if runtime_row else ""
 
     evidence_counts = count_evidence_states(ev_rows)
 
@@ -298,6 +318,8 @@ def main() -> int:
             "activation_table": act_table,
             "master_cycle_table": mst_table,
             "runtime_table": run_table,
+            "runtime_state": runtime_state,
+            "runtime_canonical_text_observed": runtime_text[:500],
             "daily_evidence_table": ev_table,
             "activation_errors": act_errs,
             "master_errors": mst_errs,
