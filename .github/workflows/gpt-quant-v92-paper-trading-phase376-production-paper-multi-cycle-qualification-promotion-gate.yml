@@ -1,0 +1,124 @@
+name: GPT Quant Phase 3.7.6 - Production Paper Multi-Cycle Qualification Promotion Gate
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Taiwan 23:05 = UTC 15:05, after Phase 3.7.5 at 22:50.
+    - cron: "5 15 * * 1-5"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  qualification-promotion-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      GPT_QUANT_PORTFOLIO_ID: V92_PRODUCTION_PAPER_V91
+      GPT_QUANT_STRATEGY_VERSION: V9.1
+      PHASE375_RESULT_PATH: artifacts/phase376/input/phase375_result.json
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile Phase 3.7.6
+        run: python -m py_compile automation/v92/paper_trading_phase376_production_paper_multi_cycle_qualification_promotion_gate.py
+
+      - name: Validate promotion gate safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="automation/v92/paper_trading_phase376_production_paper_multi_cycle_qualification_promotion_gate.py"
+          grep -q 'BROKER_ORDER_SUBMISSION_ENABLED = False' "$f"
+          grep -q 'REAL_MONEY_TRADING_ENABLED = False' "$f"
+          grep -q 'HISTORICAL_REWRITE_ALLOWED = False' "$f"
+          grep -q 'PROMOTION_WAITING_FOR_QUALIFICATION' "$f"
+          grep -q 'PRODUCTION_PAPER_PROMOTION_AUTHORIZED' "$f"
+          grep -q 'PRODUCTION_PAPER_PROMOTION_BLOCKED' "$f"
+          echo "Phase 3.7.6 promotion gate safety contract: PASS"
+
+      - name: Resolve latest Phase 3.7.5 evidence
+        id: resolve375
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/phase376/input /tmp/phase375
+          workflow="gpt-quant-v92-paper-trading-phase375-production-paper-multi-cycle-stability-evidence-qualification.yml"
+
+          run_id="$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?branch=main&status=success&per_page=20" \
+            --jq '.workflow_runs[0].id // empty' || true)"
+
+          if [ -z "$run_id" ]; then
+            echo "No successful Phase 3.7.5 run found; gate will remain WAITING."
+            exit 0
+          fi
+
+          artifact_id="$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" \
+            --jq '.artifacts[] | select(.name=="phase375-production-paper-multi-cycle-stability-evidence") | .id' \
+            | head -n 1 || true)"
+
+          if [ -z "$artifact_id" ]; then
+            echo "No Phase 3.7.5 evidence artifact found; gate will remain WAITING."
+            exit 0
+          fi
+
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \
+            > /tmp/phase375/evidence.zip
+
+          unzip -o /tmp/phase375/evidence.zip -d /tmp/phase375/unpacked >/dev/null
+
+          result="$(find /tmp/phase375/unpacked -type f -name 'phase375_result.json' | head -n 1 || true)"
+          if [ -n "$result" ]; then
+            cp "$result" artifacts/phase376/input/phase375_result.json
+            echo "Resolved Phase 3.7.5 evidence from run ${run_id}."
+          else
+            echo "phase375_result.json not found; gate will remain WAITING."
+          fi
+
+      - name: Execute Phase 3.7.6
+        id: phase376
+        continue-on-error: true
+        run: python automation/v92/paper_trading_phase376_production_paper_multi_cycle_qualification_promotion_gate.py
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase376/phase376_summary.md ]; then
+            cat artifacts/phase376/phase376_summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload promotion gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase376-production-paper-qualification-promotion-gate
+          path: artifacts/phase376
+          if-no-files-found: warn
+          retention-days: 120
+
+      - name: Enforce promotion gate safety result
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.phase376.outcome }}" != "success" ]; then
+            echo "Phase 3.7.6 promotion gate is BLOCKED."
+            exit 1
+          fi
+          echo "Phase 3.7.6 promotion gate is healthy."
