@@ -1,3 +1,5 @@
+# PHASE37261_V632_RECONSTRUCTION_AUDIT_PAYLOAD_SCHEMA_COMPATIBILITY_FIX
+# Canonical audit INSERT is append-only; updated_at is not required.
 # PHASE37261_V631_RECONSTRUCTION_RUNTIME_CANONICAL_AUDIT_BRIDGE_FIX
 # Preferred audit relation: phase37261_reconstruction_audit_v92
 from __future__ import annotations
@@ -256,7 +258,6 @@ def main() -> int:
         "live_money_release_authorized": False,
         "fail_closed_policy": True,
         "evidence_sha256": evidence_sha,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
     master = {
@@ -286,7 +287,6 @@ def main() -> int:
         "live_money_release_authorized": False,
         "fail_closed_policy": True,
         "evidence_sha256": evidence_sha,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
     sb.upsert(ACTIVATION_TABLE, activation, "portfolio_id,activation_date")
@@ -312,7 +312,6 @@ def main() -> int:
         "fail_closed_policy": True,
         "evidence_sha256": evidence_sha,
         "evidence_document": evidence,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
     sb.upsert(
