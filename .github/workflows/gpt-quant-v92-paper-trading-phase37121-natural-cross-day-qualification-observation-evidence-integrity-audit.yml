@@ -1,0 +1,89 @@
+name: GPT Quant Phase 3.7.12.1 - Natural Cross-Day Qualification Observation Evidence Integrity Audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekdays 16:50 UTC / 00:50 Asia-Taipei.
+    - cron: "50 16 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase37121-natural-cross-day-observation-audit
+  cancel-in-progress: false
+
+jobs:
+  natural-cross-day-observation-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GPT_QUANT_PORTFOLIO_ID: V92_PRODUCTION_PAPER_V91
+      GPT_QUANT_STRATEGY_VERSION: V9.1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile Phase 3.7.12.1
+        run: python -m py_compile automation/v92/paper_trading_phase37121_natural_cross_day_qualification_observation_evidence_integrity_audit.py
+
+      - name: Validate Phase 3.7.12.1 read-only safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="automation/v92/paper_trading_phase37121_natural_cross_day_qualification_observation_evidence_integrity_audit.py"
+          grep -q 'EVIDENCE_SYNTHESIS_ALLOWED = False' "$f"
+          grep -q 'CYCLE_DATE_BACKFILL_ALLOWED = False' "$f"
+          grep -q 'MANUAL_COUNTER_INCREMENT_ALLOWED = False' "$f"
+          grep -q 'QUALIFICATION_THRESHOLD_BYPASS_ALLOWED = False' "$f"
+          grep -q 'NATURAL_CROSS_DAY_QUALIFICATION_OBSERVED' "$f"
+          grep -q 'NATURAL_CROSS_DAY_OBSERVATION_WAITING' "$f"
+          echo "Phase 3.7.12.1 read-only safety contract: PASS"
+
+      - name: Capture observation baseline
+        run: python automation/v92/paper_trading_phase37121_natural_cross_day_qualification_observation_evidence_integrity_audit.py --mode baseline
+
+      - name: Wait briefly for stable canonical read
+        shell: bash
+        run: sleep 5
+
+      - name: Audit current canonical evidence
+        id: phase37121
+        continue-on-error: true
+        run: python automation/v92/paper_trading_phase37121_natural_cross_day_qualification_observation_evidence_integrity_audit.py --mode audit
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase37121/phase37121_summary.md ]; then
+            cat artifacts/phase37121/phase37121_summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload Phase 3.7.12.1 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase37121-natural-cross-day-observation-audit
+          path: artifacts/phase37121
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Enforce Phase 3.7.12.1 audit result
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.phase37121.outcome }}" != "success" ]; then
+            echo "Phase 3.7.12.1 natural cross-day evidence audit is BLOCKED."
+            exit 1
+          fi
+          echo "Phase 3.7.12.1 natural cross-day evidence audit is healthy."
