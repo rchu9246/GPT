@@ -1,0 +1,82 @@
+﻿name: GPT Quant Phase 3.7.3 - Production Paper First-Cycle Operational Validation
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Taiwan 22:20 = UTC 14:20. Runs after the Phase 3.7.2.7 22:05 cycle.
+    - cron: "20 14 * * 1-5"
+
+permissions:
+  contents: read
+
+jobs:
+  first-cycle-operational-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      GPT_QUANT_PORTFOLIO_ID: V92_PRODUCTION_PAPER_V91
+      GPT_QUANT_STRATEGY_VERSION: V9.1
+      PHASE373_ARTIFACT_DIR: artifacts/phase373
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile Phase 3.7.3
+        run: python -m py_compile automation/v92/paper_trading_phase373_production_paper_first_cycle_operational_validation.py
+
+      - name: Validate paper-only safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="automation/v92/paper_trading_phase373_production_paper_first_cycle_operational_validation.py"
+          grep -q 'broker_order_submission.*DISABLED' "$f"
+          grep -q 'real_money_trading.*DISABLED' "$f"
+          grep -q 'historical_rewrite_allowed.*False' "$f"
+          echo "Paper-only safety contract: PASS"
+
+      - name: Execute Phase 3.7.3
+        id: phase373
+        continue-on-error: true
+        run: python automation/v92/paper_trading_phase373_production_paper_first_cycle_operational_validation.py
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase373/phase373_summary.md ]; then
+            cat artifacts/phase373/phase373_summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "# Phase 3.7.3" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**No validation summary artifact was generated.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase373-production-paper-first-cycle-operational-validation
+          path: artifacts/phase373
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Enforce validation result
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.phase373.outcome }}" != "success" ]; then
+            echo "Phase 3.7.3 validation is BLOCKED."
+            exit 1
+          fi
+          echo "Phase 3.7.3 validation: PASS"
