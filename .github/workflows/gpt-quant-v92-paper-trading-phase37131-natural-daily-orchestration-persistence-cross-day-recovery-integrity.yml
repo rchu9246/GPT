@@ -1,0 +1,101 @@
+name: GPT Quant Phase 3.7.13.1 - Natural Daily Orchestration Persistence Cross-Day Recovery Integrity
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekdays 17:20 UTC / 01:20 Asia-Taipei.
+    - cron: "20 17 * * 1-5"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: phase37131-orchestration-persistence-recovery-integrity
+  cancel-in-progress: false
+
+jobs:
+  orchestration-persistence-recovery-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GPT_QUANT_PORTFOLIO_ID: V92_PRODUCTION_PAPER_V91
+      GPT_QUANT_STRATEGY_VERSION: V9.1
+      WF3713: gpt-quant-v92-paper-trading-phase3713-production-paper-natural-qualification-daily-orchestration-promotion-readiness-automation.yml
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile Phase 3.7.13.1
+        run: python -m py_compile automation/v92/paper_trading_phase37131_natural_daily_orchestration_persistence_cross_day_recovery_integrity.py
+
+      - name: Validate read-only recovery integrity contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="automation/v92/paper_trading_phase37131_natural_daily_orchestration_persistence_cross_day_recovery_integrity.py"
+          grep -q 'PERSISTED_EVIDENCE_RESET_ALLOWED = False' "$f"
+          grep -q 'CROSS_DAY_COUNTER_REGRESSION_ALLOWED = False' "$f"
+          grep -q 'DUPLICATE_RECOVERY_INSERT_ALLOWED = False' "$f"
+          grep -q 'QUALIFICATION_THRESHOLD_BYPASS_ALLOWED = False' "$f"
+          grep -q 'ORCHESTRATION_PERSISTENCE_RECOVERY_INTEGRITY_VALIDATED' "$f"
+          echo "Phase 3.7.13.1 recovery integrity contract: PASS"
+
+      - name: Confirm Phase 3.7.13 has a successful run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          conclusion="$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/${WF3713}/runs?branch=main&per_page=20" \
+            --jq '[.workflow_runs[] | select(.conclusion == "success")][0].conclusion // empty')"
+
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::No successful Phase 3.7.13 orchestration run found on main."
+            exit 1
+          fi
+
+          echo "Phase 3.7.13 successful orchestration run: PASS"
+
+      - name: Validate persisted canonical state and recovery integrity
+        id: phase37131
+        continue-on-error: true
+        run: python automation/v92/paper_trading_phase37131_natural_daily_orchestration_persistence_cross_day_recovery_integrity.py
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase37131/phase37131_summary.md ]; then
+            cat artifacts/phase37131/phase37131_summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload Phase 3.7.13.1 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase37131-orchestration-persistence-recovery-integrity
+          path: artifacts/phase37131
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Enforce Phase 3.7.13.1 result
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.phase37131.outcome }}" != "success" ]; then
+            echo "Phase 3.7.13.1 orchestration persistence recovery integrity is BLOCKED."
+            exit 1
+          fi
+          echo "Phase 3.7.13.1 orchestration persistence recovery integrity is healthy."
