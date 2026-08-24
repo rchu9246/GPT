@@ -1,0 +1,57 @@
+name: GPT Quant Phase 3.7.2.6.3 - Production Paper Runtime Reconciliation Activation Gate
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        required: true
+        default: V9.1
+        type: string
+      portfolio_id:
+        required: true
+        default: V92_PRODUCTION_PAPER_V91
+        type: string
+permissions:
+  contents: read
+jobs:
+  activation-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - name: Compile Phase 3.7.2.6.3
+        run: python -m py_compile automation/v92/paper_trading_phase37263_production_paper_runtime_reconciliation_activation_gate.py
+      - name: Validate safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="automation/v92/paper_trading_phase37263_production_paper_runtime_reconciliation_activation_gate.py"
+          grep -q 'PHASE37263_PRODUCTION_PAPER_RUNTIME_RECONCILIATION_ACTIVATION_GATE' "$f"
+          grep -q 'AUTHORIZED_PAPER_CONTINUATION' "$f"
+          grep -q 'BROKER_ORDER_SUBMISSION_ENABLED=False' "$f"
+          grep -q 'REAL_MONEY_TRADING_ENABLED=False' "$f"
+          grep -q 'HISTORICAL_REWRITE_ALLOWED=False' "$f"
+      - name: Execute Phase 3.7.2.6.3
+        run: |
+          mkdir -p artifacts/phase37263
+          python automation/v92/paper_trading_phase37263_production_paper_runtime_reconciliation_activation_gate.py --strategy-version "$STRATEGY_VERSION" --portfolio-id "$PORTFOLIO_ID" | tee artifacts/phase37263/console.md
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase37263/summary.md ]; then cat artifacts/phase37263/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase37263-production-paper-runtime-activation-gate
+          path: artifacts/phase37263/
+          if-no-files-found: warn
+          retention-days: 120
