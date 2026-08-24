@@ -46,49 +46,176 @@ jobs:
           grep -q 'EVIDENCE_PERSISTENCE_BLOCKED' "$f"
           echo "Phase 3.7.7 safety contract: PASS"
 
-      - name: Resolve latest Phase 3.7.4 evidence
+      - name: Resolve latest Phase 3.7.4 canonical evidence
+        id: resolve374
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          mkdir -p artifacts/phase377/input /tmp/phase374
+
+          mkdir -p artifacts/phase377/input /tmp/phase374/all
           workflow="gpt-quant-v92-paper-trading-phase374-production-paper-daily-cycle-monitoring-evidence-accumulation.yml"
 
           run_id="$(gh api \
             -H "Accept: application/vnd.github+json" \
-            "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?branch=main&status=success&per_page=20" \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?branch=main&status=success&per_page=30" \
             --jq '.workflow_runs[0].id // empty' || true)"
 
           if [ -z "$run_id" ]; then
-            echo "No successful Phase 3.7.4 run found; persistence will remain WAITING."
+            echo "No successful Phase 3.7.4 run found."
+            echo "phase374_evidence_resolved=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          artifact_id="$(gh api \
-            -H "Accept: application/vnd.github+json" \
-            "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" \
-            --jq '.artifacts[] | select(.name=="phase374-production-paper-daily-cycle-monitoring-evidence") | .id' \
-            | head -n 1 || true)"
+          echo "Latest successful Phase 3.7.4 run: ${run_id}"
 
-          if [ -z "$artifact_id" ]; then
-            echo "No Phase 3.7.4 evidence artifact found; persistence will remain WAITING."
+          mapfile -t artifact_rows < <(
+            gh api \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" \
+              --jq '.artifacts[] | select(.expired==false) | "\(.id)\t\(.name)"' || true
+          )
+
+          if [ "${#artifact_rows[@]}" -eq 0 ]; then
+            echo "No non-expired Phase 3.7.4 artifacts found."
+            echo "phase374_evidence_resolved=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          gh api \
-            -H "Accept: application/vnd.github+json" \
-            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \
-            > /tmp/phase374/evidence.zip
+          n=0
+          for row in "${artifact_rows[@]}"; do
+            artifact_id="${row%%$'\t'*}"
+            artifact_name="${row#*$'\t'}"
+            n=$((n+1))
+            zip="/tmp/phase374/artifact-${n}.zip"
+            dest="/tmp/phase374/all/artifact-${n}"
 
-          unzip -o /tmp/phase374/evidence.zip -d /tmp/phase374/unpacked >/dev/null
+            echo "Downloading Phase 3.7.4 artifact: ${artifact_name} (${artifact_id})"
+            mkdir -p "$dest"
 
-          result="$(find /tmp/phase374/unpacked -type f -name 'phase374_result.json' | head -n 1 || true)"
-          if [ -n "$result" ]; then
-            cp "$result" artifacts/phase377/input/phase374_result.json
-            echo "Resolved Phase 3.7.4 evidence from run ${run_id}."
+            if gh api \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \
+              > "$zip"; then
+              unzip -o "$zip" -d "$dest" >/dev/null || true
+            fi
+          done
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path("/tmp/phase374/all")
+          out = Path("artifacts/phase377/input/phase374_result.json")
+          out.parent.mkdir(parents=True, exist_ok=True)
+
+          candidates = []
+          for p in root.rglob("*.json"):
+              try:
+                  obj = json.loads(p.read_text(encoding="utf-8"))
+              except Exception:
+                  continue
+              if not isinstance(obj, dict):
+                  continue
+
+              flat_keys = {str(k).lower() for k in obj.keys()}
+              checks = obj.get("checks") if isinstance(obj.get("checks"), dict) else {}
+              checks_keys = {str(k).lower() for k in checks.keys()}
+
+              state = ""
+              for key in ("daily_validation_state", "validation_state", "state", "status", "result"):
+                  if obj.get(key):
+                      state = str(obj.get(key)).upper()
+                      break
+
+              score = 0
+              if "phase374" in p.name.lower():
+                  score += 8
+              if "daily_cycle" in p.name.lower() or "daily-cycle" in p.name.lower():
+                  score += 4
+              if "DAILY_CYCLE_" in state:
+                  score += 12
+              if "runtime_supervision" in checks_keys:
+                  score += 6
+              if "paper_only_boundary" in checks_keys:
+                  score += 4
+              if "cycle_evidence_observed" in checks_keys:
+                  score += 5
+              if "zero_trade_valid" in checks_keys:
+                  score += 5
+              if "portfolio_id" in flat_keys:
+                  score += 2
+              if "strategy_version" in flat_keys:
+                  score += 2
+
+              if score > 0:
+                  candidates.append((score, p, obj))
+
+          if not candidates:
+              print("No compatible Phase 3.7.4 JSON evidence candidate found.")
+              raise SystemExit(0)
+
+          candidates.sort(key=lambda x: x[0], reverse=True)
+          score, path, obj = candidates[0]
+
+          # Canonical normalization bridge.
+          # Keep original evidence, only add aliases needed by Phase 3.7.7 if absent.
+          checks = obj.get("checks") if isinstance(obj.get("checks"), dict) else {}
+
+          if "daily_validation_state" not in obj:
+              for key in ("validation_state", "state", "status", "result"):
+                  value = obj.get(key)
+                  if value and "DAILY_CYCLE_" in str(value).upper():
+                      obj["daily_validation_state"] = value
+                      break
+
+          if "trade_activity_observed" not in obj:
+              if "trade_activity_observed" in checks:
+                  obj["trade_activity_observed"] = checks.get("trade_activity_observed")
+              elif "zero_trade_valid" in checks:
+                  z = str(checks.get("zero_trade_valid")).strip().upper()
+                  if z in {"YES","TRUE","PASS","1"}:
+                      obj["trade_activity_observed"] = False
+
+          obj["_phase377_bridge"] = {
+              "source_run_id": os.getenv("GITHUB_RUN_ID"),
+              "phase374_source_path": str(path),
+              "candidate_score": score,
+              "bridge_version": "V1",
+          }
+
+          out.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+          print(f"Resolved canonical Phase 3.7.4 evidence: {path}")
+          print(f"Canonical bridge score: {score}")
+          print(f"Output: {out}")
+          PY
+
+          if [ -f artifacts/phase377/input/phase374_result.json ]; then
+            echo "Phase 3.7.4 canonical evidence discovery: RESOLVED"
+            echo "phase374_evidence_resolved=true" >> "$GITHUB_OUTPUT"
           else
-            echo "phase374_result.json not found; persistence will remain WAITING."
+            echo "Phase 3.7.4 canonical evidence discovery: NOT RESOLVED"
+            echo "phase374_evidence_resolved=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Show Phase 3.7.4 bridge diagnostics
+        if: always()
+        shell: bash
+        run: |
+          echo "Resolved: ${{ steps.resolve374.outputs.phase374_evidence_resolved }}"
+          if [ -f artifacts/phase377/input/phase374_result.json ]; then
+            python - <<'PY'
+            import json
+            from pathlib import Path
+            p=Path("artifacts/phase377/input/phase374_result.json")
+            d=json.loads(p.read_text(encoding="utf-8"))
+            print("daily_validation_state:", d.get("daily_validation_state"))
+            print("trade_activity_observed:", d.get("trade_activity_observed"))
+            print("checks:", json.dumps(d.get("checks", {}), ensure_ascii=False))
+            print("bridge:", json.dumps(d.get("_phase377_bridge", {}), ensure_ascii=False))
+            PY
           fi
 
       - name: Execute Phase 3.7.7
