@@ -11,14 +11,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-CONTRACT = "PHASE379_PRODUCTION_PAPER_QUALIFICATION_STATE_RECONCILIATION_AUTOMATIC_PROMOTION_READINESS"
+CONTRACT = "PHASE3791_PERSISTED_QUALIFICATION_EVIDENCE_CANONICAL_RECONCILIATION_BRIDGE_FIX"
 PORTFOLIO_ID = os.getenv("GPT_QUANT_PORTFOLIO_ID", "V92_PRODUCTION_PAPER_V91")
 STRATEGY_VERSION = os.getenv("GPT_QUANT_STRATEGY_VERSION", "V9.1")
 
 PHASE375_RESULT_PATH = Path(os.getenv("PHASE375_RESULT_PATH", "artifacts/phase379/input/phase375_result.json"))
 PHASE376_RESULT_PATH = Path(os.getenv("PHASE376_RESULT_PATH", "artifacts/phase379/input/phase376_result.json"))
 
-TARGET_TABLE = "paper_production_promotion_readiness_v92"
+READINESS_TABLE = "paper_production_promotion_readiness_v92"
+QUALIFICATION_EVIDENCE_TABLE = "paper_production_qualification_evidence_v92"
 
 PAPER_ONLY = True
 BROKER_ORDER_SUBMISSION_ENABLED = False
@@ -38,6 +39,7 @@ SUPABASE_KEY = env_first("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY")
 def request(method: str, path: str, body: Optional[Any] = None, prefer: str = "") -> Any:
     if not SUPABASE_URL or not SUPABASE_KEY:
         raise RuntimeError("SUPABASE_CONFIGURATION_MISSING")
+
     data = None if body is None else json.dumps(body).encode("utf-8")
     headers = {
         "apikey": SUPABASE_KEY,
@@ -80,6 +82,38 @@ def digest(payload: Dict[str, Any]) -> str:
     stable = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(stable.encode("utf-8")).hexdigest()
 
+def canonical_evidence_counts() -> Dict[str, Any]:
+    q = urllib.parse.urlencode({
+        "select": "cycle_date,cycle_state,valid_cycle,blocked_cycle,runtime_supervision_pass,paper_only_boundary_pass",
+        "portfolio_id": f"eq.{PORTFOLIO_ID}",
+        "strategy_version": f"eq.{STRATEGY_VERSION}",
+        "order": "cycle_date.asc",
+        "limit": "1000",
+    })
+    rows = request("GET", f"{QUALIFICATION_EVIDENCE_TABLE}?{q}") or []
+
+    observed = len(rows)
+    valid = sum(1 for r in rows if b(r.get("valid_cycle")))
+    blocked = sum(1 for r in rows if b(r.get("blocked_cycle")))
+
+    runtime_pass = (
+        observed > 0
+        and all(b(r.get("runtime_supervision_pass")) for r in rows)
+    )
+    paper_only_pass = (
+        observed > 0
+        and all(b(r.get("paper_only_boundary_pass")) for r in rows)
+    )
+
+    return {
+        "observed": observed,
+        "valid": valid,
+        "blocked": blocked,
+        "runtime_supervision_pass": runtime_pass,
+        "paper_only_boundary_pass": paper_only_pass,
+        "rows": rows,
+    }
+
 def main() -> int:
     art = Path("artifacts/phase379")
     art.mkdir(parents=True, exist_ok=True)
@@ -96,13 +130,15 @@ def main() -> int:
     p375_qualified = b(p375.get("qualified", False))
     p375_operational = b(p375.get("operational", False))
 
-    p375_checks = p375.get("checks", {}) if isinstance(p375.get("checks"), dict) else {}
-    p375_counts = p375.get("evidence_counts", {}) if isinstance(p375.get("evidence_counts"), dict) else {}
-
-    runtime_pass = str(p375_checks.get("runtime_supervision", "")).upper() == "PASS"
-    observed = int(p375_counts.get("observed", 0) or 0)
-    valid = int(p375_counts.get("valid", 0) or 0)
-    blocked = int(p375_counts.get("blocked", 0) or 0)
+    # Phase 3.7.9.1 canonical bridge:
+    # Qualification counts are reconciled from the persisted Phase 3.7.7 ledger,
+    # not from potentially stale Phase 3.7.5 artifact counters.
+    canonical = canonical_evidence_counts()
+    observed = int(canonical["observed"])
+    valid = int(canonical["valid"])
+    blocked = int(canonical["blocked"])
+    runtime_pass = bool(canonical["runtime_supervision_pass"])
+    paper_only_pass = bool(canonical["paper_only_boundary_pass"])
 
     p376_state = str(p376.get("state", "")).strip().upper()
     p376_authorized = b(p376.get("promotion_authorized", False))
@@ -114,6 +150,10 @@ def main() -> int:
         blockers.append("PHASE376_BLOCKED")
     if blocked > 0:
         blockers.append(f"BLOCKED_CYCLES_PRESENT:{blocked}")
+    if observed > 0 and not runtime_pass:
+        blockers.append("CANONICAL_RUNTIME_SUPERVISION_NOT_PASS")
+    if observed > 0 and not paper_only_pass:
+        blockers.append("CANONICAL_PAPER_ONLY_BOUNDARY_NOT_PASS")
 
     qualification_ready = (
         p375_present
@@ -121,6 +161,7 @@ def main() -> int:
         and p375_qualified
         and p375_operational
         and runtime_pass
+        and paper_only_pass
         and observed >= 3
         and valid >= 3
         and blocked == 0
@@ -162,10 +203,18 @@ def main() -> int:
             "valid": valid,
             "blocked": blocked,
         },
+        "canonical_reconciliation": {
+            "source_table": QUALIFICATION_EVIDENCE_TABLE,
+            "runtime_supervision_pass": runtime_pass,
+            "paper_only_boundary_pass": paper_only_pass,
+            "rows_reconciled": observed,
+            "phase375_artifact_counts_not_authoritative": True,
+        },
         "checks": {
             "phase375_present": p375_present,
             "phase376_present": p376_present,
             "runtime_supervision_pass": runtime_pass,
+            "paper_only_boundary_pass": paper_only_pass,
             "phase375_qualified": p375_qualified,
             "phase376_authorized": p376_authorized,
             "qualification_ready": qualification_ready,
@@ -191,7 +240,7 @@ def main() -> int:
         "valid_cycles": valid,
         "blocked_cycles": blocked,
         "runtime_supervision_pass": runtime_pass,
-        "paper_only_boundary_pass": True,
+        "paper_only_boundary_pass": paper_only_pass if observed > 0 else True,
         "broker_order_submission_enabled": False,
         "real_money_trading_enabled": False,
         "historical_rewrite_allowed": False,
@@ -199,6 +248,7 @@ def main() -> int:
         "source_phase376_run_id": os.getenv("PHASE376_RUN_ID"),
         "raw_state": payload,
     }
+
     row["reconciliation_hash"] = digest({
         "portfolio_id": PORTFOLIO_ID,
         "strategy_version": STRATEGY_VERSION,
@@ -209,20 +259,18 @@ def main() -> int:
         "observed_cycles": observed,
         "valid_cycles": valid,
         "blocked_cycles": blocked,
+        "canonical_source": QUALIFICATION_EVIDENCE_TABLE,
     })
 
-    persisted = False
-    if p375_present or p376_present:
-        request(
-            "POST",
-            f"{TARGET_TABLE}?on_conflict=portfolio_id,strategy_version,readiness_date",
-            [row],
-            prefer="resolution=merge-duplicates,return=minimal",
-        )
-        persisted = True
+    request(
+        "POST",
+        f"{READINESS_TABLE}?on_conflict=portfolio_id,strategy_version,readiness_date",
+        [row],
+        prefer="resolution=merge-duplicates,return=minimal",
+    )
 
-    payload["persisted"] = persisted
-    payload["target_table"] = TARGET_TABLE
+    payload["persisted"] = True
+    payload["target_table"] = READINESS_TABLE
 
     (art / "phase379_result.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2),
@@ -230,27 +278,30 @@ def main() -> int:
     )
 
     summary = [
-        "# GPT Quant V9.2 Paper Trading — Phase 3.7.9",
+        "# GPT Quant V9.2 Paper Trading — Phase 3.7.9.1",
         "",
-        "## Production Paper Qualification State Reconciliation + Automatic Promotion Readiness",
+        "## Persisted Qualification Evidence Canonical Reconciliation Bridge Fix",
         "",
         f"- State: **{state}**",
         f"- Operational: **{'YES' if operational else 'NO'}**",
         f"- Promotion Ready: **{'YES' if promotion_ready else 'NO'}**",
-        f"- Persisted: **{'YES' if persisted else 'NO'}**",
+        "- Persisted: **YES**",
         "",
-        "## Reconciled Qualification Evidence",
+        "## Canonical Qualification Evidence",
         "",
-        f"- Phase 3.7.5 State: **{p375_state or 'NOT_AVAILABLE'}**",
+        f"- Canonical Source: `{QUALIFICATION_EVIDENCE_TABLE}`",
         f"- Observed Cycles: **{observed}**",
         f"- Valid Cycles: **{valid}**",
         f"- Blocked Cycles: **{blocked}**",
-        f"- Runtime Supervision: **{'PASS' if runtime_pass else 'WAITING'}**",
+        f"- Runtime Supervision: **{'PASS' if runtime_pass else ('WAITING' if observed == 0 else 'FAIL')}**",
+        f"- Paper-Only Boundary: **{'PASS' if paper_only_pass else ('WAITING' if observed == 0 else 'FAIL')}**",
         "",
-        "## Promotion Gate",
+        "## Reconciled Upstream State",
         "",
+        f"- Phase 3.7.5 State: **{p375_state or 'NOT_AVAILABLE'}**",
+        f"- Phase 3.7.5 Qualified: **{'YES' if p375_qualified else 'NO'}**",
         f"- Phase 3.7.6 State: **{p376_state or 'NOT_AVAILABLE'}**",
-        f"- Promotion Authorized: **{'YES' if p376_authorized else 'NO'}**",
+        f"- Phase 3.7.6 Promotion Authorized: **{'YES' if p376_authorized else 'NO'}**",
         "",
         "## Safety Boundary",
         "",
@@ -258,7 +309,9 @@ def main() -> int:
         "- Broker Order Submission: **DISABLED**",
         "- Real-Money Trading: **DISABLED**",
         "- Historical Rewrite Allowed: **NO**",
+        "- Qualification threshold bypass: **NO**",
     ]
+
     if blockers:
         summary += ["", "## Blockers", ""] + [f"- **{x}**" for x in blockers]
 
@@ -266,10 +319,12 @@ def main() -> int:
 
     print(f"State: {state}")
     print(f"Promotion Ready: {'YES' if promotion_ready else 'NO'}")
+    print(f"Canonical Source: {QUALIFICATION_EVIDENCE_TABLE}")
     print(f"Observed Cycles: {observed}")
     print(f"Valid Cycles: {valid}")
     print(f"Blocked Cycles: {blocked}")
-    print(f"Persisted: {'YES' if persisted else 'NO'}")
+    print(f"Runtime Supervision: {'PASS' if runtime_pass else 'WAITING/FAIL'}")
+    print(f"Paper-Only Boundary: {'PASS' if paper_only_pass else 'WAITING/FAIL'}")
     if blockers:
         print("Blockers: " + ", ".join(blockers))
 
