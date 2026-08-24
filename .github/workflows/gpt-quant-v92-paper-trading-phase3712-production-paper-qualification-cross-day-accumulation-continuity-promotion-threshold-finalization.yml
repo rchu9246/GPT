@@ -1,0 +1,216 @@
+name: GPT Quant Phase 3.7.12 - Production Paper Qualification Cross-Day Accumulation Continuity Promotion Threshold Finalization
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekdays 16:35 UTC / 00:35 Asia-Taipei.
+    - cron: "35 16 * * 1-5"
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: phase3712-cross-day-accumulation-threshold-finalization
+  cancel-in-progress: false
+
+jobs:
+  cross-day-accumulation-threshold-finalization:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GPT_QUANT_PORTFOLIO_ID: V92_PRODUCTION_PAPER_V91
+      GPT_QUANT_STRATEGY_VERSION: V9.1
+      WF3710: gpt-quant-v92-paper-trading-phase3710-production-paper-multi-day-qualification-accumulation-automatic-promotion-transition.yml
+      WF379: gpt-quant-v92-paper-trading-phase379-production-paper-qualification-state-reconciliation-automatic-promotion-readiness.yml
+      WF3711: gpt-quant-v92-paper-trading-phase3711-production-paper-qualification-promotion-transition-integrity-post-promotion-safety-lock.yml
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile Phase 3.7.12
+        run: python -m py_compile automation/v92/paper_trading_phase3712_production_paper_qualification_cross_day_accumulation_continuity_promotion_threshold_finalization.py
+
+      - name: Validate Phase 3.7.12 safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="automation/v92/paper_trading_phase3712_production_paper_qualification_cross_day_accumulation_continuity_promotion_threshold_finalization.py"
+          grep -q 'QUALIFICATION_THRESHOLD_BYPASS_ALLOWED = False' "$f"
+          grep -q 'SAME_DAY_COUNTER_ADVANCE_ALLOWED = False' "$f"
+          grep -q 'FINALIZATION_WITHOUT_CANONICAL_THRESHOLD_ALLOWED = False' "$f"
+          grep -q 'PROMOTION_READY_BEFORE_THRESHOLD_FINALIZATION' "$f"
+          grep -q 'QUALIFICATION_THRESHOLD_FINALIZED' "$f"
+          echo "Phase 3.7.12 safety contract: PASS"
+
+      - name: Run latest Phase 3.7.10 accumulation pipeline
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          before_id="$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/${WF3710}/runs?branch=main&per_page=1" \
+            --jq '.workflow_runs[0].id // 0' || echo 0)"
+
+          gh workflow run "$WF3710" --ref main
+
+          run_id=""
+          for i in $(seq 1 30); do
+            sleep 2
+            run_id="$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${GITHUB_REPOSITORY}/actions/workflows/${WF3710}/runs?branch=main&event=workflow_dispatch&per_page=10" \
+              --jq "[.workflow_runs[] | select(.id > ${before_id})][0].id // empty" || true)"
+            [ -n "$run_id" ] && break
+          done
+
+          if [ -z "$run_id" ]; then
+            echo "::error::Unable to resolve Phase 3.7.10 run."
+            exit 1
+          fi
+
+          for i in $(seq 1 180); do
+            status="$(gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status')"
+            conclusion="$(gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.conclusion // ""')"
+            echo "Phase 3.7.10 status=${status} conclusion=${conclusion:-pending}"
+            if [ "$status" = "completed" ]; then
+              [ "$conclusion" = "success" ] && break
+              echo "::error::Phase 3.7.10 failed with ${conclusion}"
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Refresh Phase 3.7.9 readiness
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          before_id="$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/${WF379}/runs?branch=main&per_page=1" \
+            --jq '.workflow_runs[0].id // 0' || echo 0)"
+
+          gh workflow run "$WF379" --ref main
+
+          run_id=""
+          for i in $(seq 1 30); do
+            sleep 2
+            run_id="$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${GITHUB_REPOSITORY}/actions/workflows/${WF379}/runs?branch=main&event=workflow_dispatch&per_page=10" \
+              --jq "[.workflow_runs[] | select(.id > ${before_id})][0].id // empty" || true)"
+            [ -n "$run_id" ] && break
+          done
+
+          if [ -z "$run_id" ]; then
+            echo "::error::Unable to resolve Phase 3.7.9 run."
+            exit 1
+          fi
+
+          for i in $(seq 1 180); do
+            status="$(gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status')"
+            conclusion="$(gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.conclusion // ""')"
+            echo "Phase 3.7.9 status=${status} conclusion=${conclusion:-pending}"
+            if [ "$status" = "completed" ]; then
+              [ "$conclusion" = "success" ] && break
+              echo "::error::Phase 3.7.9 failed with ${conclusion}"
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Evaluate qualification threshold finalization
+        id: phase3712
+        continue-on-error: true
+        run: python automation/v92/paper_trading_phase3712_production_paper_qualification_cross_day_accumulation_continuity_promotion_threshold_finalization.py
+
+      - name: Run Phase 3.7.11 integrity check after threshold finalization
+        if: steps.phase3712.outcome == 'success'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          threshold_met="$(python -c "import json; d=json.load(open('artifacts/phase3712/phase3712_result.json', encoding='utf-8')); print('true' if d.get('promotion_threshold_met') else 'false')")"
+
+          if [ "$threshold_met" != "true" ]; then
+            echo "Threshold not met yet; Phase 3.7.11 post-finalization check not required."
+            exit 0
+          fi
+
+          before_id="$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/${WF3711}/runs?branch=main&per_page=1" \
+            --jq '.workflow_runs[0].id // 0' || echo 0)"
+
+          gh workflow run "$WF3711" --ref main
+
+          run_id=""
+          for i in $(seq 1 30); do
+            sleep 2
+            run_id="$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${GITHUB_REPOSITORY}/actions/workflows/${WF3711}/runs?branch=main&event=workflow_dispatch&per_page=10" \
+              --jq "[.workflow_runs[] | select(.id > ${before_id})][0].id // empty" || true)"
+            [ -n "$run_id" ] && break
+          done
+
+          if [ -z "$run_id" ]; then
+            echo "::error::Unable to resolve Phase 3.7.11 run."
+            exit 1
+          fi
+
+          for i in $(seq 1 180); do
+            status="$(gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status')"
+            conclusion="$(gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.conclusion // ""')"
+            echo "Phase 3.7.11 status=${status} conclusion=${conclusion:-pending}"
+            if [ "$status" = "completed" ]; then
+              [ "$conclusion" = "success" ] && break
+              echo "::error::Phase 3.7.11 failed with ${conclusion}"
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase3712/phase3712_summary.md ]; then
+            cat artifacts/phase3712/phase3712_summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload Phase 3.7.12 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3712-cross-day-accumulation-threshold-finalization
+          path: artifacts/phase3712
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Enforce Phase 3.7.12 result
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.phase3712.outcome }}" != "success" ]; then
+            echo "Phase 3.7.12 qualification threshold finalization is BLOCKED."
+            exit 1
+          fi
+          echo "Phase 3.7.12 qualification threshold finalization is healthy."
