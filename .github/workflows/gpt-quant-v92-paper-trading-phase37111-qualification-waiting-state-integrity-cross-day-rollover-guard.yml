@@ -1,0 +1,128 @@
+name: GPT Quant Phase 3.7.11.1 - Qualification Waiting-State Integrity Cross-Day Rollover Guard
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekdays 16:20 UTC / 00:20 Asia-Taipei.
+    - cron: "20 16 * * 1-5"
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: phase37111-qualification-waiting-rollover-guard
+  cancel-in-progress: false
+
+jobs:
+  qualification-waiting-rollover-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GPT_QUANT_PORTFOLIO_ID: V92_PRODUCTION_PAPER_V91
+      GPT_QUANT_STRATEGY_VERSION: V9.1
+      WF3710: gpt-quant-v92-paper-trading-phase3710-production-paper-multi-day-qualification-accumulation-automatic-promotion-transition.yml
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile Phase 3.7.11.1
+        run: python -m py_compile automation/v92/paper_trading_phase37111_qualification_waiting_state_integrity_cross_day_rollover_guard.py
+
+      - name: Validate Phase 3.7.11.1 safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="automation/v92/paper_trading_phase37111_qualification_waiting_state_integrity_cross_day_rollover_guard.py"
+          grep -q 'SAME_DAY_COUNTER_ADVANCE_ALLOWED = False' "$f"
+          grep -q 'CROSS_DAY_ADVANCE_WITHOUT_NEW_DATE_ALLOWED = False' "$f"
+          grep -q 'QUALIFICATION_THRESHOLD_BYPASS_ALLOWED = False' "$f"
+          grep -q 'SAME_DAY_COUNTER_ADVANCE_DETECTED' "$f"
+          grep -q 'CROSS_DAY_ROLLOVER_INTEGRITY_FAILED' "$f"
+          grep -q 'MULTI_CYCLE_COUNTER_JUMP_DETECTED' "$f"
+          echo "Phase 3.7.11.1 safety contract: PASS"
+
+      - name: Capture baseline qualification state
+        run: python automation/v92/paper_trading_phase37111_qualification_waiting_state_integrity_cross_day_rollover_guard.py --mode baseline
+
+      - name: Run current Phase 3.7.10 pipeline once
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          before_id="$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/${WF3710}/runs?branch=main&per_page=1" \
+            --jq '.workflow_runs[0].id // 0' || echo 0)"
+
+          gh workflow run "$WF3710" --ref main
+
+          run_id=""
+          for i in $(seq 1 30); do
+            sleep 2
+            run_id="$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${GITHUB_REPOSITORY}/actions/workflows/${WF3710}/runs?branch=main&event=workflow_dispatch&per_page=10" \
+              --jq "[.workflow_runs[] | select(.id > ${before_id})][0].id // empty" || true)"
+            [ -n "$run_id" ] && break
+          done
+
+          if [ -z "$run_id" ]; then
+            echo "::error::Unable to resolve Phase 3.7.10 run."
+            exit 1
+          fi
+
+          for i in $(seq 1 180); do
+            status="$(gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status')"
+            conclusion="$(gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.conclusion // ""')"
+            echo "Phase 3.7.10 status=${status} conclusion=${conclusion:-pending}"
+            if [ "$status" = "completed" ]; then
+              [ "$conclusion" = "success" ] && break
+              echo "::error::Phase 3.7.10 failed with ${conclusion}"
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Validate waiting-state / cross-day rollover guard
+        id: phase37111
+        continue-on-error: true
+        run: python automation/v92/paper_trading_phase37111_qualification_waiting_state_integrity_cross_day_rollover_guard.py --mode validate
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase37111/phase37111_summary.md ]; then
+            cat artifacts/phase37111/phase37111_summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload Phase 3.7.11.1 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase37111-qualification-waiting-rollover-guard
+          path: artifacts/phase37111
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Enforce Phase 3.7.11.1 result
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.phase37111.outcome }}" != "success" ]; then
+            echo "Phase 3.7.11.1 qualification waiting-state integrity is BLOCKED."
+            exit 1
+          fi
+          echo "Phase 3.7.11.1 qualification waiting-state integrity is healthy."
