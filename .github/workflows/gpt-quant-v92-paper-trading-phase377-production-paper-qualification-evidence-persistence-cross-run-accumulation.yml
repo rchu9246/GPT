@@ -204,20 +204,13 @@ jobs:
         if: always()
         shell: bash
         run: |
+          set -euo pipefail
           echo "Resolved: ${{ steps.resolve374.outputs.phase374_evidence_resolved }}"
           if [ -f artifacts/phase377/input/phase374_result.json ]; then
-            python - <<'PY'
-            import json
-            from pathlib import Path
-            p=Path("artifacts/phase377/input/phase374_result.json")
-            d=json.loads(p.read_text(encoding="utf-8"))
-            print("daily_validation_state:", d.get("daily_validation_state"))
-            print("trade_activity_observed:", d.get("trade_activity_observed"))
-            print("checks:", json.dumps(d.get("checks", {}), ensure_ascii=False))
-            print("bridge:", json.dumps(d.get("_phase377_bridge", {}), ensure_ascii=False))
-            PY
+            python -c "import json,pathlib; p=pathlib.Path('artifacts/phase377/input/phase374_result.json'); d=json.loads(p.read_text(encoding='utf-8')); print('daily_validation_state:', d.get('daily_validation_state')); print('trade_activity_observed:', d.get('trade_activity_observed')); print('checks:', json.dumps(d.get('checks', {}), ensure_ascii=False)); print('bridge:', json.dumps(d.get('_phase377_bridge', {}), ensure_ascii=False))"
+          else
+            echo "No resolved Phase 3.7.4 canonical evidence file is present."
           fi
-
       - name: Execute Phase 3.7.7
         id: phase377
         continue-on-error: true
