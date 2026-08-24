@@ -1,0 +1,166 @@
+name: GPT Quant Phase 3.7.11 - Production Paper Qualification Promotion Transition Integrity Post-Promotion Safety Lock
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekdays 16:05 UTC / 00:05 Asia-Taipei.
+    - cron: "5 16 * * 1-5"
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: phase3711-promotion-transition-integrity-safety-lock
+  cancel-in-progress: false
+
+jobs:
+  promotion-transition-integrity-safety-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GPT_QUANT_PORTFOLIO_ID: V92_PRODUCTION_PAPER_V91
+      GPT_QUANT_STRATEGY_VERSION: V9.1
+      WF3710: gpt-quant-v92-paper-trading-phase3710-production-paper-multi-day-qualification-accumulation-automatic-promotion-transition.yml
+      WF379: gpt-quant-v92-paper-trading-phase379-production-paper-qualification-state-reconciliation-automatic-promotion-readiness.yml
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile Phase 3.7.11
+        run: python -m py_compile automation/v92/paper_trading_phase3711_production_paper_qualification_promotion_transition_integrity_post_promotion_safety_lock.py
+
+      - name: Validate Phase 3.7.11 safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="automation/v92/paper_trading_phase3711_production_paper_qualification_promotion_transition_integrity_post_promotion_safety_lock.py"
+          grep -q 'POST_PROMOTION_BROKER_UNLOCK_ALLOWED = False' "$f"
+          grep -q 'POST_PROMOTION_REAL_MONEY_UNLOCK_ALLOWED = False' "$f"
+          grep -q 'QUALIFICATION_THRESHOLD_BYPASS_ALLOWED = False' "$f"
+          grep -q 'PROMOTION_READY_BEFORE_CANONICAL_THRESHOLD' "$f"
+          grep -q 'POST_PROMOTION_SAFETY_LOCK_BREACH' "$f"
+          echo "Phase 3.7.11 safety contract: PASS"
+
+      - name: Run latest multi-day qualification transition
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          before_id="$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/${WF3710}/runs?branch=main&per_page=1" \
+            --jq '.workflow_runs[0].id // 0' || echo 0)"
+
+          gh workflow run "$WF3710" --ref main
+
+          run_id=""
+          for i in $(seq 1 30); do
+            sleep 2
+            run_id="$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${GITHUB_REPOSITORY}/actions/workflows/${WF3710}/runs?branch=main&event=workflow_dispatch&per_page=10" \
+              --jq "[.workflow_runs[] | select(.id > ${before_id})][0].id // empty" || true)"
+            [ -n "$run_id" ] && break
+          done
+
+          if [ -z "$run_id" ]; then
+            echo "::error::Unable to resolve Phase 3.7.10 run."
+            exit 1
+          fi
+
+          for i in $(seq 1 180); do
+            status="$(gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status')"
+            conclusion="$(gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.conclusion // ""')"
+            echo "Phase 3.7.10 status=${status} conclusion=${conclusion:-pending}"
+            if [ "$status" = "completed" ]; then
+              [ "$conclusion" = "success" ] && break
+              echo "::error::Phase 3.7.10 failed with ${conclusion}"
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Refresh promotion readiness
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          before_id="$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/${WF379}/runs?branch=main&per_page=1" \
+            --jq '.workflow_runs[0].id // 0' || echo 0)"
+
+          gh workflow run "$WF379" --ref main
+
+          run_id=""
+          for i in $(seq 1 30); do
+            sleep 2
+            run_id="$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${GITHUB_REPOSITORY}/actions/workflows/${WF379}/runs?branch=main&event=workflow_dispatch&per_page=10" \
+              --jq "[.workflow_runs[] | select(.id > ${before_id})][0].id // empty" || true)"
+            [ -n "$run_id" ] && break
+          done
+
+          if [ -z "$run_id" ]; then
+            echo "::error::Unable to resolve Phase 3.7.9 run."
+            exit 1
+          fi
+
+          for i in $(seq 1 180); do
+            status="$(gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status')"
+            conclusion="$(gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.conclusion // ""')"
+            echo "Phase 3.7.9 status=${status} conclusion=${conclusion:-pending}"
+            if [ "$status" = "completed" ]; then
+              [ "$conclusion" = "success" ] && break
+              echo "::error::Phase 3.7.9 failed with ${conclusion}"
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Validate promotion transition integrity and safety lock
+        id: phase3711
+        continue-on-error: true
+        run: python automation/v92/paper_trading_phase3711_production_paper_qualification_promotion_transition_integrity_post_promotion_safety_lock.py
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase3711/phase3711_summary.md ]; then
+            cat artifacts/phase3711/phase3711_summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload Phase 3.7.11 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3711-promotion-transition-integrity-safety-lock
+          path: artifacts/phase3711
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Enforce Phase 3.7.11 result
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.phase3711.outcome }}" != "success" ]; then
+            echo "Phase 3.7.11 promotion transition integrity is BLOCKED."
+            exit 1
+          fi
+          echo "Phase 3.7.11 promotion transition integrity is healthy."
