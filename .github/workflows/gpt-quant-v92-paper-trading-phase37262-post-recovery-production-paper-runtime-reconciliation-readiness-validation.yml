@@ -1,0 +1,92 @@
+name: GPT Quant Phase 3.7.2.6.2 - Post Recovery Production Paper Runtime Reconciliation Readiness Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+      portfolio_id:
+        description: Persistent paper portfolio ID
+        required: true
+        default: V92_PRODUCTION_PAPER_V91
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase37262-post-recovery-runtime-readiness
+  cancel-in-progress: false
+
+jobs:
+  post-recovery-runtime-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Compile Phase 3.7.2.6.2
+        run: |
+          python -m py_compile automation/v92/paper_trading_phase37262_post_recovery_production_paper_runtime_reconciliation_readiness_validation.py
+
+      - name: Validate Phase 3.7.2.6.2 safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+
+          FILE="automation/v92/paper_trading_phase37262_post_recovery_production_paper_runtime_reconciliation_readiness_validation.py"
+
+          grep -q 'PHASE37262_POST_RECOVERY_PRODUCTION_PAPER_RUNTIME_RECONCILIATION_READINESS_VALIDATION' "$FILE"
+          grep -q 'phase37261_reconstruction_audit_v92' "$FILE"
+          grep -q 'BROKER_ORDER_SUBMISSION_ENABLED = False' "$FILE"
+          grep -q 'REAL_MONEY_TRADING_ENABLED = False' "$FILE"
+          grep -q 'HISTORICAL_REWRITE_ALLOWED = False' "$FILE"
+
+          echo "Phase 3.7.2.6.2 safety contract: PASS"
+
+      - name: Execute Phase 3.7.2.6.2
+        shell: bash
+        run: |
+          mkdir -p artifacts/phase37262
+
+          python automation/v92/paper_trading_phase37262_post_recovery_production_paper_runtime_reconciliation_readiness_validation.py \
+            --strategy-version "$STRATEGY_VERSION" \
+            --portfolio-id "$PORTFOLIO_ID" \
+            | tee artifacts/phase37262/console.md
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase37262/summary.md ]; then
+            cat artifacts/phase37262/summary.md >> "$GITHUB_STEP_SUMMARY"
+          elif [ -f artifacts/phase37262/console.md ]; then
+            cat artifacts/phase37262/console.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase37262-runtime-reconciliation-readiness
+          path: artifacts/phase37262/
+          if-no-files-found: warn
+          retention-days: 120
