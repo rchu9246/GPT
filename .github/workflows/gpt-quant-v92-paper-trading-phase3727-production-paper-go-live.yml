@@ -1,0 +1,99 @@
+name: GPT Quant Phase 3.7.2.7 - Production Paper Go-Live
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy_version:
+        description: Strategy version
+        required: true
+        default: V9.1
+        type: string
+      portfolio_id:
+        description: Persistent paper portfolio ID
+        required: true
+        default: V92_PRODUCTION_PAPER_V91
+        type: string
+
+  schedule:
+    # 14:05 UTC = 22:05 Asia/Taipei, Monday-Friday
+    - cron: "5 14 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase3727-production-paper-go-live
+  cancel-in-progress: false
+
+jobs:
+  production-paper-go-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
+      PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Compile Phase 3.7.2.7
+        run: |
+          python -m py_compile automation/v92/paper_trading_phase3727_production_paper_go_live.py
+
+      - name: Validate Phase 3.7.2.7 safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_URL:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+
+          FILE="automation/v92/paper_trading_phase3727_production_paper_go_live.py"
+
+          grep -q 'PHASE3727_PRODUCTION_PAPER_GO_LIVE' "$FILE"
+          grep -q 'PAPER_TRADING_ENABLED = True' "$FILE"
+          grep -q 'DATA_COLLECTION_ENABLED = True' "$FILE"
+          grep -q 'RUNTIME_SUPERVISION_ENABLED = True' "$FILE"
+          grep -q 'BROKER_ORDER_SUBMISSION_ENABLED = False' "$FILE"
+          grep -q 'REAL_MONEY_TRADING_ENABLED = False' "$FILE"
+          grep -q 'HISTORICAL_REWRITE_ALLOWED = False' "$FILE"
+          grep -q 'Real-money promotion authority is \*\*NOT PRESENT IN THIS PHASE\*\*' "$FILE"
+
+          echo "Phase 3.7.2.7 safety contract: PASS"
+
+      - name: Execute Phase 3.7.2.7
+        shell: bash
+        run: |
+          mkdir -p artifacts/phase3727
+
+          python automation/v92/paper_trading_phase3727_production_paper_go_live.py \
+            --strategy-version "$STRATEGY_VERSION" \
+            --portfolio-id "$PORTFOLIO_ID" \
+            | tee artifacts/phase3727/console.md
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase3727/summary.md ]; then
+            cat artifacts/phase3727/summary.md >> "$GITHUB_STEP_SUMMARY"
+          elif [ -f artifacts/phase3727/console.md ]; then
+            cat artifacts/phase3727/console.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3727-production-paper-go-live
+          path: artifacts/phase3727/
+          if-no-files-found: warn
+          retention-days: 120
