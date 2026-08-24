@@ -46,10 +46,15 @@ SUPABASE_KEY = env_first("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY", "S
 class RestError(RuntimeError):
     pass
 
-def request(table: str, limit: int = 100) -> List[Dict[str, Any]]:
+def request(table: str, limit: int = 100, portfolio_scoped: bool = False) -> List[Dict[str, Any]]:
     if not SUPABASE_URL or not SUPABASE_KEY:
         raise RuntimeError("SUPABASE configuration missing")
-    q = urllib.parse.urlencode({"select":"*","limit":str(limit)})
+
+    params = {"select":"*","limit":str(limit)}
+    if portfolio_scoped:
+        params["portfolio_id"] = f"eq.{PORTFOLIO_ID}"
+
+    q = urllib.parse.urlencode(params)
     req = urllib.request.Request(
         f"{SUPABASE_URL}/rest/v1/{table}?{q}",
         headers={"apikey":SUPABASE_KEY,"Authorization":f"Bearer {SUPABASE_KEY}","Accept":"application/json"}
@@ -66,10 +71,21 @@ def is_missing(exc: Exception) -> bool:
     s = str(exc).lower()
     return "pgrst205" in s or "42p01" in s or "could not find the table" in s
 
-def inspect(candidates: List[str]) -> Tuple[Optional[str], List[Dict[str, Any]], List[str]]:
+def inspect(candidates: List[str], portfolio_scoped: bool = False) -> Tuple[Optional[str], List[Dict[str, Any]], List[str]]:
     errs = []
     for t in candidates:
         try:
+            if portfolio_scoped:
+                try:
+                    rows = request(t, portfolio_scoped=True)
+                    return t, rows, errs
+                except RestError as scoped_error:
+                    # Some legacy-compatible tables may not expose portfolio_id.
+                    # Fall back only when the schema itself rejects that column/filter.
+                    msg = str(scoped_error).lower()
+                    if "portfolio_id" not in msg and "pgrst" not in msg:
+                        raise
+                    errs.append(f"{t}:PORTFOLIO_FILTER_FALLBACK")
             return t, request(t), errs
         except Exception as e:
             if is_missing(e):
@@ -105,6 +121,49 @@ def active(row: Dict[str, Any]) -> bool:
     hay = " ".join(text(v).upper() for v in row.values())
     return any(w in hay for w in ["ACTIVE","CONTINUE_ACTIVE","AUTHORIZED_PAPER_CONTINUATION","PASS","READY"])
 
+def field_state(row: Dict[str, Any], names: Tuple[str, ...]) -> str:
+    lower = {str(k).lower(): v for k, v in row.items()}
+    for name in names:
+        value = text(lower.get(name.lower())).upper()
+        if value:
+            return value
+    return ""
+
+def runtime_supervision_ready(row: Dict[str, Any]) -> Tuple[bool, str]:
+    if not row:
+        return False, "MISSING"
+
+    state = field_state(
+        row,
+        ("supervision_state", "runtime_supervision", "runtime_supervision_state", "state", "status"),
+    )
+
+    # Canonical Phase 3.6.7 / 3.7.2.7 contract:
+    # CONTINUE_ACTIVE and CONTINUE_WITH_OBSERVATION are valid supervised paper states.
+    # Only explicit fail-closed/revocation states block continuation.
+    canonical_block_states = {"REVOKED","FAIL_CLOSED","BLOCKED","HALTED","SUSPENDED","ERROR","FAILED"}
+    canonical_ready_states = {
+        "CONTINUE_ACTIVE",
+        "CONTINUE_WITH_OBSERVATION",
+        "ACTIVE",
+        "ENABLED",
+        "READY",
+        "PASS",
+        "AUTHORIZED_PAPER_CONTINUATION",
+    }
+
+    if state in canonical_block_states:
+        return False, state
+    if state in canonical_ready_states:
+        return True, state
+
+    # Compatibility rule: a present canonical supervision row with no explicit
+    # blocking state remains supervised/ready, matching Phase 3.7.2.7.
+    if not blocked(row):
+        return True, state or "PRESENT_NON_BLOCKING"
+
+    return False, state or "BLOCKED"
+
 def main() -> int:
     art = Path("artifacts/phase374")
     art.mkdir(parents=True, exist_ok=True)
@@ -128,13 +187,22 @@ def main() -> int:
 
     sources = {}
     for name, candidates in TABLE_GROUPS.items():
-        table, rows, errors = inspect(candidates)
+        # Canonical control states must be resolved for this portfolio, not from
+        # an unrelated globally-latest row.
+        scoped = name in {"activation", "master_cycle", "runtime"}
+        table, rows, errors = inspect(candidates, portfolio_scoped=scoped)
         sources[name] = {"table":table,"rows_sampled":len(rows),"latest":latest(rows),"errors":errors}
     result["sources"] = sources
 
     activation_ok = bool(sources["activation"]["latest"]) and active(sources["activation"]["latest"]) and not blocked(sources["activation"]["latest"])
     master_ok = bool(sources["master_cycle"]["latest"]) and not blocked(sources["master_cycle"]["latest"])
-    runtime_ok = bool(sources["runtime"]["latest"]) and not blocked(sources["runtime"]["latest"])
+    runtime_ok, runtime_state = runtime_supervision_ready(sources["runtime"]["latest"])
+    result["runtime_supervision_resolution"] = {
+        "table": sources["runtime"]["table"],
+        "state": runtime_state,
+        "ready": runtime_ok,
+        "compatibility_contract": "PHASE367_PHASE3727_CANONICAL",
+    }
 
     signals = sources["signals"]["rows_sampled"] > 0
     decisions = sources["decisions"]["rows_sampled"] > 0
@@ -149,7 +217,7 @@ def main() -> int:
     blockers = []
     if not activation_ok: blockers.append("ACTIVATION_NOT_ACTIVE")
     if not master_ok: blockers.append("MASTER_CYCLE_NOT_READY")
-    if not runtime_ok: blockers.append("RUNTIME_SUPERVISION_NOT_READY")
+    if not runtime_ok: blockers.append(f"RUNTIME_SUPERVISION_NOT_READY:{runtime_state}")
 
     if blockers:
         state = "DAILY_CYCLE_BLOCKED"
@@ -183,7 +251,7 @@ def main() -> int:
 def finish(art: Path, result: Dict[str, Any]) -> int:
     (art/"phase374_result.json").write_text(json.dumps(result,indent=2,ensure_ascii=False),encoding="utf-8")
     lines = [
-        "# GPT Quant V9.2 Paper Trading ??Phase 3.7.4",
+        "# GPT Quant V9.2 Paper Trading — Phase 3.7.4",
         "",
         "## Production Paper Daily Cycle Monitoring + Evidence Accumulation",
         "",
