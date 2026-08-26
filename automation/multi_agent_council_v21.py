@@ -475,3 +475,13 @@ upsert_rows(
 print(cio_message)
 print(dissent_summary)
 print(execution_guidance)
+# Phase 3.7.18.7 compatibility entrypoint.
+#
+# multi_agent_council_v21.py is a legacy top-level executable. Enterprise 3.0
+# Stable loads this module via importlib, which already executes the existing
+# council-review body. The orchestrator then requires a callable main().
+#
+# This no-op main() satisfies the loader contract without re-running council
+# deliberation, consensus scoring, symbol review, or PAPER decision generation.
+def main() -> None:
+    return None
