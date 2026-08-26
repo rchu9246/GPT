@@ -1,0 +1,87 @@
+name: GPT Quant Phase 3.7.18.2 - Natural 3of3 Completion Automatic Promotion Activation Chain Verification
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run after Phase 3.7.18 observation.
+    # 19:55 UTC = 03:55 Asia/Taipei.
+    - cron: "55 19 * * 1-5"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: phase37182-natural-3of3-promotion-activation-chain-verification
+  cancel-in-progress: false
+
+jobs:
+  natural-3of3-promotion-activation-chain-verification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GITHUB_TOKEN: ${{ github.token }}
+      GPT_QUANT_PORTFOLIO_ID: V92_PRODUCTION_PAPER_V91
+      GPT_QUANT_STRATEGY_VERSION: V9.1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile Phase 3.7.18.2
+        run: python -m py_compile automation/v92/paper_trading_phase37182_natural_3of3_completion_automatic_promotion_activation_chain_verification.py
+
+      - name: Validate Phase 3.7.18.2 safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="automation/v92/paper_trading_phase37182_natural_3of3_completion_automatic_promotion_activation_chain_verification.py"
+          grep -q 'OBSERVATION_ONLY = True' "$f"
+          grep -q 'QUALIFICATION_MUTATION_ALLOWED = False' "$f"
+          grep -q 'SYNTHETIC_QUALIFICATION_ALLOWED = False' "$f"
+          grep -q 'MANUAL_COUNTER_INCREMENT_ALLOWED = False' "$f"
+          grep -q 'PROMOTION_FORCE_ALLOWED = False' "$f"
+          grep -q 'ACTIVATION_FORCE_ALLOWED = False' "$f"
+          grep -q 'BROKER_ORDER_SUBMISSION_ENABLED = False' "$f"
+          grep -q 'REAL_MONEY_TRADING_ENABLED = False' "$f"
+          echo "Phase 3.7.18.2 safety contract: PASS"
+
+      - name: Verify natural 3of3 completion and promotion activation chain
+        id: phase37182
+        continue-on-error: true
+        run: python automation/v92/paper_trading_phase37182_natural_3of3_completion_automatic_promotion_activation_chain_verification.py
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase37182/phase37182_summary.md ]; then
+            cat artifacts/phase37182/phase37182_summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload Phase 3.7.18.2 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase37182-natural-3of3-promotion-activation-chain-verification
+          path: artifacts/phase37182
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Enforce Phase 3.7.18.2 result
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.phase37182.outcome }}" != "success" ]; then
+            echo "Phase 3.7.18.2 detected a blocking integrity problem."
+            exit 1
+          fi
+          echo "Phase 3.7.18.2 natural 3/3 promotion/activation verification is healthy."
