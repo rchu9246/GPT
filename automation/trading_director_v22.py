@@ -369,3 +369,15 @@ print(f"Directive: {directive}")
 print(f"Confidence: {confidence:.1f}")
 print(portfolio_action)
 print(rationale)
+# Phase 3.7.18.8 compatibility entrypoint.
+#
+# trading_director_v22.py is a legacy top-level executable. Enterprise 3.0
+# Stable loads this module via importlib, which already executes the existing
+# director scoring / directive logic. The orchestrator then requires a callable
+# main().
+#
+# This no-op main() satisfies the loader contract without re-running director
+# scoring, directive selection, confidence calculation, or PAPER allocation
+# guidance a second time.
+def main() -> None:
+    return None
