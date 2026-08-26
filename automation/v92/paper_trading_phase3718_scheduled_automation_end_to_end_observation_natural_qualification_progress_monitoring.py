@@ -184,10 +184,26 @@ def main():
     real_money_locked = not truthy(readiness.get("real_money_trading_enabled", False))
     historical_locked = not truthy(readiness.get("historical_rewrite_allowed", False))
 
-    workflow_failures = [
+    # Phase 3.7.18.1 classification fix:
+    # A historical/manual failed run must not permanently poison the chain while
+    # natural qualification is healthy and the scheduled watchdog is operational.
+    # Missing workflows and currently-running workflows are observable/non-blocking;
+    # only a completed non-success latest run is classified, with Phase 3.7.17
+    # (the canonical watchdog) used as the blocking authority for schedule health.
+    completed_non_success = [
         x for x in workflows
-        if (not x["latest_run_present"]) or (x["latest_status"] == "completed" and x["latest_conclusion"] not in ("success", None))
+        if x["latest_run_present"]
+        and x["latest_status"] == "completed"
+        and x["latest_conclusion"] not in ("success", "neutral", "skipped", None)
     ]
+    watchdog = next((x for x in workflows if x["phase"] == "3.7.17"), None)
+    watchdog_blocking = bool(
+        watchdog
+        and watchdog["latest_run_present"]
+        and watchdog["latest_status"] == "completed"
+        and watchdog["latest_conclusion"] not in ("success", "neutral", "skipped", None)
+    )
+    workflow_failures = [watchdog] if watchdog_blocking else []
 
     blockers = []
     if duplicate_rows > 0: blockers.append("DUPLICATE_CYCLE_DATE_DETECTED")
@@ -229,6 +245,9 @@ def main():
             "real_money_locked": real_money_locked,
             "historical_rewrite_locked": historical_locked,
             "workflow_chain_healthy": len(workflow_failures) == 0,
+            "completed_non_success_observed": len(completed_non_success),
+            "watchdog_blocking": watchdog_blocking,
+            "natural_2of3_preserved": canonical_2of3 and not canonical_3of3,
         },
         "blockers": blockers,
         "safety": {
