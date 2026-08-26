@@ -88,3 +88,13 @@ for idx,(_,sym,item,source) in enumerate(sorted(accepted,key=lambda x:x[0],rever
  payload={"account_name":ACCOUNT,"symbol":sym,"side":"BUY","quantity":qty,"reference_price":round(price,2),"notional":round(gross,2),"score":num(item["signal"].get("total_score")),"risk_score":num(item["signal"].get("risk_score"),50),"confidence":num(item["signal"].get("confidence"),50),"reason":f"ENTRY_SIGNAL_V16_{source}","mode":"PAPER","status":"PROPOSED","signal_date":day,"execution_date":day,"idempotency_key":key}
  row=post("trade_orders_v13",payload)[0]; created.append(row); evalrow(day,item["stock"],item["signal"],price,"ACCEPTED","ORDER_CREATED",f"source={source}",qty,gross,row["id"]); invest=max(0,invest-gross-fee)
 print(f"V16 complete date={day} strict_accepted={sum(1 for x in accepted if x[3]=='STRICT')} fallback_accepted={sum(1 for x in accepted if x[3]=='FALLBACK')} created={len(created)}")
+# Phase 3.7.18.3 compatibility entrypoint.
+#
+# This module is a legacy top-level executable: its V16 order-generation work
+# runs when the module is executed/imported. Enterprise 3.0 Stable dynamically
+# loads the module and then requires a callable main(). The missing callable
+# caused the orchestrator to mark V16_ORDERS failed after the legacy body had
+# already completed. This no-op entrypoint intentionally does not re-run the
+# order-generation body; it only satisfies the orchestrator contract.
+def main() -> None:
+    return None
