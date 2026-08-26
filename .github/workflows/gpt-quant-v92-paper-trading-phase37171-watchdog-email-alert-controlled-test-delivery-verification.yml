@@ -1,0 +1,82 @@
+name: GPT Quant Phase 3.7.17.1 - Watchdog Email Alert Controlled Test Delivery Verification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase37171-watchdog-email-alert-controlled-test
+  cancel-in-progress: false
+
+jobs:
+  controlled-email-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_APP_PASSWORD: ${{ secrets.SMTP_APP_PASSWORD }}
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: "465"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile Phase 3.7.17.1
+        run: python -m py_compile automation/v92/paper_trading_phase37171_watchdog_email_alert_controlled_test_delivery_verification.py
+
+      - name: Validate controlled-test safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="automation/v92/paper_trading_phase37171_watchdog_email_alert_controlled_test_delivery_verification.py"
+          grep -q 'CONTROLLED_TEST_ONLY = True' "$f"
+          grep -q 'WATCHDOG_READ_ONLY = True' "$f"
+          grep -q 'QUALIFICATION_MUTATION_ALLOWED = False' "$f"
+          grep -q 'SYNTHETIC_QUALIFICATION_ALLOWED = False' "$f"
+          grep -q 'MANUAL_COUNTER_INCREMENT_ALLOWED = False' "$f"
+          grep -q 'PRODUCTION_SCHEDULE_MUTATION_ALLOWED = False' "$f"
+          grep -q 'BROKER_ORDER_SUBMISSION_ENABLED = False' "$f"
+          grep -q 'REAL_MONEY_TRADING_ENABLED = False' "$f"
+          echo "Phase 3.7.17.1 controlled-test safety contract: PASS"
+
+      - name: Send controlled test email
+        id: phase37171
+        continue-on-error: true
+        run: python automation/v92/paper_trading_phase37171_watchdog_email_alert_controlled_test_delivery_verification.py
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase37171/phase37171_summary.md ]; then
+            cat artifacts/phase37171/phase37171_summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload Phase 3.7.17.1 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase37171-watchdog-email-alert-controlled-test
+          path: artifacts/phase37171
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Enforce controlled test result
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.phase37171.outcome }}" != "success" ]; then
+            echo "Phase 3.7.17.1 controlled test failed."
+            exit 1
+          fi
+          echo "Phase 3.7.17.1 email send succeeded. Confirm delivery in recipient inbox."
