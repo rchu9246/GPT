@@ -354,3 +354,14 @@ upsert_rows(
 print(pm_message)
 print(cro_message)
 print(execution_plan)
+# Phase 3.7.18.6 compatibility entrypoint.
+#
+# hedge_fund_manager_v19.py is a legacy top-level executable. Enterprise 3.0
+# Stable loads this module via importlib, so the existing hedge/risk logic already
+# executes during module loading. The orchestrator then requires a callable
+# main(). Without main(), the stage is marked failed after V19 logic completes.
+#
+# This no-op main() satisfies the compatibility contract without re-running
+# regime allocation, VaR / drawdown checks, hedge sizing, or PAPER order review.
+def main() -> None:
+    return None
