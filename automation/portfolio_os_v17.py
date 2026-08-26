@@ -327,3 +327,15 @@ print(
     f"V17 Portfolio OS complete: positions={len(positions)}, "
     f"decisions={len(decisions)}, equity={equity:.2f}"
 )
+# Phase 3.7.18.4 compatibility entrypoint.
+#
+# portfolio_os_v17.py is a legacy top-level executable. Enterprise 3.0 Stable
+# loads the module via importlib, which executes its existing V17 portfolio body,
+# and then requires a callable main(). Without main(), the stage is marked failed
+# after the portfolio work already completed.
+#
+# This compatibility main() is intentionally a no-op. It satisfies the
+# orchestrator contract without re-running portfolio decisions, position updates,
+# equity snapshots, or proposed PAPER orders a second time.
+def main() -> None:
+    return None
