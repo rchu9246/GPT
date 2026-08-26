@@ -379,3 +379,14 @@ upsert_rows(
 print(chief_message)
 print(risk_message)
 print(action_plan)
+# Phase 3.7.18.5 compatibility entrypoint.
+#
+# ai_fund_manager_v18.py is a legacy top-level executable. Enterprise 3.0 Stable
+# loads this module via importlib, so the existing AI Fund Manager body already
+# runs during module loading. The orchestrator then requires a callable main().
+#
+# This no-op main() satisfies that compatibility contract without re-running the
+# market-regime analysis, committee review, risk sizing, or proposed PAPER order
+# generation a second time.
+def main() -> None:
+    return None
