@@ -113,7 +113,10 @@ def select_latest(
     portfolio_id: str,
     order_candidates: Tuple[str, ...],
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    # Canonical fallback semantics: zero rows from a successful query is
+    # a valid read, not a source-read failure. Only fail if every query fails.
     last_error: Optional[Exception] = None
+    successful_read = False
     filters = [
         "portfolio_id=eq." + urllib.parse.quote(portfolio_id, safe=""),
         "",
@@ -126,11 +129,15 @@ def select_latest(
             q += f"&order={col}.desc&limit=1"
             try:
                 rows = sb.select(table, q)
+                successful_read = True
                 if rows:
                     return rows[0], None
             except Exception as exc:
                 last_error = exc
+    if successful_read:
+        return None, None
     return None, str(last_error) if last_error else None
+
 
 def normalized_readiness(row: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if not row:
