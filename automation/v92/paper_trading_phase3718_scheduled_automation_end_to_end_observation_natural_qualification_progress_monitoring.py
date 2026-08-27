@@ -171,7 +171,9 @@ def main():
         and qualification["paper_only_boundary_pass"]
     )
 
-    promotion_ready = truthy(readiness.get("promotion_ready", False))
+    # PHASE371810_CANONICAL_3OF3_PROMOTION_READINESS_STATE_SYNCHRONIZATION_FIX_V2
+    # Preserve the persisted readiness signal separately.
+    persisted_promotion_ready = truthy(readiness.get("promotion_ready", False))
     readiness_consistent = True
     if readiness:
         readiness_consistent = (
@@ -204,6 +206,19 @@ def main():
         and watchdog["latest_conclusion"] not in ("success", "neutral", "skipped", None)
     )
     workflow_failures = [watchdog] if watchdog_blocking else []
+
+
+    # Observation-layer canonical promotion readiness.
+    # This derives from existing evidence only; it does not mutate persistence.
+    canonical_promotion_ready = (
+        canonical_3of3
+        and readiness_consistent
+        and broker_locked
+        and real_money_locked
+        and historical_locked
+        and (not workflow_failures)
+    )
+    promotion_ready = persisted_promotion_ready or canonical_promotion_ready
 
     blockers = []
     if duplicate_rows > 0: blockers.append("DUPLICATE_CYCLE_DATE_DETECTED")
@@ -240,6 +255,8 @@ def main():
             "canonical_2of3": canonical_2of3,
             "canonical_3of3": canonical_3of3,
             "promotion_ready": promotion_ready,
+            "persisted_promotion_ready": persisted_promotion_ready,
+            "canonical_promotion_ready": canonical_promotion_ready,
             "readiness_consistent": readiness_consistent,
             "broker_locked": broker_locked,
             "real_money_locked": real_money_locked,
@@ -280,6 +297,8 @@ def main():
         f"- Canonical 2/3: **{'PASS' if canonical_2of3 else 'WAITING'}**",
         f"- Canonical 3/3: **{'PASS' if canonical_3of3 else 'WAITING'}**",
         f"- Promotion Ready: **{'YES' if promotion_ready else 'NO'}**",
+        f"- Persisted Promotion Ready: **{'YES' if persisted_promotion_ready else 'NO'}**",
+        f"- Canonical Promotion Ready: **{'YES' if canonical_promotion_ready else 'NO'}**",
         "",
         "## End-to-End Workflow Chain",
         "",
