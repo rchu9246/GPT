@@ -38,30 +38,38 @@ jobs:
           path: artifacts/phase3717
           if-no-files-found: warn
           retention-days: 90
-      - name: Enforce Phase 3.7.17 result semantics
+      - name: Enforce Phase 3.7.17 terminal-state evidence contract
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          # PHASE37171_WATCHDOG_ALERT_RESULT_SEMANTICS_FIX
-          evidence_dir="artifacts/phase3717"
+          # PHASE37172_WATCHDOG_TERMINAL_STATE_EVIDENCE_CONTRACT_ALIGNMENT
+          result_json="artifacts/phase3717/phase3717_result.json"
 
-          if [ ! -d "$evidence_dir" ]; then
-            echo "::error::Phase 3.7.17 evidence directory missing."
+          if [ ! -f "$result_json" ]; then
+            echo "::error::Phase 3.7.17 canonical result JSON is missing."
             exit 1
           fi
 
-          if grep -Rqs "WATCHDOG_ALERT_DETECTED" "$evidence_dir"; then
-            echo "Phase 3.7.17 watchdog completed successfully and detected alert(s)."
-            echo "Alert evidence and email delivery remain preserved."
-            exit 0
+          state=$(python -c "import json,sys; print(str(json.load(open(sys.argv[1], encoding='utf-8')).get('state','')))" "$result_json")
+
+          if [ -z "$state" ]; then
+            echo "::error::Phase 3.7.17 result JSON is missing state."
+            exit 1
           fi
 
-          if grep -Rqs "WATCHDOG_HEALTHY" "$evidence_dir"; then
-            echo "Phase 3.7.17 watchdog completed successfully with no alerts."
-            exit 0
-          fi
-
-          echo "::error::Unrecognized or missing Phase 3.7.17 watchdog terminal-state evidence."
-          find "$evidence_dir" -maxdepth 2 -type f -print || true
-          exit 1
+          case "$state" in
+            WATCHDOG_ALL_SCHEDULED_WORKFLOWS_HEALTHY)
+              echo "Phase 3.7.17 watchdog terminal state: $state"
+              exit 0
+              ;;
+            WATCHDOG_ALERT_DETECTED)
+              echo "Phase 3.7.17 watchdog terminal state: $state"
+              echo "Alert evidence/email remain preserved."
+              exit 0
+              ;;
+            *)
+              echo "::error::Unrecognized Phase 3.7.17 watchdog terminal state: $state"
+              exit 1
+              ;;
+          esac
