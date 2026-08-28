@@ -267,6 +267,27 @@ def canonical_business_date(row: Dict[str, Any]):
     return None, None
 
 # PHASE371819_RUNTIME_SUPERVISION_CROSS_DOMAIN_BUSINESS_DATE_EVENT_TIME_SUPERSESSION_RECONCILIATION_FIX
+# PHASE371820_RUNTIME_SUPERVISION_MASTER_BUSINESS_DATE_RUNTIME_EVENT_DATE_DOMAIN_SEPARATION_RECONCILIATION_FIX
+def chronology_domain(source: Optional[str]) -> str:
+    semantic = timestamp_semantic_class(source)
+    if semantic == "cycle_date":
+        return "business_date"
+    if semantic in {"event", "lifecycle"}:
+        return "event_time"
+    return "unknown"
+
+def separated_domain_relation(
+    runtime_row: Dict[str, Any],
+    master_row: Dict[str, Any],
+) -> Tuple[str, str]:
+    _, runtime_src, _ = canonical_event_timestamp_with_provenance(runtime_row)
+    _, master_src, _ = canonical_event_timestamp_with_provenance(master_row)
+
+    runtime_domain = chronology_domain(runtime_src)
+    master_domain = chronology_domain(master_src)
+
+    return runtime_domain, master_domain
+
 def cross_domain_supersession_evidence(
     runtime_row: Dict[str, Any],
     master_row: Dict[str, Any],
@@ -277,40 +298,67 @@ def cross_domain_supersession_evidence(
     runtime_business_date, runtime_business_src = canonical_business_date(runtime_row)
     master_business_date, master_business_src = canonical_business_date(master_row)
 
-    if runtime_event_dt is None:
-        return False, "RUNTIME_EVENT_TIME_MISSING"
+    runtime_domain, master_domain = separated_domain_relation(runtime_row, master_row)
 
-    if master_business_date is None:
-        return False, "MASTER_BUSINESS_DATE_MISSING"
-
-    if runtime_event_sem not in {"event", "lifecycle"}:
+    if runtime_domain == "unknown" or master_domain == "unknown":
         return False, (
-            f"RUNTIME_EVENT_DOMAIN_NOT_PRECISE:"
-            f"source={runtime_event_src},semantic={runtime_event_sem}"
+            f"UNKNOWN_CHRONOLOGY_DOMAIN:"
+            f"runtime={runtime_event_src}/{runtime_domain},"
+            f"master={master_event_src}/{master_domain}"
         )
 
-    # Business-date and event-time are different clock domains.
-    # Only date-level ordering may be used between them.
-    if master_business_date > runtime_event_dt.date():
-        return True, (
-            f"MASTER_BUSINESS_DATE_SUPERSEDES_RUNTIME_EVENT_DATE:"
+    # If both are in the same domain, chronology may be compared directly.
+    if runtime_domain == master_domain:
+        if runtime_domain == "event_time":
+            if runtime_event_dt is None or master_event_dt is None:
+                return False, "SAME_EVENT_DOMAIN_TIMESTAMP_MISSING"
+            return (
+                master_event_dt > runtime_event_dt,
+                (
+                    f"SAME_EVENT_DOMAIN_COMPARISON:"
+                    f"runtime={runtime_event_src},master={master_event_src}"
+                ),
+            )
+
+        if runtime_domain == "business_date":
+            if runtime_business_date is None or master_business_date is None:
+                return False, "SAME_BUSINESS_DOMAIN_DATE_MISSING"
+            return (
+                master_business_date > runtime_business_date,
+                (
+                    f"SAME_BUSINESS_DOMAIN_COMPARISON:"
+                    f"runtime={runtime_business_src},master={master_business_src}"
+                ),
+            )
+
+    # Critical Phase 3.7.18.20 rule:
+    # master business-date and runtime event-time are deliberately separate
+    # clock domains. A date such as master.run_date MUST NOT be declared stale
+    # solely because runtime.updated_at occurs later in wall-clock time.
+    if runtime_domain == "event_time" and master_domain == "business_date":
+        if master_business_date is None:
+            return False, "MASTER_BUSINESS_DATE_MISSING"
+        if runtime_event_dt is None:
+            return False, "RUNTIME_EVENT_TIME_MISSING"
+
+        return False, (
+            f"CROSS_DOMAIN_SEPARATED_NO_DIRECT_SUPERSESSION:"
             f"runtime={runtime_event_src}/{runtime_event_dt.date()},"
             f"master={master_business_src}/{master_business_date}"
         )
 
-    if master_business_date == runtime_event_dt.date():
+    if runtime_domain == "business_date" and master_domain == "event_time":
+        if runtime_business_date is None or master_event_dt is None:
+            return False, "CROSS_DOMAIN_CHRONOLOGY_MISSING"
         return False, (
-            f"SAME_DATE_CROSS_DOMAIN_AMBIGUOUS:"
-            f"runtime={runtime_event_src}/{runtime_event_dt.date()},"
-            f"master={master_business_src}/{master_business_date}"
+            f"CROSS_DOMAIN_SEPARATED_NO_DIRECT_SUPERSESSION:"
+            f"runtime={runtime_business_src}/{runtime_business_date},"
+            f"master={master_event_src}/{master_event_dt.date()}"
         )
 
-    # A business date before the runtime event date cannot by itself supersede
-    # that runtime event. Remain fail-closed.
     return False, (
-        f"MASTER_BUSINESS_DATE_PRECEDES_RUNTIME_EVENT_DATE:"
-        f"runtime={runtime_event_src}/{runtime_event_dt.date()},"
-        f"master={master_business_src}/{master_business_date}"
+        f"UNSAFE_DOMAIN_RELATION:"
+        f"runtime={runtime_domain},master={master_domain}"
     )
 
 def semantically_comparable_supersession(runtime_row: Dict[str, Any], master_row: Dict[str, Any]):
@@ -380,32 +428,32 @@ def suspended_is_superseded(
     if blocked(master_row):
         return False, "SUSPENDED_MASTER_CYCLE_BLOCKED"
 
-    comparable, reason = semantically_comparable_supersession(runtime_row, master_row)
-    if comparable:
-        return True, f"SUSPENDED_SUPERSEDED_BY_NORMALIZED_MASTER_EVENT:{reason}"
+    runtime_domain, master_domain = separated_domain_relation(runtime_row, master_row)
 
-    activation_dt, activation_src, activation_sem = canonical_semantic_event_time(activation_row)
-    runtime_dt, runtime_src, runtime_sem = canonical_semantic_event_time(runtime_row)
-    master_dt, master_src, master_sem = canonical_semantic_event_time(master_row)
+    # Same-domain evidence may prove chronological supersession.
+    if runtime_domain == master_domain and runtime_domain != "unknown":
+        comparable, reason = semantically_comparable_supersession(
+            runtime_row,
+            master_row,
+        )
+        if comparable:
+            return True, f"SUSPENDED_SUPERSEDED_WITHIN_DOMAIN:{reason}"
+        return False, f"SUSPENDED_NOT_SUPERSEDED_WITHIN_DOMAIN:{reason}"
 
-    if (
-        activation_dt is not None
-        and runtime_dt is not None
-        and activation_sem in {"event", "lifecycle"}
-        and runtime_sem in {"event", "lifecycle"}
-        and activation_dt > runtime_dt
-        and master_dt is not None
-        and master_sem == "cycle_date"
-        and master_dt.date() > runtime_dt.date()
-    ):
-        return True, (
-            f"SUSPENDED_CROSS_SOURCE_SEMANTIC_RECONCILED:"
-            f"runtime={runtime_src}/{runtime_sem},"
-            f"activation={activation_src}/{activation_sem},"
-            f"master={master_src}/{master_sem}"
+    # Cross-domain evidence is intentionally not compared as older/newer.
+    # We preserve fail-closed behavior, but classify the blocker correctly.
+    if runtime_domain != "unknown" and master_domain != "unknown":
+        return False, (
+            f"SUSPENDED_CROSS_DOMAIN_SUPERSESSION_UNRESOLVED:"
+            f"runtime_domain={runtime_domain},"
+            f"master_domain={master_domain}"
         )
 
-    return False, f"SUSPENDED_NOT_SUPERSEDED_BY_NORMALIZED_MASTER_EVENT:{reason}"
+    return False, (
+        f"SUSPENDED_CHRONOLOGY_DOMAIN_UNKNOWN:"
+        f"runtime_domain={runtime_domain},"
+        f"master_domain={master_domain}"
+    )
 
 def runtime_supervision_ready(
     row: Dict[str, Any],
@@ -486,7 +534,7 @@ def main() -> int:
         "table": sources["runtime"]["table"],
         "state": runtime_state,
         "ready": runtime_ok,
-        "compatibility_contract": "PHASE371819_CROSS_DOMAIN_BUSINESS_DATE_EVENT_TIME_RECONCILIATION",
+        "compatibility_contract": "PHASE371820_MASTER_BUSINESS_DATE_RUNTIME_EVENT_DATE_DOMAIN_SEPARATION",
         "runtime_timestamp": (
             canonical_timestamp(sources["runtime"]["latest"]).isoformat()
             if canonical_timestamp(sources["runtime"]["latest"]) else None
@@ -567,6 +615,15 @@ def main() -> int:
             )[1]
         ),
         "cross_domain_supersession_contract": "PHASE371819",
+        "runtime_chronology_domain": separated_domain_relation(
+            sources["runtime"]["latest"],
+            sources["master_cycle"]["latest"],
+        )[0],
+        "master_cycle_chronology_domain": separated_domain_relation(
+            sources["runtime"]["latest"],
+            sources["master_cycle"]["latest"],
+        )[1],
+        "domain_separation_contract": "PHASE371820",
         "activation_semantically_active": (
             active(sources["activation"]["latest"])
             and not blocked(sources["activation"]["latest"])
