@@ -129,7 +129,62 @@ def field_state(row: Dict[str, Any], names: Tuple[str, ...]) -> str:
             return value
     return ""
 
-def runtime_supervision_ready(row: Dict[str, Any]) -> Tuple[bool, str]:
+# PHASE371812_RUNTIME_SUPERVISION_SUSPENDED_CANONICAL_STATE_RECONCILIATION_FIX
+def canonical_timestamp(row: Dict[str, Any]) -> Optional[datetime]:
+    if not row:
+        return None
+    lower = {str(k).lower(): v for k, v in row.items()}
+    for name in (
+        "updated_at","created_at","run_at","observed_at","validated_at",
+        "cycle_at","cycle_date","run_date","trade_date","date",
+    ):
+        raw = text(lower.get(name))
+        if not raw:
+            continue
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+        except Exception:
+            try:
+                dt = datetime.fromisoformat(raw[:10])
+                return dt.replace(tzinfo=timezone.utc)
+            except Exception:
+                continue
+    return None
+
+def suspended_is_superseded(
+    runtime_row: Dict[str, Any],
+    activation_row: Dict[str, Any],
+    master_row: Dict[str, Any],
+) -> Tuple[bool, str]:
+    runtime_ts = canonical_timestamp(runtime_row)
+    activation_ts = canonical_timestamp(activation_row)
+    master_ts = canonical_timestamp(master_row)
+
+    if runtime_ts is None:
+        return False, "SUSPENDED_RUNTIME_TIMESTAMP_MISSING"
+    if activation_ts is None:
+        return False, "SUSPENDED_ACTIVATION_TIMESTAMP_MISSING"
+    if master_ts is None:
+        return False, "SUSPENDED_MASTER_TIMESTAMP_MISSING"
+    if not active(activation_row) or blocked(activation_row):
+        return False, "SUSPENDED_ACTIVATION_NOT_CANONICALLY_ACTIVE"
+    if blocked(master_row):
+        return False, "SUSPENDED_MASTER_CYCLE_BLOCKED"
+    if activation_ts <= runtime_ts:
+        return False, "SUSPENDED_NOT_SUPERSEDED_BY_ACTIVATION"
+    if master_ts <= runtime_ts:
+        return False, "SUSPENDED_NOT_SUPERSEDED_BY_MASTER"
+
+    return True, "SUSPENDED_STALE_SUPERSEDED_BY_NEWER_CANONICAL_LIFECYCLE"
+
+def runtime_supervision_ready(
+    row: Dict[str, Any],
+    activation_row: Optional[Dict[str, Any]] = None,
+    master_row: Optional[Dict[str, Any]] = None,
+) -> Tuple[bool, str]:
     if not row:
         return False, "MISSING"
 
@@ -138,27 +193,26 @@ def runtime_supervision_ready(row: Dict[str, Any]) -> Tuple[bool, str]:
         ("supervision_state", "runtime_supervision", "runtime_supervision_state", "state", "status"),
     )
 
-    # Canonical Phase 3.6.7 / 3.7.2.7 contract:
-    # CONTINUE_ACTIVE and CONTINUE_WITH_OBSERVATION are valid supervised paper states.
-    # Only explicit fail-closed/revocation states block continuation.
-    canonical_block_states = {"REVOKED","FAIL_CLOSED","BLOCKED","HALTED","SUSPENDED","ERROR","FAILED"}
-    canonical_ready_states = {
-        "CONTINUE_ACTIVE",
-        "CONTINUE_WITH_OBSERVATION",
-        "ACTIVE",
-        "ENABLED",
-        "READY",
-        "PASS",
-        "AUTHORIZED_PAPER_CONTINUATION",
+    hard_block_states = {"REVOKED","FAIL_CLOSED","BLOCKED","HALTED","ERROR","FAILED"}
+    ready_states = {
+        "CONTINUE_ACTIVE","CONTINUE_WITH_OBSERVATION","ACTIVE","ENABLED",
+        "READY","PASS","AUTHORIZED_PAPER_CONTINUATION",
     }
 
-    if state in canonical_block_states:
+    if state in hard_block_states:
         return False, state
-    if state in canonical_ready_states:
+
+    if state == "SUSPENDED":
+        ok, reason = suspended_is_superseded(
+            row,
+            activation_row or {},
+            master_row or {},
+        )
+        return ok, reason
+
+    if state in ready_states:
         return True, state
 
-    # Compatibility rule: a present canonical supervision row with no explicit
-    # blocking state remains supervised/ready, matching Phase 3.7.2.7.
     if not blocked(row):
         return True, state or "PRESENT_NON_BLOCKING"
 
@@ -196,12 +250,28 @@ def main() -> int:
 
     activation_ok = bool(sources["activation"]["latest"]) and active(sources["activation"]["latest"]) and not blocked(sources["activation"]["latest"])
     master_ok = bool(sources["master_cycle"]["latest"]) and not blocked(sources["master_cycle"]["latest"])
-    runtime_ok, runtime_state = runtime_supervision_ready(sources["runtime"]["latest"])
+    runtime_ok, runtime_state = runtime_supervision_ready(
+        sources["runtime"]["latest"],
+        sources["activation"]["latest"],
+        sources["master_cycle"]["latest"],
+    )
     result["runtime_supervision_resolution"] = {
         "table": sources["runtime"]["table"],
         "state": runtime_state,
         "ready": runtime_ok,
-        "compatibility_contract": "PHASE367_PHASE3727_CANONICAL",
+        "compatibility_contract": "PHASE371812_SUSPENDED_CANONICAL_RECONCILIATION",
+        "runtime_timestamp": (
+            canonical_timestamp(sources["runtime"]["latest"]).isoformat()
+            if canonical_timestamp(sources["runtime"]["latest"]) else None
+        ),
+        "activation_timestamp": (
+            canonical_timestamp(sources["activation"]["latest"]).isoformat()
+            if canonical_timestamp(sources["activation"]["latest"]) else None
+        ),
+        "master_cycle_timestamp": (
+            canonical_timestamp(sources["master_cycle"]["latest"]).isoformat()
+            if canonical_timestamp(sources["master_cycle"]["latest"]) else None
+        ),
     }
 
     signals = sources["signals"]["rows_sampled"] > 0
