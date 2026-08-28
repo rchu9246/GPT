@@ -418,6 +418,27 @@ def semantically_comparable_supersession(runtime_row: Dict[str, Any], master_row
 
 
 # PHASE371821_RUNTIME_SUPERVISION_CROSS_DOMAIN_SUPERSESSION_SEMANTIC_EQUIVALENCE_RECONCILIATION_FIX
+# PHASE3718211_RUNTIME_STATE_HELPER_COMPATIBILITY_HOTFIX
+def runtime_state_compat(row: Dict[str, Any]) -> str:
+    if not row:
+        return "UNKNOWN"
+
+    lower = {str(k).lower(): v for k, v in row.items()}
+
+    # Prefer runtime/supervision specific fields, then generic state/status.
+    for key in (
+        "runtime_state",
+        "supervision_state",
+        "operational_state",
+        "state",
+        "status",
+    ):
+        raw = text(lower.get(key))
+        if raw:
+            return raw.strip().upper()
+
+    return "UNKNOWN"
+
 def cross_domain_semantic_equivalence(
     runtime_row: Dict[str, Any],
     activation_row: Dict[str, Any],
@@ -436,7 +457,7 @@ def cross_domain_semantic_equivalence(
 
     # Preserve hard-block semantics first.
     if blocked(runtime_row):
-        runtime_state = state_of(runtime_row)
+        runtime_state = runtime_state_compat(runtime_row)
         if runtime_state not in {"SUSPENDED", "PAUSED", "INACTIVE"}:
             return False, f"RUNTIME_HARD_BLOCK_NOT_EQUIVALENT:{runtime_state}"
 
@@ -461,7 +482,7 @@ def cross_domain_semantic_equivalence(
     if master_business_date is None:
         return False, "MASTER_BUSINESS_DATE_MISSING"
 
-    runtime_state = state_of(runtime_row)
+    runtime_state = runtime_state_compat(runtime_row)
     if runtime_state not in {"SUSPENDED", "PAUSED", "INACTIVE"}:
         return False, f"RUNTIME_STATE_NOT_SOFT_SUSPENDED:{runtime_state}"
 
@@ -693,6 +714,7 @@ def main() -> int:
             ) == ("event_time", "business_date")
         ),
         "cross_domain_semantic_equivalence_contract": "PHASE371821",
+        "runtime_state_helper_contract": "PHASE3718211",
         "activation_semantically_active": (
             active(sources["activation"]["latest"])
             and not blocked(sources["activation"]["latest"])
