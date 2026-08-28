@@ -172,6 +172,48 @@ def canonical_timestamp(row: Dict[str, Any]) -> Optional[datetime]:
     dt, _, _ = canonical_timestamp_with_provenance(row)
     return dt
 
+# PHASE371816_RUNTIME_SUPERVISION_SUSPENDED_CANONICAL_EVENT_CHRONOLOGY_RECONCILIATION_FIX
+CANONICAL_EVENT_TIMESTAMP_PRIORITY = (
+    "observed_at",
+    "validated_at",
+    "run_at",
+    "cycle_at",
+    "cycle_date",
+    "run_date",
+    "trade_date",
+    "date",
+    "updated_at",
+    "created_at",
+)
+
+def canonical_event_timestamp_with_provenance(row: Dict[str, Any]):
+    if not row:
+        return None, None, None
+
+    lower = {str(k).lower(): v for k, v in row.items()}
+
+    for name in CANONICAL_EVENT_TIMESTAMP_PRIORITY:
+        raw = text(lower.get(name))
+        if not raw:
+            continue
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc), name, raw
+        except Exception:
+            try:
+                dt = datetime.fromisoformat(raw[:10])
+                return dt.replace(tzinfo=timezone.utc), name, raw
+            except Exception:
+                continue
+
+    return None, None, None
+
+def canonical_event_timestamp(row: Dict[str, Any]) -> Optional[datetime]:
+    dt, _, _ = canonical_event_timestamp_with_provenance(row)
+    return dt
+
 def suspended_is_superseded(
     runtime_row: Dict[str, Any],
     activation_row: Dict[str, Any],
@@ -181,14 +223,40 @@ def suspended_is_superseded(
     activation_ts, activation_src, _ = canonical_timestamp_with_provenance(activation_row)
     master_ts, master_src, _ = canonical_timestamp_with_provenance(master_row)
 
-    if runtime_ts is None:
-        return False, "SUSPENDED_RUNTIME_TIMESTAMP_PROVENANCE_MISSING"
+    runtime_event_ts, runtime_event_src, _ = canonical_event_timestamp_with_provenance(runtime_row)
+    activation_event_ts, activation_event_src, _ = canonical_event_timestamp_with_provenance(activation_row)
+    master_event_ts, master_event_src, _ = canonical_event_timestamp_with_provenance(master_row)
+
+    if runtime_ts is None and runtime_event_ts is None:
+        return False, "SUSPENDED_RUNTIME_CHRONOLOGY_MISSING"
 
     if not active(activation_row) or blocked(activation_row):
         return False, "SUSPENDED_ACTIVATION_NOT_CANONICALLY_ACTIVE"
 
     if blocked(master_row):
         return False, "SUSPENDED_MASTER_CYCLE_BLOCKED"
+
+    if runtime_event_ts is not None and master_event_ts is not None:
+        if master_event_ts > runtime_event_ts:
+            return True, (
+                f"SUSPENDED_SUPERSEDED_BY_MASTER_EVENT:"
+                f"runtime={runtime_event_src},master={master_event_src}"
+            )
+
+        if (
+            activation_event_ts is not None
+            and activation_event_ts > runtime_event_ts
+            and master_event_ts >= runtime_event_ts
+        ):
+            return True, (
+                f"SUSPENDED_EVENT_CHRONOLOGY_RECONCILED:"
+                f"activation={activation_event_src},master={master_event_src}"
+            )
+
+        return False, (
+            f"SUSPENDED_NOT_SUPERSEDED_BY_MASTER_EVENT:"
+            f"runtime_source={runtime_event_src},master_source={master_event_src}"
+        )
 
     strong_sources = {
         "updated_at",
@@ -199,23 +267,25 @@ def suspended_is_superseded(
         "created_at",
     }
 
-    if master_ts is not None and master_ts > runtime_ts and master_src in strong_sources:
-        return True, f"SUSPENDED_SUPERSEDED_BY_MASTER:{master_src}"
+    if master_ts is not None and runtime_ts is not None:
+        if master_ts > runtime_ts and master_src in strong_sources:
+            return True, f"SUSPENDED_SUPERSEDED_BY_MASTER_TIMESTAMP:{master_src}"
 
     if (
         activation_ts is not None
+        and runtime_ts is not None
         and activation_ts > runtime_ts
         and activation_src in strong_sources
         and master_ts is not None
         and master_ts >= runtime_ts
     ):
         return True, (
-            f"SUSPENDED_MASTER_PROVENANCE_RECONCILED:"
+            f"SUSPENDED_TIMESTAMP_PROVENANCE_RECONCILED:"
             f"activation={activation_src},master={master_src}"
         )
 
-    if master_ts is None:
-        return False, "SUSPENDED_MASTER_TIMESTAMP_PROVENANCE_MISSING"
+    if master_ts is None and master_event_ts is None:
+        return False, "SUSPENDED_MASTER_CHRONOLOGY_MISSING"
 
     return False, (
         f"SUSPENDED_NOT_SUPERSEDED_BY_MASTER:"
@@ -301,7 +371,7 @@ def main() -> int:
         "table": sources["runtime"]["table"],
         "state": runtime_state,
         "ready": runtime_ok,
-        "compatibility_contract": "PHASE371815_TIMESTAMP_PROVENANCE_RECONCILIATION",
+        "compatibility_contract": "PHASE371816_CANONICAL_EVENT_CHRONOLOGY_RECONCILIATION",
         "runtime_timestamp": (
             canonical_timestamp(sources["runtime"]["latest"]).isoformat()
             if canonical_timestamp(sources["runtime"]["latest"]) else None
@@ -324,6 +394,28 @@ def main() -> int:
             sources["master_cycle"]["latest"]
         )[1],
         "timestamp_provenance_contract": "PHASE371815",
+        "runtime_event_timestamp": (
+            canonical_event_timestamp(sources["runtime"]["latest"]).isoformat()
+            if canonical_event_timestamp(sources["runtime"]["latest"]) else None
+        ),
+        "activation_event_timestamp": (
+            canonical_event_timestamp(sources["activation"]["latest"]).isoformat()
+            if canonical_event_timestamp(sources["activation"]["latest"]) else None
+        ),
+        "master_cycle_event_timestamp": (
+            canonical_event_timestamp(sources["master_cycle"]["latest"]).isoformat()
+            if canonical_event_timestamp(sources["master_cycle"]["latest"]) else None
+        ),
+        "runtime_event_timestamp_provenance": canonical_event_timestamp_with_provenance(
+            sources["runtime"]["latest"]
+        )[1],
+        "activation_event_timestamp_provenance": canonical_event_timestamp_with_provenance(
+            sources["activation"]["latest"]
+        )[1],
+        "master_cycle_event_timestamp_provenance": canonical_event_timestamp_with_provenance(
+            sources["master_cycle"]["latest"]
+        )[1],
+        "event_chronology_contract": "PHASE371816",
         "activation_semantically_active": (
             active(sources["activation"]["latest"])
             and not blocked(sources["activation"]["latest"])
