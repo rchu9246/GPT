@@ -266,6 +266,53 @@ def canonical_business_date(row: Dict[str, Any]):
 
     return None, None
 
+# PHASE371819_RUNTIME_SUPERVISION_CROSS_DOMAIN_BUSINESS_DATE_EVENT_TIME_SUPERSESSION_RECONCILIATION_FIX
+def cross_domain_supersession_evidence(
+    runtime_row: Dict[str, Any],
+    master_row: Dict[str, Any],
+) -> Tuple[bool, str]:
+    runtime_event_dt, runtime_event_src, runtime_event_sem = canonical_semantic_event_time(runtime_row)
+    master_event_dt, master_event_src, master_event_sem = canonical_semantic_event_time(master_row)
+
+    runtime_business_date, runtime_business_src = canonical_business_date(runtime_row)
+    master_business_date, master_business_src = canonical_business_date(master_row)
+
+    if runtime_event_dt is None:
+        return False, "RUNTIME_EVENT_TIME_MISSING"
+
+    if master_business_date is None:
+        return False, "MASTER_BUSINESS_DATE_MISSING"
+
+    if runtime_event_sem not in {"event", "lifecycle"}:
+        return False, (
+            f"RUNTIME_EVENT_DOMAIN_NOT_PRECISE:"
+            f"source={runtime_event_src},semantic={runtime_event_sem}"
+        )
+
+    # Business-date and event-time are different clock domains.
+    # Only date-level ordering may be used between them.
+    if master_business_date > runtime_event_dt.date():
+        return True, (
+            f"MASTER_BUSINESS_DATE_SUPERSEDES_RUNTIME_EVENT_DATE:"
+            f"runtime={runtime_event_src}/{runtime_event_dt.date()},"
+            f"master={master_business_src}/{master_business_date}"
+        )
+
+    if master_business_date == runtime_event_dt.date():
+        return False, (
+            f"SAME_DATE_CROSS_DOMAIN_AMBIGUOUS:"
+            f"runtime={runtime_event_src}/{runtime_event_dt.date()},"
+            f"master={master_business_src}/{master_business_date}"
+        )
+
+    # A business date before the runtime event date cannot by itself supersede
+    # that runtime event. Remain fail-closed.
+    return False, (
+        f"MASTER_BUSINESS_DATE_PRECEDES_RUNTIME_EVENT_DATE:"
+        f"runtime={runtime_event_src}/{runtime_event_dt.date()},"
+        f"master={master_business_src}/{master_business_date}"
+    )
+
 def semantically_comparable_supersession(runtime_row: Dict[str, Any], master_row: Dict[str, Any]):
     runtime_dt, runtime_src, runtime_sem = canonical_semantic_event_time(runtime_row)
     master_dt, master_src, master_sem = canonical_semantic_event_time(master_row)
@@ -285,42 +332,20 @@ def semantically_comparable_supersession(runtime_row: Dict[str, Any], master_row
             f"runtime={runtime_src},master={master_src}"
         )
 
+    # Same-domain comparisons remain unchanged.
     if runtime_sem == master_sem and runtime_dt is not None and master_dt is not None:
         return (
             master_dt > runtime_dt,
             f"SAME_SEMANTIC_CLASS:{runtime_sem}:runtime={runtime_src},master={master_src}"
         )
 
+    # Cross-domain business-date vs precise event/lifecycle timestamp.
     if master_sem == "cycle_date" and runtime_sem in {"event", "lifecycle"}:
-        if master_business_date is None or runtime_business_date is None:
-            return False, (
-                f"CROSS_SOURCE_BUSINESS_DATE_MISSING:"
-                f"runtime={runtime_business_src},master={master_business_src}"
-            )
-
-        if master_business_date > runtime_business_date:
-            return True, (
-                f"MASTER_BUSINESS_DATE_AFTER_RUNTIME_EVENT_DATE:"
-                f"runtime={runtime_src}/{runtime_business_date},"
-                f"master={master_src}/{master_business_date}"
-            )
-
-        if master_business_date == runtime_business_date:
-            return False, (
-                f"SAME_BUSINESS_DATE_CROSS_SEMANTIC_AMBIGUOUS:"
-                f"runtime={runtime_src}/{runtime_business_date},"
-                f"master={master_src}/{master_business_date}"
-            )
-
-        return False, (
-            f"MASTER_BUSINESS_DATE_BEFORE_RUNTIME_EVENT_DATE:"
-            f"runtime={runtime_src}/{runtime_business_date},"
-            f"master={master_src}/{master_business_date}"
-        )
+        return cross_domain_supersession_evidence(runtime_row, master_row)
 
     if runtime_sem == "cycle_date" and master_sem in {"event", "lifecycle"}:
         if runtime_business_date is None or master_business_date is None:
-            return False, "CROSS_SOURCE_BUSINESS_DATE_MISSING"
+            return False, "CROSS_DOMAIN_BUSINESS_DATE_MISSING"
         return (
             master_business_date > runtime_business_date,
             (
@@ -332,14 +357,14 @@ def semantically_comparable_supersession(runtime_row: Dict[str, Any], master_row
 
     if {runtime_sem, master_sem} <= {"event", "lifecycle"}:
         if runtime_dt is None or master_dt is None:
-            return False, "PRECISE_CROSS_SEMANTIC_TIMESTAMP_MISSING"
+            return False, "PRECISE_CROSS_DOMAIN_TIMESTAMP_MISSING"
         return (
             master_dt > runtime_dt,
-            f"PRECISE_CROSS_SEMANTIC:runtime={runtime_src},master={master_src}"
+            f"PRECISE_CROSS_DOMAIN:runtime={runtime_src},master={master_src}"
         )
 
     return False, (
-        f"UNSAFE_CROSS_SOURCE_EVENT_TIME_SEMANTICS:"
+        f"UNSAFE_CROSS_DOMAIN_EVENT_TIME_SEMANTICS:"
         f"runtime={runtime_src}/{runtime_sem},master={master_src}/{master_sem}"
     )
 
@@ -461,7 +486,7 @@ def main() -> int:
         "table": sources["runtime"]["table"],
         "state": runtime_state,
         "ready": runtime_ok,
-        "compatibility_contract": "PHASE371818_BUSINESS_DATE_RUNTIME_EVENT_DATE_RECONCILIATION",
+        "compatibility_contract": "PHASE371819_CROSS_DOMAIN_BUSINESS_DATE_EVENT_TIME_RECONCILIATION",
         "runtime_timestamp": (
             canonical_timestamp(sources["runtime"]["latest"]).isoformat()
             if canonical_timestamp(sources["runtime"]["latest"]) else None
@@ -531,6 +556,17 @@ def main() -> int:
             sources["master_cycle"]["latest"]
         )[1],
         "business_date_event_date_contract": "PHASE371818",
+        "cross_domain_runtime_semantic": timestamp_semantic_class(
+            canonical_event_timestamp_with_provenance(
+                sources["runtime"]["latest"]
+            )[1]
+        ),
+        "cross_domain_master_semantic": timestamp_semantic_class(
+            canonical_event_timestamp_with_provenance(
+                sources["master_cycle"]["latest"]
+            )[1]
+        ),
+        "cross_domain_supersession_contract": "PHASE371819",
         "activation_semantically_active": (
             active(sources["activation"]["latest"])
             and not blocked(sources["activation"]["latest"])
