@@ -159,28 +159,32 @@ def suspended_is_superseded(
     activation_row: Dict[str, Any],
     master_row: Dict[str, Any],
 ) -> Tuple[bool, str]:
-    # PHASE371813_RUNTIME_SUPERVISION_SUSPENDED_ACTIVATION_SUPERSESSION_BRIDGE_FIX
+    # PHASE371814_RUNTIME_SUPERVISION_SUSPENDED_MASTER_CYCLE_SUPERSESSION_CHRONOLOGY_RECONCILIATION_FIX_V2
     runtime_ts = canonical_timestamp(runtime_row)
     activation_ts = canonical_timestamp(activation_row)
     master_ts = canonical_timestamp(master_row)
 
     if runtime_ts is None:
         return False, "SUSPENDED_RUNTIME_TIMESTAMP_MISSING"
-    if master_ts is None:
-        return False, "SUSPENDED_MASTER_TIMESTAMP_MISSING"
 
     if not active(activation_row) or blocked(activation_row):
         return False, "SUSPENDED_ACTIVATION_NOT_CANONICALLY_ACTIVE"
+
     if blocked(master_row):
         return False, "SUSPENDED_MASTER_CYCLE_BLOCKED"
 
-    if master_ts <= runtime_ts:
-        return False, "SUSPENDED_NOT_SUPERSEDED_BY_MASTER"
+    if master_ts is not None and master_ts > runtime_ts:
+        if activation_ts is not None and activation_ts > runtime_ts:
+            return True, "SUSPENDED_SUPERSEDED_BY_NEWER_ACTIVATION_AND_MASTER"
+        return True, "SUSPENDED_SUPERSEDED_BY_ACTIVE_ACTIVATION_AND_NEWER_MASTER"
 
     if activation_ts is not None and activation_ts > runtime_ts:
-        return True, "SUSPENDED_SUPERSEDED_BY_NEWER_ACTIVATION_AND_MASTER"
+        return True, "SUSPENDED_MASTER_CHRONOLOGY_RECONCILED_BY_NEWER_ACTIVE_ACTIVATION"
 
-    return True, "SUSPENDED_SUPERSEDED_BY_ACTIVE_ACTIVATION_AND_NEWER_MASTER_BRIDGE"
+    if master_ts is None:
+        return False, "SUSPENDED_MASTER_TIMESTAMP_MISSING"
+
+    return False, "SUSPENDED_NOT_SUPERSEDED_BY_MASTER"
 
 def runtime_supervision_ready(
     row: Dict[str, Any],
@@ -261,7 +265,7 @@ def main() -> int:
         "table": sources["runtime"]["table"],
         "state": runtime_state,
         "ready": runtime_ok,
-        "compatibility_contract": "PHASE371813_SUSPENDED_ACTIVATION_SUPERSESSION_BRIDGE",
+        "compatibility_contract": "PHASE371814_V2_MASTER_CYCLE_CHRONOLOGY_RECONCILIATION",
         "runtime_timestamp": (
             canonical_timestamp(sources["runtime"]["latest"]).isoformat()
             if canonical_timestamp(sources["runtime"]["latest"]) else None
@@ -284,6 +288,8 @@ def main() -> int:
             and canonical_timestamp(sources["master_cycle"]["latest"])
                 > canonical_timestamp(sources["runtime"]["latest"])
         ),
+        "master_chronology_reconciliation_contract": "PHASE371814_V2",
+        "master_chronology_fail_closed": True,
     }
 
     signals = sources["signals"]["rows_sampled"] > 0
