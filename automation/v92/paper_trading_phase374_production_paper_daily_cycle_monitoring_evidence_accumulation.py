@@ -214,83 +214,112 @@ def canonical_event_timestamp(row: Dict[str, Any]) -> Optional[datetime]:
     dt, _, _ = canonical_event_timestamp_with_provenance(row)
     return dt
 
+# PHASE371817_RUNTIME_SUPERVISION_CROSS_SOURCE_CANONICAL_EVENT_TIME_SEMANTIC_NORMALIZATION_FIX
+EVENT_TIME_SEMANTIC_CLASS = {
+    "observed_at": "event",
+    "validated_at": "event",
+    "run_at": "event",
+    "cycle_at": "event",
+    "updated_at": "lifecycle",
+    "created_at": "lifecycle",
+    "cycle_date": "cycle_date",
+    "run_date": "cycle_date",
+    "trade_date": "cycle_date",
+    "date": "cycle_date",
+}
+
+def timestamp_semantic_class(source: Optional[str]) -> str:
+    if not source:
+        return "unknown"
+    return EVENT_TIME_SEMANTIC_CLASS.get(source, "unknown")
+
+def normalize_cycle_date_boundary(dt: datetime) -> datetime:
+    return dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+def canonical_semantic_event_time(row: Dict[str, Any]):
+    dt, source, _ = canonical_event_timestamp_with_provenance(row)
+    semantic = timestamp_semantic_class(source)
+    if dt is None:
+        return None, source, semantic
+    if semantic == "cycle_date":
+        dt = normalize_cycle_date_boundary(dt)
+    return dt, source, semantic
+
+def semantically_comparable_supersession(runtime_row: Dict[str, Any], master_row: Dict[str, Any]):
+    runtime_dt, runtime_src, runtime_sem = canonical_semantic_event_time(runtime_row)
+    master_dt, master_src, master_sem = canonical_semantic_event_time(master_row)
+
+    if runtime_dt is None:
+        return False, "RUNTIME_EVENT_TIME_MISSING"
+    if master_dt is None:
+        return False, "MASTER_EVENT_TIME_MISSING"
+    if runtime_sem == "unknown" or master_sem == "unknown":
+        return False, f"UNKNOWN_EVENT_TIME_SEMANTICS:runtime={runtime_src},master={master_src}"
+
+    if runtime_sem == master_sem:
+        return master_dt > runtime_dt, (
+            f"SAME_SEMANTIC_CLASS:{runtime_sem}:runtime={runtime_src},master={master_src}"
+        )
+
+    if master_sem == "cycle_date" and runtime_sem in {"event", "lifecycle"}:
+        if master_dt.date() > runtime_dt.date():
+            return True, f"MASTER_CYCLE_DATE_AFTER_RUNTIME_DATE:runtime={runtime_src},master={master_src}"
+        if master_dt.date() == runtime_dt.date():
+            return False, f"SAME_DAY_CROSS_SEMANTIC_AMBIGUOUS:runtime={runtime_src},master={master_src}"
+        return False, f"MASTER_CYCLE_DATE_BEFORE_RUNTIME_DATE:runtime={runtime_src},master={master_src}"
+
+    if runtime_sem == "cycle_date" and master_sem in {"event", "lifecycle"}:
+        return master_dt > runtime_dt, (
+            f"MASTER_PRECISE_TIME_VS_RUNTIME_CYCLE_DATE:runtime={runtime_src},master={master_src}"
+        )
+
+    if {runtime_sem, master_sem} <= {"event", "lifecycle"}:
+        return master_dt > runtime_dt, (
+            f"PRECISE_CROSS_SEMANTIC:runtime={runtime_src},master={master_src}"
+        )
+
+    return False, (
+        f"UNSAFE_CROSS_SOURCE_EVENT_TIME_SEMANTICS:"
+        f"runtime={runtime_src}/{runtime_sem},master={master_src}/{master_sem}"
+    )
+
 def suspended_is_superseded(
     runtime_row: Dict[str, Any],
     activation_row: Dict[str, Any],
     master_row: Dict[str, Any],
 ) -> Tuple[bool, str]:
-    runtime_ts, runtime_src, _ = canonical_timestamp_with_provenance(runtime_row)
-    activation_ts, activation_src, _ = canonical_timestamp_with_provenance(activation_row)
-    master_ts, master_src, _ = canonical_timestamp_with_provenance(master_row)
-
-    runtime_event_ts, runtime_event_src, _ = canonical_event_timestamp_with_provenance(runtime_row)
-    activation_event_ts, activation_event_src, _ = canonical_event_timestamp_with_provenance(activation_row)
-    master_event_ts, master_event_src, _ = canonical_event_timestamp_with_provenance(master_row)
-
-    if runtime_ts is None and runtime_event_ts is None:
-        return False, "SUSPENDED_RUNTIME_CHRONOLOGY_MISSING"
-
     if not active(activation_row) or blocked(activation_row):
         return False, "SUSPENDED_ACTIVATION_NOT_CANONICALLY_ACTIVE"
 
     if blocked(master_row):
         return False, "SUSPENDED_MASTER_CYCLE_BLOCKED"
 
-    if runtime_event_ts is not None and master_event_ts is not None:
-        if master_event_ts > runtime_event_ts:
-            return True, (
-                f"SUSPENDED_SUPERSEDED_BY_MASTER_EVENT:"
-                f"runtime={runtime_event_src},master={master_event_src}"
-            )
+    comparable, reason = semantically_comparable_supersession(runtime_row, master_row)
+    if comparable:
+        return True, f"SUSPENDED_SUPERSEDED_BY_NORMALIZED_MASTER_EVENT:{reason}"
 
-        if (
-            activation_event_ts is not None
-            and activation_event_ts > runtime_event_ts
-            and master_event_ts >= runtime_event_ts
-        ):
-            return True, (
-                f"SUSPENDED_EVENT_CHRONOLOGY_RECONCILED:"
-                f"activation={activation_event_src},master={master_event_src}"
-            )
-
-        return False, (
-            f"SUSPENDED_NOT_SUPERSEDED_BY_MASTER_EVENT:"
-            f"runtime_source={runtime_event_src},master_source={master_event_src}"
-        )
-
-    strong_sources = {
-        "updated_at",
-        "observed_at",
-        "validated_at",
-        "run_at",
-        "cycle_at",
-        "created_at",
-    }
-
-    if master_ts is not None and runtime_ts is not None:
-        if master_ts > runtime_ts and master_src in strong_sources:
-            return True, f"SUSPENDED_SUPERSEDED_BY_MASTER_TIMESTAMP:{master_src}"
+    activation_dt, activation_src, activation_sem = canonical_semantic_event_time(activation_row)
+    runtime_dt, runtime_src, runtime_sem = canonical_semantic_event_time(runtime_row)
+    master_dt, master_src, master_sem = canonical_semantic_event_time(master_row)
 
     if (
-        activation_ts is not None
-        and runtime_ts is not None
-        and activation_ts > runtime_ts
-        and activation_src in strong_sources
-        and master_ts is not None
-        and master_ts >= runtime_ts
+        activation_dt is not None
+        and runtime_dt is not None
+        and activation_sem in {"event", "lifecycle"}
+        and runtime_sem in {"event", "lifecycle"}
+        and activation_dt > runtime_dt
+        and master_dt is not None
+        and master_sem == "cycle_date"
+        and master_dt.date() > runtime_dt.date()
     ):
         return True, (
-            f"SUSPENDED_TIMESTAMP_PROVENANCE_RECONCILED:"
-            f"activation={activation_src},master={master_src}"
+            f"SUSPENDED_CROSS_SOURCE_SEMANTIC_RECONCILED:"
+            f"runtime={runtime_src}/{runtime_sem},"
+            f"activation={activation_src}/{activation_sem},"
+            f"master={master_src}/{master_sem}"
         )
 
-    if master_ts is None and master_event_ts is None:
-        return False, "SUSPENDED_MASTER_CHRONOLOGY_MISSING"
-
-    return False, (
-        f"SUSPENDED_NOT_SUPERSEDED_BY_MASTER:"
-        f"runtime_source={runtime_src},master_source={master_src}"
-    )
+    return False, f"SUSPENDED_NOT_SUPERSEDED_BY_NORMALIZED_MASTER_EVENT:{reason}"
 
 def runtime_supervision_ready(
     row: Dict[str, Any],
@@ -371,7 +400,7 @@ def main() -> int:
         "table": sources["runtime"]["table"],
         "state": runtime_state,
         "ready": runtime_ok,
-        "compatibility_contract": "PHASE371816_CANONICAL_EVENT_CHRONOLOGY_RECONCILIATION",
+        "compatibility_contract": "PHASE371817_CROSS_SOURCE_EVENT_TIME_SEMANTIC_NORMALIZATION",
         "runtime_timestamp": (
             canonical_timestamp(sources["runtime"]["latest"]).isoformat()
             if canonical_timestamp(sources["runtime"]["latest"]) else None
@@ -416,6 +445,16 @@ def main() -> int:
             sources["master_cycle"]["latest"]
         )[1],
         "event_chronology_contract": "PHASE371816",
+        "runtime_event_time_semantic": timestamp_semantic_class(
+            canonical_event_timestamp_with_provenance(sources["runtime"]["latest"])[1]
+        ),
+        "activation_event_time_semantic": timestamp_semantic_class(
+            canonical_event_timestamp_with_provenance(sources["activation"]["latest"])[1]
+        ),
+        "master_cycle_event_time_semantic": timestamp_semantic_class(
+            canonical_event_timestamp_with_provenance(sources["master_cycle"]["latest"])[1]
+        ),
+        "cross_source_event_time_contract": "PHASE371817",
         "activation_semantically_active": (
             active(sources["activation"]["latest"])
             and not blocked(sources["activation"]["latest"])
