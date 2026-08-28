@@ -245,36 +245,96 @@ def canonical_semantic_event_time(row: Dict[str, Any]):
         dt = normalize_cycle_date_boundary(dt)
     return dt, source, semantic
 
+# PHASE371818_RUNTIME_SUPERVISION_NORMALIZED_MASTER_CYCLE_BUSINESS_DATE_RUNTIME_EVENT_DATE_RECONCILIATION_FIX
+def canonical_business_date(row: Dict[str, Any]):
+    if not row:
+        return None, None
+
+    lower = {str(k).lower(): v for k, v in row.items()}
+    for name in ("cycle_date", "run_date", "trade_date", "date"):
+        raw = text(lower.get(name))
+        if not raw:
+            continue
+        try:
+            return datetime.fromisoformat(raw[:10]).date(), name
+        except Exception:
+            continue
+
+    dt, source, _ = canonical_event_timestamp_with_provenance(row)
+    if dt is not None:
+        return dt.date(), source
+
+    return None, None
+
 def semantically_comparable_supersession(runtime_row: Dict[str, Any], master_row: Dict[str, Any]):
     runtime_dt, runtime_src, runtime_sem = canonical_semantic_event_time(runtime_row)
     master_dt, master_src, master_sem = canonical_semantic_event_time(master_row)
 
-    if runtime_dt is None:
-        return False, "RUNTIME_EVENT_TIME_MISSING"
-    if master_dt is None:
-        return False, "MASTER_EVENT_TIME_MISSING"
-    if runtime_sem == "unknown" or master_sem == "unknown":
-        return False, f"UNKNOWN_EVENT_TIME_SEMANTICS:runtime={runtime_src},master={master_src}"
+    runtime_business_date, runtime_business_src = canonical_business_date(runtime_row)
+    master_business_date, master_business_src = canonical_business_date(master_row)
 
-    if runtime_sem == master_sem:
-        return master_dt > runtime_dt, (
+    if runtime_dt is None and runtime_business_date is None:
+        return False, "RUNTIME_EVENT_AND_BUSINESS_DATE_MISSING"
+
+    if master_dt is None and master_business_date is None:
+        return False, "MASTER_EVENT_AND_BUSINESS_DATE_MISSING"
+
+    if runtime_sem == "unknown" or master_sem == "unknown":
+        return False, (
+            f"UNKNOWN_EVENT_TIME_SEMANTICS:"
+            f"runtime={runtime_src},master={master_src}"
+        )
+
+    if runtime_sem == master_sem and runtime_dt is not None and master_dt is not None:
+        return (
+            master_dt > runtime_dt,
             f"SAME_SEMANTIC_CLASS:{runtime_sem}:runtime={runtime_src},master={master_src}"
         )
 
     if master_sem == "cycle_date" and runtime_sem in {"event", "lifecycle"}:
-        if master_dt.date() > runtime_dt.date():
-            return True, f"MASTER_CYCLE_DATE_AFTER_RUNTIME_DATE:runtime={runtime_src},master={master_src}"
-        if master_dt.date() == runtime_dt.date():
-            return False, f"SAME_DAY_CROSS_SEMANTIC_AMBIGUOUS:runtime={runtime_src},master={master_src}"
-        return False, f"MASTER_CYCLE_DATE_BEFORE_RUNTIME_DATE:runtime={runtime_src},master={master_src}"
+        if master_business_date is None or runtime_business_date is None:
+            return False, (
+                f"CROSS_SOURCE_BUSINESS_DATE_MISSING:"
+                f"runtime={runtime_business_src},master={master_business_src}"
+            )
+
+        if master_business_date > runtime_business_date:
+            return True, (
+                f"MASTER_BUSINESS_DATE_AFTER_RUNTIME_EVENT_DATE:"
+                f"runtime={runtime_src}/{runtime_business_date},"
+                f"master={master_src}/{master_business_date}"
+            )
+
+        if master_business_date == runtime_business_date:
+            return False, (
+                f"SAME_BUSINESS_DATE_CROSS_SEMANTIC_AMBIGUOUS:"
+                f"runtime={runtime_src}/{runtime_business_date},"
+                f"master={master_src}/{master_business_date}"
+            )
+
+        return False, (
+            f"MASTER_BUSINESS_DATE_BEFORE_RUNTIME_EVENT_DATE:"
+            f"runtime={runtime_src}/{runtime_business_date},"
+            f"master={master_src}/{master_business_date}"
+        )
 
     if runtime_sem == "cycle_date" and master_sem in {"event", "lifecycle"}:
-        return master_dt > runtime_dt, (
-            f"MASTER_PRECISE_TIME_VS_RUNTIME_CYCLE_DATE:runtime={runtime_src},master={master_src}"
+        if runtime_business_date is None or master_business_date is None:
+            return False, "CROSS_SOURCE_BUSINESS_DATE_MISSING"
+        return (
+            master_business_date > runtime_business_date,
+            (
+                f"MASTER_EVENT_DATE_VS_RUNTIME_BUSINESS_DATE:"
+                f"runtime={runtime_src}/{runtime_business_date},"
+                f"master={master_src}/{master_business_date}"
+            ),
         )
 
     if {runtime_sem, master_sem} <= {"event", "lifecycle"}:
-        return master_dt > runtime_dt, (
+        if runtime_dt is None or master_dt is None:
+            return False, "PRECISE_CROSS_SEMANTIC_TIMESTAMP_MISSING"
+        return (
+            master_dt > runtime_dt,
             f"PRECISE_CROSS_SEMANTIC:runtime={runtime_src},master={master_src}"
         )
 
@@ -282,6 +342,7 @@ def semantically_comparable_supersession(runtime_row: Dict[str, Any], master_row
         f"UNSAFE_CROSS_SOURCE_EVENT_TIME_SEMANTICS:"
         f"runtime={runtime_src}/{runtime_sem},master={master_src}/{master_sem}"
     )
+
 
 def suspended_is_superseded(
     runtime_row: Dict[str, Any],
@@ -400,7 +461,7 @@ def main() -> int:
         "table": sources["runtime"]["table"],
         "state": runtime_state,
         "ready": runtime_ok,
-        "compatibility_contract": "PHASE371817_CROSS_SOURCE_EVENT_TIME_SEMANTIC_NORMALIZATION",
+        "compatibility_contract": "PHASE371818_BUSINESS_DATE_RUNTIME_EVENT_DATE_RECONCILIATION",
         "runtime_timestamp": (
             canonical_timestamp(sources["runtime"]["latest"]).isoformat()
             if canonical_timestamp(sources["runtime"]["latest"]) else None
@@ -455,6 +516,21 @@ def main() -> int:
             canonical_event_timestamp_with_provenance(sources["master_cycle"]["latest"])[1]
         ),
         "cross_source_event_time_contract": "PHASE371817",
+        "runtime_business_date": (
+            canonical_business_date(sources["runtime"]["latest"])[0].isoformat()
+            if canonical_business_date(sources["runtime"]["latest"])[0] else None
+        ),
+        "runtime_business_date_provenance": canonical_business_date(
+            sources["runtime"]["latest"]
+        )[1],
+        "master_cycle_business_date": (
+            canonical_business_date(sources["master_cycle"]["latest"])[0].isoformat()
+            if canonical_business_date(sources["master_cycle"]["latest"])[0] else None
+        ),
+        "master_cycle_business_date_provenance": canonical_business_date(
+            sources["master_cycle"]["latest"]
+        )[1],
+        "business_date_event_date_contract": "PHASE371818",
         "activation_semantically_active": (
             active(sources["activation"]["latest"])
             and not blocked(sources["activation"]["latest"])
