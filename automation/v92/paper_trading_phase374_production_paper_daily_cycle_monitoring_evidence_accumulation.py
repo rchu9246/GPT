@@ -130,14 +130,27 @@ def field_state(row: Dict[str, Any], names: Tuple[str, ...]) -> str:
     return ""
 
 # PHASE371812_RUNTIME_SUPERVISION_SUSPENDED_CANONICAL_STATE_RECONCILIATION_FIX
-def canonical_timestamp(row: Dict[str, Any]) -> Optional[datetime]:
+# PHASE371815_RUNTIME_SUPERVISION_SUSPENDED_CANONICAL_TIMESTAMP_PROVENANCE_RECONCILIATION_FIX
+CANONICAL_TIMESTAMP_PRIORITY = (
+    "updated_at",
+    "observed_at",
+    "validated_at",
+    "run_at",
+    "cycle_at",
+    "created_at",
+    "cycle_date",
+    "run_date",
+    "trade_date",
+    "date",
+)
+
+def canonical_timestamp_with_provenance(row: Dict[str, Any]):
     if not row:
-        return None
+        return None, None, None
+
     lower = {str(k).lower(): v for k, v in row.items()}
-    for name in (
-        "updated_at","created_at","run_at","observed_at","validated_at",
-        "cycle_at","cycle_date","run_date","trade_date","date",
-    ):
+
+    for name in CANONICAL_TIMESTAMP_PRIORITY:
         raw = text(lower.get(name))
         if not raw:
             continue
@@ -145,27 +158,31 @@ def canonical_timestamp(row: Dict[str, Any]) -> Optional[datetime]:
             dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
-            return dt.astimezone(timezone.utc)
+            return dt.astimezone(timezone.utc), name, raw
         except Exception:
             try:
                 dt = datetime.fromisoformat(raw[:10])
-                return dt.replace(tzinfo=timezone.utc)
+                return dt.replace(tzinfo=timezone.utc), name, raw
             except Exception:
                 continue
-    return None
+
+    return None, None, None
+
+def canonical_timestamp(row: Dict[str, Any]) -> Optional[datetime]:
+    dt, _, _ = canonical_timestamp_with_provenance(row)
+    return dt
 
 def suspended_is_superseded(
     runtime_row: Dict[str, Any],
     activation_row: Dict[str, Any],
     master_row: Dict[str, Any],
 ) -> Tuple[bool, str]:
-    # PHASE371814_RUNTIME_SUPERVISION_SUSPENDED_MASTER_CYCLE_SUPERSESSION_CHRONOLOGY_RECONCILIATION_FIX_V2
-    runtime_ts = canonical_timestamp(runtime_row)
-    activation_ts = canonical_timestamp(activation_row)
-    master_ts = canonical_timestamp(master_row)
+    runtime_ts, runtime_src, _ = canonical_timestamp_with_provenance(runtime_row)
+    activation_ts, activation_src, _ = canonical_timestamp_with_provenance(activation_row)
+    master_ts, master_src, _ = canonical_timestamp_with_provenance(master_row)
 
     if runtime_ts is None:
-        return False, "SUSPENDED_RUNTIME_TIMESTAMP_MISSING"
+        return False, "SUSPENDED_RUNTIME_TIMESTAMP_PROVENANCE_MISSING"
 
     if not active(activation_row) or blocked(activation_row):
         return False, "SUSPENDED_ACTIVATION_NOT_CANONICALLY_ACTIVE"
@@ -173,18 +190,37 @@ def suspended_is_superseded(
     if blocked(master_row):
         return False, "SUSPENDED_MASTER_CYCLE_BLOCKED"
 
-    if master_ts is not None and master_ts > runtime_ts:
-        if activation_ts is not None and activation_ts > runtime_ts:
-            return True, "SUSPENDED_SUPERSEDED_BY_NEWER_ACTIVATION_AND_MASTER"
-        return True, "SUSPENDED_SUPERSEDED_BY_ACTIVE_ACTIVATION_AND_NEWER_MASTER"
+    strong_sources = {
+        "updated_at",
+        "observed_at",
+        "validated_at",
+        "run_at",
+        "cycle_at",
+        "created_at",
+    }
 
-    if activation_ts is not None and activation_ts > runtime_ts:
-        return True, "SUSPENDED_MASTER_CHRONOLOGY_RECONCILED_BY_NEWER_ACTIVE_ACTIVATION"
+    if master_ts is not None and master_ts > runtime_ts and master_src in strong_sources:
+        return True, f"SUSPENDED_SUPERSEDED_BY_MASTER:{master_src}"
+
+    if (
+        activation_ts is not None
+        and activation_ts > runtime_ts
+        and activation_src in strong_sources
+        and master_ts is not None
+        and master_ts >= runtime_ts
+    ):
+        return True, (
+            f"SUSPENDED_MASTER_PROVENANCE_RECONCILED:"
+            f"activation={activation_src},master={master_src}"
+        )
 
     if master_ts is None:
-        return False, "SUSPENDED_MASTER_TIMESTAMP_MISSING"
+        return False, "SUSPENDED_MASTER_TIMESTAMP_PROVENANCE_MISSING"
 
-    return False, "SUSPENDED_NOT_SUPERSEDED_BY_MASTER"
+    return False, (
+        f"SUSPENDED_NOT_SUPERSEDED_BY_MASTER:"
+        f"runtime_source={runtime_src},master_source={master_src}"
+    )
 
 def runtime_supervision_ready(
     row: Dict[str, Any],
@@ -265,7 +301,7 @@ def main() -> int:
         "table": sources["runtime"]["table"],
         "state": runtime_state,
         "ready": runtime_ok,
-        "compatibility_contract": "PHASE371814_V2_MASTER_CYCLE_CHRONOLOGY_RECONCILIATION",
+        "compatibility_contract": "PHASE371815_TIMESTAMP_PROVENANCE_RECONCILIATION",
         "runtime_timestamp": (
             canonical_timestamp(sources["runtime"]["latest"]).isoformat()
             if canonical_timestamp(sources["runtime"]["latest"]) else None
@@ -278,6 +314,16 @@ def main() -> int:
             canonical_timestamp(sources["master_cycle"]["latest"]).isoformat()
             if canonical_timestamp(sources["master_cycle"]["latest"]) else None
         ),
+        "runtime_timestamp_provenance": canonical_timestamp_with_provenance(
+            sources["runtime"]["latest"]
+        )[1],
+        "activation_timestamp_provenance": canonical_timestamp_with_provenance(
+            sources["activation"]["latest"]
+        )[1],
+        "master_cycle_timestamp_provenance": canonical_timestamp_with_provenance(
+            sources["master_cycle"]["latest"]
+        )[1],
+        "timestamp_provenance_contract": "PHASE371815",
         "activation_semantically_active": (
             active(sources["activation"]["latest"])
             and not blocked(sources["activation"]["latest"])
