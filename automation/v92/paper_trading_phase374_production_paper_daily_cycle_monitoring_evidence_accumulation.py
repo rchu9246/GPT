@@ -159,26 +159,28 @@ def suspended_is_superseded(
     activation_row: Dict[str, Any],
     master_row: Dict[str, Any],
 ) -> Tuple[bool, str]:
+    # PHASE371813_RUNTIME_SUPERVISION_SUSPENDED_ACTIVATION_SUPERSESSION_BRIDGE_FIX
     runtime_ts = canonical_timestamp(runtime_row)
     activation_ts = canonical_timestamp(activation_row)
     master_ts = canonical_timestamp(master_row)
 
     if runtime_ts is None:
         return False, "SUSPENDED_RUNTIME_TIMESTAMP_MISSING"
-    if activation_ts is None:
-        return False, "SUSPENDED_ACTIVATION_TIMESTAMP_MISSING"
     if master_ts is None:
         return False, "SUSPENDED_MASTER_TIMESTAMP_MISSING"
+
     if not active(activation_row) or blocked(activation_row):
         return False, "SUSPENDED_ACTIVATION_NOT_CANONICALLY_ACTIVE"
     if blocked(master_row):
         return False, "SUSPENDED_MASTER_CYCLE_BLOCKED"
-    if activation_ts <= runtime_ts:
-        return False, "SUSPENDED_NOT_SUPERSEDED_BY_ACTIVATION"
+
     if master_ts <= runtime_ts:
         return False, "SUSPENDED_NOT_SUPERSEDED_BY_MASTER"
 
-    return True, "SUSPENDED_STALE_SUPERSEDED_BY_NEWER_CANONICAL_LIFECYCLE"
+    if activation_ts is not None and activation_ts > runtime_ts:
+        return True, "SUSPENDED_SUPERSEDED_BY_NEWER_ACTIVATION_AND_MASTER"
+
+    return True, "SUSPENDED_SUPERSEDED_BY_ACTIVE_ACTIVATION_AND_NEWER_MASTER_BRIDGE"
 
 def runtime_supervision_ready(
     row: Dict[str, Any],
@@ -259,7 +261,7 @@ def main() -> int:
         "table": sources["runtime"]["table"],
         "state": runtime_state,
         "ready": runtime_ok,
-        "compatibility_contract": "PHASE371812_SUSPENDED_CANONICAL_RECONCILIATION",
+        "compatibility_contract": "PHASE371813_SUSPENDED_ACTIVATION_SUPERSESSION_BRIDGE",
         "runtime_timestamp": (
             canonical_timestamp(sources["runtime"]["latest"]).isoformat()
             if canonical_timestamp(sources["runtime"]["latest"]) else None
@@ -271,6 +273,16 @@ def main() -> int:
         "master_cycle_timestamp": (
             canonical_timestamp(sources["master_cycle"]["latest"]).isoformat()
             if canonical_timestamp(sources["master_cycle"]["latest"]) else None
+        ),
+        "activation_semantically_active": (
+            active(sources["activation"]["latest"])
+            and not blocked(sources["activation"]["latest"])
+        ),
+        "master_newer_than_runtime": (
+            canonical_timestamp(sources["master_cycle"]["latest"]) is not None
+            and canonical_timestamp(sources["runtime"]["latest"]) is not None
+            and canonical_timestamp(sources["master_cycle"]["latest"])
+                > canonical_timestamp(sources["runtime"]["latest"])
         ),
     }
 
