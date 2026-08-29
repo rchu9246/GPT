@@ -1,0 +1,59 @@
+﻿name: GPT Quant Phase 3.7.19 - Autonomous Failure Diagnosis Safe Self-Healing Controller
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile Phase 3.7.19
+        run: python -m py_compile automation/v92/phase3719_autonomous_failure_diagnosis_safe_self_healing_controller.py
+
+      - name: Validate safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="automation/v92/phase3719_autonomous_failure_diagnosis_safe_self_healing_controller.py"
+          grep -q '"source_mutation": False' "$f"
+          grep -q '"git_push": False' "$f"
+          grep -q '"supabase_mutation": False' "$f"
+          grep -q '"broker_order_enablement": False' "$f"
+          grep -q '"real_money_enablement": False' "$f"
+          grep -q '"automatic_patch_application": False' "$f"
+          echo "Phase 3.7.19 safety contract: PASS"
+
+      - name: Run autonomous diagnosis
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python automation/v92/phase3719_autonomous_failure_diagnosis_safe_self_healing_controller.py
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase3719/phase3719_failure_diagnosis.md ]; then
+            cat artifacts/phase3719/phase3719_failure_diagnosis.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload diagnosis evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3719-autonomous-failure-diagnosis
+          path: artifacts/phase3719
+          if-no-files-found: warn
+          retention-days: 90
