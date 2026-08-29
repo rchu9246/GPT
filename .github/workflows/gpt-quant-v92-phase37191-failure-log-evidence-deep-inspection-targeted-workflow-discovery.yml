@@ -1,0 +1,65 @@
+﻿name: GPT Quant Phase 3.7.19.1 - Failure Log Evidence Deep Inspection Targeted Workflow Discovery
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "27 * * * *"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  diagnose:
+    name: failure-log-deep-inspection
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile Phase 3.7.19.1
+        run: python -m py_compile automation/v92/phase37191_failure_log_evidence_deep_inspection_targeted_workflow_discovery.py
+
+      - name: Validate safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="automation/v92/phase37191_failure_log_evidence_deep_inspection_targeted_workflow_discovery.py"
+          grep -q 'MODE = "DRY_RUN_RECOMMEND_ONLY"' "$f"
+          grep -q '"source_mutation": False' "$f"
+          grep -q '"git_push": False' "$f"
+          grep -q '"supabase_mutation": False' "$f"
+          grep -q '"qualification_counter_mutation": False' "$f"
+          grep -q '"broker_order_enablement": False' "$f"
+          grep -q '"real_money_enablement": False' "$f"
+          grep -q '"automatic_patch_application": False' "$f"
+          echo "Phase 3.7.19.1 safety contract: PASS"
+
+      - name: Run failure log deep inspection
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python automation/v92/phase37191_failure_log_evidence_deep_inspection_targeted_workflow_discovery.py
+
+      - name: Publish diagnostic summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase37191/phase37191_failure_diagnosis.md ]; then
+            cat artifacts/phase37191/phase37191_failure_diagnosis.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase37191-failure-log-evidence
+          path: artifacts/phase37191
+          if-no-files-found: warn
+          retention-days: 90
