@@ -18,8 +18,7 @@ concurrency:
 jobs:
   ordered-qualification-pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
+    timeout-minutes: 60
     env:
       WF374: gpt-quant-v92-paper-trading-phase374-production-paper-daily-cycle-monitoring-evidence-accumulation.yml
       WF377: gpt-quant-v92-paper-trading-phase377-production-paper-qualification-evidence-persistence-cross-run-accumulation.yml
@@ -110,6 +109,24 @@ jobs:
             done
 
             echo "::error::${label}: timed out waiting for completion."
+            # PHASE371922_V21_PYTHON_WRITE_TEXT_COMPATIBILITY_HOTFIX
+            # Final read-only terminal-state reconciliation before timeout failure.
+            if [ -n "${run_id:-}" ]; then
+              final_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" 2>/dev/null || true)"
+              if [ -n "$final_json" ]; then
+                final_status="$(printf '%s' "$final_json" | python -c 'import json,sys; d=json.load(sys.stdin); print(d.get("status") or "")' 2>/dev/null || true)"
+                final_conclusion="$(printf '%s' "$final_json" | python -c 'import json,sys; d=json.load(sys.stdin); print(d.get("conclusion") or "")' 2>/dev/null || true)"
+                echo "${label} final reconciliation: status=${final_status:-unknown} conclusion=${final_conclusion:-pending}"
+                if [ "$final_status" = "completed" ]; then
+                  if [ "$final_conclusion" = "success" ]; then
+                    return 0
+                  fi
+                  echo "::error::${label} completed with conclusion=${final_conclusion:-unknown}"
+                  return 1
+                fi
+              fi
+            fi
+
             return 1
           }
 
