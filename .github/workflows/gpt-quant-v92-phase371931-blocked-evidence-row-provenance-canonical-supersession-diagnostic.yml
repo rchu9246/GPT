@@ -1,0 +1,39 @@
+name: GPT Quant Phase 3.7.19.3.1 - Blocked Evidence Provenance Canonical Supersession Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile
+        run: python -m py_compile automation/v92/phase371931_blocked_evidence_row_provenance_canonical_supersession_diagnostic.py
+      - name: Run read-only diagnostic
+        run: python automation/v92/phase371931_blocked_evidence_row_provenance_canonical_supersession_diagnostic.py
+      - name: Publish summary
+        if: always()
+        run: |
+          if [ -f artifacts/phase371931/phase371931_blocked_evidence_provenance.md ]; then
+            cat artifacts/phase371931/phase371931_blocked_evidence_provenance.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase371931-blocked-evidence-provenance
+          path: artifacts/phase371931
+          retention-days: 90
