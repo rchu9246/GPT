@@ -1,0 +1,112 @@
+﻿#requires -Version 5.1
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+Write-Host "======================================================================"
+Write-Host " GPT Quant Phase 3.7.19.3.4"
+Write-Host " Phase 3.7.5 Runtime Supervision Canonical Row Provenance"
+Write-Host " + Supersession Diagnostic"
+Write-Host " READ-ONLY / NO MUTATION"
+Write-Host "======================================================================"
+
+$Root = (Get-Location).Path
+$PyRel  = "automation\v92\phase371934_phase375_runtime_supervision_canonical_row_provenance_supersession_diagnostic.py"
+$YmlRel = ".github\workflows\gpt-quant-v92-phase371934-phase375-runtime-supervision-canonical-row-provenance-supersession-diagnostic.yml"
+$Py  = Join-Path $Root $PyRel
+$Yml = Join-Path $Root $YmlRel
+$Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$Backup = Join-Path $Root ".phase371934-backup-$Stamp"
+
+if (Get-Command py -ErrorAction SilentlyContinue) {
+    $PythonMode = "py"
+} elseif (Get-Command python -ErrorAction SilentlyContinue) {
+    $PythonMode = "python"
+} else {
+    throw "Python launcher not found."
+}
+
+$PyPayloadB64 = "ZnJvbSBfX2Z1dHVyZV9fIGltcG9ydCBhbm5vdGF0aW9ucwppbXBvcnQgaW1wb3J0bGliLnV0aWwKaW1wb3J0IGpzb24KZnJvbSBkYXRldGltZSBpbXBvcnQgZGF0ZXRpbWUsIHRpbWV6b25lCmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aApmcm9tIHR5cGluZyBpbXBvcnQgQW55LCBEaWN0LCBMaXN0CgpST09UID0gUGF0aChfX2ZpbGVfXykucmVzb2x2ZSgpLnBhcmVudHNbMl0KUDM3NSA9IFJPT1QgLyAiYXV0b21hdGlvbiIgLyAidjkyIiAvICJwYXBlcl90cmFkaW5nX3BoYXNlMzc1X3Byb2R1Y3Rpb25fcGFwZXJfbXVsdGlfY3ljbGVfc3RhYmlsaXR5X2V2aWRlbmNlX3F1YWxpZmljYXRpb24ucHkiCk9VVCA9IFJPT1QgLyAiYXJ0aWZhY3RzIiAvICJwaGFzZTM3MTkzNCIKTU9ERSA9ICJSRUFEX09OTFlfTk9fTVVUQVRJT04iCgpEQVRFX0ZJRUxEUyA9ICgic3VwZXJ2aXNpb25fZGF0ZSIsInJ1bl9kYXRlIiwiYnVzaW5lc3NfZGF0ZSIsImN5Y2xlX2RhdGUiLCJkYXRlIikKVElNRV9GSUVMRFMgPSAoInVwZGF0ZWRfYXQiLCJjcmVhdGVkX2F0IiwiZXZlbnRfdGltZSIsInJlY29yZGVkX2F0IiwidGltZXN0YW1wIiwidHMiKQoKZGVmIGxvYWRfdGFyZ2V0KCk6CiAgICBzcGVjID0gaW1wb3J0bGliLnV0aWwuc3BlY19mcm9tX2ZpbGVfbG9jYXRpb24oInBoYXNlMzc1X3J1bnRpbWVfZGlhZ190YXJnZXQiLCBQMzc1KQogICAgaWYgc3BlYyBpcyBOb25lIG9yIHNwZWMubG9hZGVyIGlzIE5vbmU6CiAgICAgICAgcmFpc2UgUnVudGltZUVycm9yKCJVbmFibGUgdG8gbG9hZCBQaGFzZSAzLjcuNSBzb3VyY2UiKQogICAgbW9kID0gaW1wb3J0bGliLnV0aWwubW9kdWxlX2Zyb21fc3BlYyhzcGVjKQogICAgc3BlYy5sb2FkZXIuZXhlY19tb2R1bGUobW9kKQogICAgcmV0dXJuIG1vZAoKZGVmIGZpcnN0KHJvdzogRGljdFtzdHIsIEFueV0sIGZpZWxkcykgLT4gc3RyOgogICAgZm9yIGsgaW4gZmllbGRzOgogICAgICAgIHYgPSByb3cuZ2V0KGspCiAgICAgICAgaWYgdiBpcyBub3QgTm9uZSBhbmQgc3RyKHYpLnN0cmlwKCk6CiAgICAgICAgICAgIHJldHVybiBzdHIodikuc3RyaXAoKQogICAgcmV0dXJuICIiCgpkZWYgcm93X2lkKHJvdzogRGljdFtzdHIsIEFueV0pIC0+IHN0cjoKICAgIGZvciBrIGluICgiaWQiLCJydW50aW1lX2lkIiwic3VwZXJ2aXNpb25faWQiLCJydW5faWQiKToKICAgICAgICBpZiByb3cuZ2V0KGspIGlzIG5vdCBOb25lOgogICAgICAgICAgICByZXR1cm4gc3RyKHJvdy5nZXQoaykpCiAgICByZXR1cm4gIiIKCmRlZiBldmVudF90aW1lKHJvdzogRGljdFtzdHIsIEFueV0pIC0+IHN0cjoKICAgIHJldHVybiBmaXJzdChyb3csIFRJTUVfRklFTERTKQoKZGVmIGJ1c2luZXNzX2RhdGUocm93OiBEaWN0W3N0ciwgQW55XSkgLT4gc3RyOgogICAgdiA9IGZpcnN0KHJvdywgREFURV9GSUVMRFMpCiAgICBpZiB2OgogICAgICAgIHJldHVybiB2WzoxMF0KICAgIHQgPSBldmVudF90aW1lKHJvdykKICAgIHJldHVybiB0WzoxMF0gaWYgbGVuKHQpID49IDEwIGVsc2UgIlVOS05PV05fREFURSIKCmRlZiBzdGF0ZV9maWVsZHMocm93OiBEaWN0W3N0ciwgQW55XSkgLT4gRGljdFtzdHIsIEFueV06CiAgICBrZXlzID0gKAogICAgICAgICJydW50aW1lX3N0YXRlIiwic3VwZXJ2aXNpb25fc3RhdGUiLCJvcGVyYXRpb25hbF9zdGF0ZSIsInN0YXRlIiwic3RhdHVzIiwKICAgICAgICAiYWN0aXZhdGlvbl9zdGF0ZSIsIm1hc3Rlcl9jeWNsZV9zdGF0ZSIsInF1YWxpZmljYXRpb25fc3RhdGUiLAogICAgICAgICJzYWZldHlfcmV2b2NhdGlvbl90cmlnZ2VyZWQiLCJmYWlsX2Nsb3NlZF9wb2xpY3kiLCJyZWFkaW5lc3Nfc3RhdGUiLAogICAgICAgICJoZWFsdGhfc3RhdGUiLCJpbmNpZGVudF9zZXZlcml0eSIKICAgICkKICAgIHJldHVybiB7azogcm93LmdldChrKSBmb3IgayBpbiBrZXlzIGlmIGsgaW4gcm93fQoKZGVmIG1haW4oKToKICAgIGlmIG5vdCBQMzc1LmV4aXN0cygpOgogICAgICAgIHJhaXNlIFN5c3RlbUV4aXQoZiJNaXNzaW5nIFBoYXNlIDMuNy41IHNvdXJjZToge1AzNzV9IikKCiAgICBtb2QgPSBsb2FkX3RhcmdldCgpCiAgICBmb3IgbmFtZSBpbiAoImluc3BlY3QiLCJSVU5USU1FX1RBQkxFUyIsImxhdGVzdCIsInJ1bnRpbWVfc3VwZXJ2aXNpb25fcmVjb25zdHJ1Y3QiKToKICAgICAgICBpZiBub3QgaGFzYXR0cihtb2QsIG5hbWUpOgogICAgICAgICAgICByYWlzZSBTeXN0ZW1FeGl0KGYiTWlzc2luZyBQaGFzZSAzLjcuNSBydW50aW1lIGNvbnRyYWN0OiB7bmFtZX0iKQoKICAgIHRhYmxlLCByb3dzLCBlcnJvcnMgPSBtb2QuaW5zcGVjdChtb2QuUlVOVElNRV9UQUJMRVMsIHBvcnRmb2xpb19zY29wZWQ9VHJ1ZSkKICAgIHJvd3MgPSBbciBmb3IgciBpbiAocm93cyBvciBbXSkgaWYgaXNpbnN0YW5jZShyLCBkaWN0KV0KCiAgICBzZWxlY3RlZCA9IG1vZC5sYXRlc3Qocm93cykKICAgIHNlbGVjdGVkX29rLCBzZWxlY3RlZF9zdGF0ZSwgc2VsZWN0ZWRfcmVhc29uID0gbW9kLnJ1bnRpbWVfc3VwZXJ2aXNpb25fcmVjb25zdHJ1Y3Qoc2VsZWN0ZWQpCgogICAgbm9ybWFsaXplZDogTGlzdFtEaWN0W3N0ciwgQW55XV0gPSBbXQogICAgZm9yIGksIHIgaW4gZW51bWVyYXRlKHJvd3MpOgogICAgICAgIG9rLCBzdGF0ZSwgcmVhc29uID0gbW9kLnJ1bnRpbWVfc3VwZXJ2aXNpb25fcmVjb25zdHJ1Y3QocikKICAgICAgICBub3JtYWxpemVkLmFwcGVuZCh7CiAgICAgICAgICAgICJpbmRleCI6IGksCiAgICAgICAgICAgICJpZCI6IHJvd19pZChyKSwKICAgICAgICAgICAgImJ1c2luZXNzX2RhdGUiOiBidXNpbmVzc19kYXRlKHIpLAogICAgICAgICAgICAiZXZlbnRfdGltZSI6IGV2ZW50X3RpbWUociksCiAgICAgICAgICAgICJyZWNvbnN0cnVjdGVkX29rIjogYm9vbChvayksCiAgICAgICAgICAgICJyZWNvbnN0cnVjdGVkX3N0YXRlIjogc3RhdGUsCiAgICAgICAgICAgICJyZWNvbnN0cnVjdGlvbl9yZWFzb24iOiByZWFzb24sCiAgICAgICAgICAgICJmaWVsZHMiOiBzdGF0ZV9maWVsZHMociksCiAgICAgICAgfSkKCiAgICBjaHJvbm9sb2dpY2FsID0gc29ydGVkKAogICAgICAgIG5vcm1hbGl6ZWQsCiAgICAgICAga2V5PWxhbWJkYSB4OiAoeFsiZXZlbnRfdGltZSJdLCB4WyJidXNpbmVzc19kYXRlIl0sIHhbImlkIl0sIHhbImluZGV4Il0pCiAgICApCgogICAgbGF0ZXN0X2J5X2V2ZW50ID0gY2hyb25vbG9naWNhbFstMV0gaWYgY2hyb25vbG9naWNhbCBlbHNlIE5vbmUKCiAgICBzZWxlY3RlZF9pZCA9IHJvd19pZChzZWxlY3RlZCkgaWYgc2VsZWN0ZWQgZWxzZSAiIgogICAgc2VsZWN0ZWRfbm9ybSA9IG5leHQoKHggZm9yIHggaW4gbm9ybWFsaXplZCBpZiB4WyJpZCJdID09IHNlbGVjdGVkX2lkIGFuZCBzZWxlY3RlZF9pZCksIE5vbmUpCiAgICBpZiBzZWxlY3RlZF9ub3JtIGlzIE5vbmUgYW5kIHNlbGVjdGVkOgogICAgICAgIHNlbGVjdGVkX25vcm0gPSB7CiAgICAgICAgICAgICJpbmRleCI6IE5vbmUsCiAgICAgICAgICAgICJpZCI6IHNlbGVjdGVkX2lkLAogICAgICAgICAgICAiYnVzaW5lc3NfZGF0ZSI6IGJ1c2luZXNzX2RhdGUoc2VsZWN0ZWQpLAogICAgICAgICAgICAiZXZlbnRfdGltZSI6IGV2ZW50X3RpbWUoc2VsZWN0ZWQpLAogICAgICAgICAgICAicmVjb25zdHJ1Y3RlZF9vayI6IGJvb2woc2VsZWN0ZWRfb2spLAogICAgICAgICAgICAicmVjb25zdHJ1Y3RlZF9zdGF0ZSI6IHNlbGVjdGVkX3N0YXRlLAogICAgICAgICAgICAicmVjb25zdHJ1Y3Rpb25fcmVhc29uIjogc2VsZWN0ZWRfcmVhc29uLAogICAgICAgICAgICAiZmllbGRzIjogc3RhdGVfZmllbGRzKHNlbGVjdGVkKSwKICAgICAgICB9CgogICAgbmV3ZXJfcGFzc19yb3dzID0gW10KICAgIGlmIHNlbGVjdGVkX25vcm06CiAgICAgICAgc19rZXkgPSAoc2VsZWN0ZWRfbm9ybVsiZXZlbnRfdGltZSJdLCBzZWxlY3RlZF9ub3JtWyJidXNpbmVzc19kYXRlIl0sIHNlbGVjdGVkX25vcm1bImlkIl0pCiAgICAgICAgZm9yIHggaW4gY2hyb25vbG9naWNhbDoKICAgICAgICAgICAgeF9rZXkgPSAoeFsiZXZlbnRfdGltZSJdLCB4WyJidXNpbmVzc19kYXRlIl0sIHhbImlkIl0pCiAgICAgICAgICAgIGlmIHhfa2V5ID4gc19rZXkgYW5kIHhbInJlY29uc3RydWN0ZWRfb2siXToKICAgICAgICAgICAgICAgIG5ld2VyX3Bhc3Nfcm93cy5hcHBlbmQoeCkKCiAgICBpZiBzZWxlY3RlZF9ub3JtIGFuZCBub3Qgc2VsZWN0ZWRfbm9ybVsicmVjb25zdHJ1Y3RlZF9vayJdIGFuZCBuZXdlcl9wYXNzX3Jvd3M6CiAgICAgICAgY29uY2x1c2lvbiA9ICJTRUxFQ1RFRF9CTE9DS0VEX1JPV19IQVNfTkVXRVJfUEFTU19DQU5ESURBVEUiCiAgICBlbGlmIHNlbGVjdGVkX25vcm0gYW5kIG5vdCBzZWxlY3RlZF9ub3JtWyJyZWNvbnN0cnVjdGVkX29rIl06CiAgICAgICAgY29uY2x1c2lvbiA9ICJTRUxFQ1RFRF9CTE9DS0VEX1JPV19OT19ORVdFUl9QQVNTX0ZPVU5EIgogICAgZWxpZiBzZWxlY3RlZF9ub3JtIGFuZCBzZWxlY3RlZF9ub3JtWyJyZWNvbnN0cnVjdGVkX29rIl06CiAgICAgICAgY29uY2x1c2lvbiA9ICJTRUxFQ1RFRF9SVU5USU1FX1JPV19BTFJFQURZX1BBU1MiCiAgICBlbHNlOgogICAgICAgIGNvbmNsdXNpb24gPSAiUlVOVElNRV9ST1dfVU5SRVNPTFZFRCIKCiAgICByZXN1bHQgPSB7CiAgICAgICAgImNvbnRyYWN0IjogIlBIQVNFMzcxOTM0X1BIQVNFMzc1X1JVTlRJTUVfU1VQRVJWSVNJT05fQ0FOT05JQ0FMX1JPV19QUk9WRU5BTkNFX1NVUEVSU0VTU0lPTl9ESUFHTk9TVElDIiwKICAgICAgICAibW9kZSI6IE1PREUsCiAgICAgICAgImdlbmVyYXRlZF9hdCI6IGRhdGV0aW1lLm5vdyh0aW1lem9uZS51dGMpLmlzb2Zvcm1hdCgpLAogICAgICAgICJzZWxlY3RlZF9ydW50aW1lX3RhYmxlIjogdGFibGUsCiAgICAgICAgInJlYWRfZXJyb3JzIjogZXJyb3JzIG9yIFtdLAogICAgICAgICJyb3dfY291bnQiOiBsZW4ocm93cyksCiAgICAgICAgInNlbGVjdGVkX3JvdyI6IHNlbGVjdGVkX25vcm0sCiAgICAgICAgImxhdGVzdF9ieV9ldmVudF90aW1lIjogbGF0ZXN0X2J5X2V2ZW50LAogICAgICAgICJuZXdlcl9wYXNzX2NhbmRpZGF0ZXMiOiBuZXdlcl9wYXNzX3Jvd3MsCiAgICAgICAgImFsbF9yb3dzIjogY2hyb25vbG9naWNhbCwKICAgICAgICAiY29uY2x1c2lvbiI6IGNvbmNsdXNpb24sCiAgICAgICAgInNhZmV0eSI6IHsKICAgICAgICAgICAgInBoYXNlMzc1X2xvZ2ljX2NoYW5nZSI6IEZhbHNlLAogICAgICAgICAgICAic3VwYWJhc2VfbXV0YXRpb24iOiBGYWxzZSwKICAgICAgICAgICAgInF1YWxpZmljYXRpb25fY291bnRlcl9tdXRhdGlvbiI6IEZhbHNlLAogICAgICAgICAgICAic3ludGhldGljX3F1YWxpZmljYXRpb24iOiBGYWxzZSwKICAgICAgICAgICAgImhpc3RvcmljYWxfZXZpZGVuY2VfcmV3cml0ZSI6IEZhbHNlLAogICAgICAgICAgICAiYnJva2VyX29yZGVyX2VuYWJsZW1lbnQiOiBGYWxzZSwKICAgICAgICAgICAgInJlYWxfbW9uZXlfZW5hYmxlbWVudCI6IEZhbHNlLAogICAgICAgIH0sCiAgICB9CgogICAgT1VULm1rZGlyKHBhcmVudHM9VHJ1ZSwgZXhpc3Rfb2s9VHJ1ZSkKICAgIChPVVQgLyAicGhhc2UzNzE5MzRfcnVudGltZV9wcm92ZW5hbmNlLmpzb24iKS53cml0ZV90ZXh0KAogICAgICAgIGpzb24uZHVtcHMocmVzdWx0LCBpbmRlbnQ9MiwgZW5zdXJlX2FzY2lpPUZhbHNlKSwKICAgICAgICBlbmNvZGluZz0idXRmLTgiLAogICAgKQoKICAgIG1kID0gWwogICAgICAgICIjIFBoYXNlIDMuNy4xOS4zLjQgLSBQaGFzZSAzLjcuNSBSdW50aW1lIFN1cGVydmlzaW9uIENhbm9uaWNhbCBSb3cgUHJvdmVuYW5jZSIsCiAgICAgICAgIiIsCiAgICAgICAgZiItIE1vZGU6ICoqe01PREV9KioiLAogICAgICAgIGYiLSBDb25jbHVzaW9uOiAqKntjb25jbHVzaW9ufSoqIiwKICAgICAgICBmIi0gU2VsZWN0ZWQgUnVudGltZSBUYWJsZTogYHt0YWJsZX1gIiwKICAgICAgICBmIi0gUm93IENvdW50OiAqKntsZW4ocm93cyl9KioiLAogICAgICAgIGYiLSBSZWFkIEVycm9yczogYHtlcnJvcnMgb3IgW119YCIsCiAgICAgICAgIiIsCiAgICAgICAgIiMjIFNlbGVjdGVkIFJvdyIsCiAgICAgICAgIiIsCiAgICBdCiAgICBpZiBzZWxlY3RlZF9ub3JtOgogICAgICAgIGZvciBrIGluICgiaWQiLCJidXNpbmVzc19kYXRlIiwiZXZlbnRfdGltZSIsInJlY29uc3RydWN0ZWRfb2siLCJyZWNvbnN0cnVjdGVkX3N0YXRlIiwicmVjb25zdHJ1Y3Rpb25fcmVhc29uIik6CiAgICAgICAgICAgIG1kLmFwcGVuZChmIi0ge2t9OiBge3NlbGVjdGVkX25vcm0uZ2V0KGspfWAiKQogICAgICAgIG1kLmFwcGVuZChmIi0gZmllbGRzOiBge3NlbGVjdGVkX25vcm0uZ2V0KCdmaWVsZHMnKX1gIikKICAgIGVsc2U6CiAgICAgICAgbWQuYXBwZW5kKCItIE5vbmUiKQoKICAgIG1kICs9IFsiIiwgIiMjIExhdGVzdCBCeSBFdmVudCBUaW1lIiwgIiJdCiAgICBpZiBsYXRlc3RfYnlfZXZlbnQ6CiAgICAgICAgZm9yIGsgaW4gKCJpZCIsImJ1c2luZXNzX2RhdGUiLCJldmVudF90aW1lIiwicmVjb25zdHJ1Y3RlZF9vayIsInJlY29uc3RydWN0ZWRfc3RhdGUiLCJyZWNvbnN0cnVjdGlvbl9yZWFzb24iKToKICAgICAgICAgICAgbWQuYXBwZW5kKGYiLSB7a306IGB7bGF0ZXN0X2J5X2V2ZW50LmdldChrKX1gIikKICAgICAgICBtZC5hcHBlbmQoZiItIGZpZWxkczogYHtsYXRlc3RfYnlfZXZlbnQuZ2V0KCdmaWVsZHMnKX1gIikKICAgIGVsc2U6CiAgICAgICAgbWQuYXBwZW5kKCItIE5vbmUiKQoKICAgIG1kICs9IFsiIiwgIiMjIE5ld2VyIFBBU1MgQ2FuZGlkYXRlcyIsICIiXQogICAgaWYgbmV3ZXJfcGFzc19yb3dzOgogICAgICAgIGZvciB4IGluIG5ld2VyX3Bhc3Nfcm93czoKICAgICAgICAgICAgbWQuYXBwZW5kKAogICAgICAgICAgICAgICAgZiItIHt4WydidXNpbmVzc19kYXRlJ119IHwge3hbJ2V2ZW50X3RpbWUnXX0gfCB7eFsncmVjb25zdHJ1Y3RlZF9zdGF0ZSddfSB8ICIKICAgICAgICAgICAgICAgIGYie3hbJ3JlY29uc3RydWN0aW9uX3JlYXNvbiddfSB8IGlkIHt4WydpZCddfSIKICAgICAgICAgICAgKQogICAgZWxzZToKICAgICAgICBtZC5hcHBlbmQoIi0gTm9uZSIpCgogICAgbWQgKz0gWyIiLCAiIyMgQWxsIFJ1bnRpbWUgUm93cyIsICIiXQogICAgZm9yIHggaW4gY2hyb25vbG9naWNhbDoKICAgICAgICBtZC5hcHBlbmQoCiAgICAgICAgICAgIGYiLSB7eFsnYnVzaW5lc3NfZGF0ZSddfSB8IHt4WydldmVudF90aW1lJ119IHwgb2s9e3hbJ3JlY29uc3RydWN0ZWRfb2snXX0gfCAiCiAgICAgICAgICAgIGYic3RhdGU9e3hbJ3JlY29uc3RydWN0ZWRfc3RhdGUnXX0gfCByZWFzb249e3hbJ3JlY29uc3RydWN0aW9uX3JlYXNvbiddfSB8IGlkPXt4WydpZCddfSIKICAgICAgICApCgogICAgbWQgKz0gWwogICAgICAgICIiLAogICAgICAgICIjIyBTYWZldHkiLAogICAgICAgICIiLAogICAgICAgICItIFBoYXNlIDMuNy41IExvZ2ljIENoYW5nZTogKipOTyoqIiwKICAgICAgICAiLSBTdXBhYmFzZSBNdXRhdGlvbjogKipOTyoqIiwKICAgICAgICAiLSBRdWFsaWZpY2F0aW9uIENvdW50ZXIgTXV0YXRpb246ICoqTk8qKiIsCiAgICAgICAgIi0gU3ludGhldGljIFF1YWxpZmljYXRpb246ICoqTk8qKiIsCiAgICAgICAgIi0gSGlzdG9yaWNhbCBFdmlkZW5jZSBSZXdyaXRlOiAqKk5PKioiLAogICAgICAgICItIEJyb2tlciBPcmRlciBFbmFibGVtZW50OiAqKk5PKioiLAogICAgICAgICItIFJlYWwtTW9uZXkgRW5hYmxlbWVudDogKipOTyoqIiwKICAgIF0KCiAgICAoT1VUIC8gInBoYXNlMzcxOTM0X3J1bnRpbWVfcHJvdmVuYW5jZS5tZCIpLndyaXRlX3RleHQoCiAgICAgICAgIlxuIi5qb2luKG1kKSArICJcbiIsCiAgICAgICAgZW5jb2Rpbmc9InV0Zi04IiwKICAgICkKCiAgICBwcmludCgiUEhBU0UzNzE5MzRfQ09OQ0xVU0lPTj0iICsgY29uY2x1c2lvbikKICAgIHByaW50KCJTRUxFQ1RFRF9SVU5USU1FX1RBQkxFPSIgKyBzdHIodGFibGUpKQogICAgcHJpbnQoIlJPV19DT1VOVD0iICsgc3RyKGxlbihyb3dzKSkpCiAgICBwcmludCgiU0VMRUNURURfUk9XX0lEPSIgKyBzdHIoc2VsZWN0ZWRfbm9ybS5nZXQoImlkIikgaWYgc2VsZWN0ZWRfbm9ybSBlbHNlIE5vbmUpKQogICAgcHJpbnQoIlNFTEVDVEVEX1NUQVRFPSIgKyBzdHIoc2VsZWN0ZWRfbm9ybS5nZXQoInJlY29uc3RydWN0ZWRfc3RhdGUiKSBpZiBzZWxlY3RlZF9ub3JtIGVsc2UgTm9uZSkpCiAgICBwcmludCgiU0VMRUNURURfUkVBU09OPSIgKyBzdHIoc2VsZWN0ZWRfbm9ybS5nZXQoInJlY29uc3RydWN0aW9uX3JlYXNvbiIpIGlmIHNlbGVjdGVkX25vcm0gZWxzZSBOb25lKSkKICAgIHByaW50KCJMQVRFU1RfRVZFTlRfUk9XX0lEPSIgKyBzdHIobGF0ZXN0X2J5X2V2ZW50LmdldCgiaWQiKSBpZiBsYXRlc3RfYnlfZXZlbnQgZWxzZSBOb25lKSkKICAgIHByaW50KCJMQVRFU1RfRVZFTlRfU1RBVEU9IiArIHN0cihsYXRlc3RfYnlfZXZlbnQuZ2V0KCJyZWNvbnN0cnVjdGVkX3N0YXRlIikgaWYgbGF0ZXN0X2J5X2V2ZW50IGVsc2UgTm9uZSkpCiAgICBwcmludCgiTkVXRVJfUEFTU19DQU5ESURBVEVTPSIgKyBzdHIobGVuKG5ld2VyX3Bhc3Nfcm93cykpKQoKaWYgX19uYW1lX18gPT0gIl9fbWFpbl9fIjoKICAgIG1haW4oKQo="
+$YmlPayloadB64 = "bmFtZTogR1BUIFF1YW50IFBoYXNlIDMuNy4xOS4zLjQgLSBQaGFzZSAzLjcuNSBSdW50aW1lIFN1cGVydmlzaW9uIENhbm9uaWNhbCBSb3cgUHJvdmVuYW5jZSBTdXBlcnNlc3Npb24gRGlhZ25vc3RpYwoKb246CiAgd29ya2Zsb3dfZGlzcGF0Y2g6CgpwZXJtaXNzaW9uczoKICBjb250ZW50czogcmVhZAogIGFjdGlvbnM6IHJlYWQKCmpvYnM6CiAgZGlhZ25vc2U6CiAgICBuYW1lOiBydW50aW1lLXN1cGVydmlzaW9uLXByb3ZlbmFuY2UKICAgIHJ1bnMtb246IHVidW50dS1sYXRlc3QKICAgIHRpbWVvdXQtbWludXRlczogMTUKICAgIGVudjoKICAgICAgU1VQQUJBU0VfVVJMOiAke3sgc2VjcmV0cy5TVVBBQkFTRV9VUkwgfX0KICAgICAgU1VQQUJBU0VfU0VSVklDRV9ST0xFX0tFWTogJHt7IHNlY3JldHMuU1VQQUJBU0VfU0VSVklDRV9ST0xFX0tFWSB9fQogICAgICBTVVBBQkFTRV9LRVk6ICR7eyBzZWNyZXRzLlNVUEFCQVNFX0tFWSB9fQoKICAgIHN0ZXBzOgogICAgICAtIHVzZXM6IGFjdGlvbnMvY2hlY2tvdXRAdjQKCiAgICAgIC0gdXNlczogYWN0aW9ucy9zZXR1cC1weXRob25AdjUKICAgICAgICB3aXRoOgogICAgICAgICAgcHl0aG9uLXZlcnNpb246ICIzLjEyIgoKICAgICAgLSBuYW1lOiBDb21waWxlIGRpYWdub3N0aWMKICAgICAgICBydW46IHB5dGhvbiAtbSBweV9jb21waWxlIGF1dG9tYXRpb24vdjkyL3BoYXNlMzcxOTM0X3BoYXNlMzc1X3J1bnRpbWVfc3VwZXJ2aXNpb25fY2Fub25pY2FsX3Jvd19wcm92ZW5hbmNlX3N1cGVyc2Vzc2lvbl9kaWFnbm9zdGljLnB5CgogICAgICAtIG5hbWU6IFJ1biByZWFkLW9ubHkgZGlhZ25vc3RpYwogICAgICAgIHJ1bjogcHl0aG9uIGF1dG9tYXRpb24vdjkyL3BoYXNlMzcxOTM0X3BoYXNlMzc1X3J1bnRpbWVfc3VwZXJ2aXNpb25fY2Fub25pY2FsX3Jvd19wcm92ZW5hbmNlX3N1cGVyc2Vzc2lvbl9kaWFnbm9zdGljLnB5CgogICAgICAtIG5hbWU6IFB1Ymxpc2ggc3VtbWFyeQogICAgICAgIGlmOiBhbHdheXMoKQogICAgICAgIHNoZWxsOiBiYXNoCiAgICAgICAgcnVuOiB8CiAgICAgICAgICBpZiBbIC1mIGFydGlmYWN0cy9waGFzZTM3MTkzNC9waGFzZTM3MTkzNF9ydW50aW1lX3Byb3ZlbmFuY2UubWQgXTsgdGhlbgogICAgICAgICAgICBjYXQgYXJ0aWZhY3RzL3BoYXNlMzcxOTM0L3BoYXNlMzcxOTM0X3J1bnRpbWVfcHJvdmVuYW5jZS5tZCA+PiAiJEdJVEhVQl9TVEVQX1NVTU1BUlkiCiAgICAgICAgICBmaQoKICAgICAgLSBuYW1lOiBVcGxvYWQgZXZpZGVuY2UKICAgICAgICBpZjogYWx3YXlzKCkKICAgICAgICB1c2VzOiBhY3Rpb25zL3VwbG9hZC1hcnRpZmFjdEB2NAogICAgICAgIHdpdGg6CiAgICAgICAgICBuYW1lOiBwaGFzZTM3MTkzNC1ydW50aW1lLXN1cGVydmlzaW9uLXByb3ZlbmFuY2UKICAgICAgICAgIHBhdGg6IGFydGlmYWN0cy9waGFzZTM3MTkzNAogICAgICAgICAgaWYtbm8tZmlsZXMtZm91bmQ6IHdhcm4KICAgICAgICAgIHJldGVudGlvbi1kYXlzOiA5MAo="
+
+function Write-Base64Utf8File {
+    param([string]$Base64,[string]$Path)
+    [IO.File]::WriteAllBytes($Path, [Convert]::FromBase64String($Base64))
+}
+
+function Restore-Targets {
+    $bp = Join-Path $Backup ([IO.Path]::GetFileName($Py))
+    $by = Join-Path $Backup ([IO.Path]::GetFileName($Yml))
+    if (Test-Path $bp) { Copy-Item $bp $Py -Force } elseif (Test-Path $Py) { Remove-Item $Py -Force }
+    if (Test-Path $by) { Copy-Item $by $Yml -Force } elseif (Test-Path $Yml) { Remove-Item $Yml -Force }
+}
+
+try {
+    Write-Host "[1/9] Repository pre-check..."
+    if (-not (Test-Path (Join-Path $Root ".git"))) { throw "Not at GPT repository root." }
+
+    Write-Host "[2/9] Python launcher..."
+    Write-Host "  Launcher: $PythonMode"
+
+    Write-Host "[3/9] Backup..."
+    New-Item -ItemType Directory -Force -Path $Backup | Out-Null
+    New-Item -ItemType Directory -Force -Path (Split-Path $Py) | Out-Null
+    New-Item -ItemType Directory -Force -Path (Split-Path $Yml) | Out-Null
+    if (Test-Path $Py) { Copy-Item $Py (Join-Path $Backup ([IO.Path]::GetFileName($Py))) -Force }
+    if (Test-Path $Yml) { Copy-Item $Yml (Join-Path $Backup ([IO.Path]::GetFileName($Yml))) -Force }
+
+    Write-Host "[4/9] Writing parser-safe diagnostic controller..."
+    Write-Base64Utf8File $PyPayloadB64 $Py
+
+    Write-Host "[5/9] Writing parser-safe workflow..."
+    Write-Base64Utf8File $YmlPayloadB64 $Yml
+
+    Write-Host "[6/9] Compile diagnostic..."
+    if ($PythonMode -eq "py") { & py -3 -m py_compile $Py } else { & python -m py_compile $Py }
+    if ($LASTEXITCODE -ne 0) { throw "Compile failed." }
+
+    Write-Host "[7/9] Safety verification..."
+    $text = Get-Content -LiteralPath $Py -Raw
+    foreach ($token in @(
+        'MODE = "READ_ONLY_NO_MUTATION"',
+        '"phase375_logic_change": False',
+        '"supabase_mutation": False',
+        '"qualification_counter_mutation": False',
+        '"synthetic_qualification": False',
+        '"historical_evidence_rewrite": False',
+        '"broker_order_enablement": False',
+        '"real_money_enablement": False'
+    )) {
+        if (-not $text.Contains($token)) {
+            throw "Missing safety token: $token"
+        }
+    }
+
+    Write-Host "[8/9] Git diff verification..."
+    if (Get-Command git -ErrorAction SilentlyContinue) {
+        & git diff --check -- $PyRel $YmlRel
+        if ($LASTEXITCODE -ne 0) { throw "git diff --check failed." }
+        & git status --short -- $PyRel $YmlRel
+    }
+
+    Write-Host "[9/9] SUCCESS"
+    Write-Host "======================================================================"
+    Write-Host " Phase 3.7.19.3.4 DEPLOYED AND VERIFIED"
+    Write-Host "======================================================================"
+    Write-Host "Mode                           : READ-ONLY"
+    Write-Host "Runtime row provenance         : ENABLED"
+    Write-Host "Supersession diagnostic        : ENABLED"
+    Write-Host "Phase 3.7.5 logic change       : NO"
+    Write-Host "Supabase mutation              : NO"
+    Write-Host "Qualification counter mutation : NO"
+    Write-Host "Synthetic qualification        : NO"
+    Write-Host "Historical evidence rewrite    : NO"
+    Write-Host "Broker order enablement        : NO"
+    Write-Host "Real-money enablement          : NO"
+    Write-Host ""
+    Write-Host "IMPORTANT: Do not use git add ."
+    Write-Host "IMPORTANT: Do not re-run Phase 3.7.5 yet."
+} catch {
+    Write-Host "ROLLBACK: restoring Phase 3.7.19.3.4 targets..." -ForegroundColor Yellow
+    Restore-Targets
+    throw
+}

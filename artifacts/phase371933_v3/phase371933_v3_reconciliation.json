@@ -1,0 +1,46 @@
+{
+  "contract": "PHASE371933_V3_CANONICAL_DAILY_EVIDENCE_SOURCE_CONTRACT_RECONCILIATION",
+  "generated_at": "2026-08-31T05:58:56.238649+00:00",
+  "state": "PATCH_APPLIED",
+  "discovered_candidates": [
+    "paper_post_recovery_activation_state_v92",
+    "paper_post_recovery_master_cycle_v92",
+    "paper_runtime_supervision_state_v92",
+    "paper_production_runtime_supervision_v92",
+    "paper_runtime_evidence_v92",
+    "paper_production_evidence_v92",
+    "production_evidence_v92"
+  ],
+  "priority_candidates": [
+    "paper_runtime_evidence_v92",
+    "paper_production_evidence_v92",
+    "production_evidence_v92"
+  ],
+  "previous_daily_evidence_tables": [
+    "paper_daily_cycle_monitoring_v92",
+    "paper_daily_cycle_evidence_v92",
+    "paper_runtime_evidence_v92",
+    "paper_production_evidence_v92",
+    "production_evidence_v92",
+    "paper_evidence_v92"
+  ],
+  "reconciled_daily_evidence_tables": [
+    "paper_runtime_evidence_v92",
+    "paper_production_evidence_v92",
+    "production_evidence_v92",
+    "paper_daily_cycle_monitoring_v92",
+    "paper_daily_cycle_evidence_v92",
+    "paper_evidence_v92"
+  ],
+  "safety": {
+    "phase374_logic_change": false,
+    "phase375_qualification_logic_change": false,
+    "qualification_threshold_change": false,
+    "supabase_mutation_by_deployer": false,
+    "qualification_counter_mutation": false,
+    "synthetic_qualification": false,
+    "historical_evidence_rewrite": false,
+    "broker_order_enablement": false,
+    "real_money_enablement": false
+  }
+}

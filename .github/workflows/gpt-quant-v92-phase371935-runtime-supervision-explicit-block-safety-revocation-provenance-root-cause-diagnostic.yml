@@ -1,0 +1,48 @@
+name: GPT Quant Phase 3.7.19.3.5 - Runtime Supervision Explicit Block Safety Revocation Provenance Root Cause Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  diagnose:
+    name: safety-revocation-root-cause
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile diagnostic
+        run: python -m py_compile automation/v92/phase371935_runtime_supervision_explicit_block_safety_revocation_provenance_root_cause_diagnostic.py
+
+      - name: Run read-only root cause diagnostic
+        run: python automation/v92/phase371935_runtime_supervision_explicit_block_safety_revocation_provenance_root_cause_diagnostic.py
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase371935/phase371935_root_cause.md ]; then
+            cat artifacts/phase371935/phase371935_root_cause.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase371935-safety-revocation-root-cause
+          path: artifacts/phase371935
+          if-no-files-found: warn
+          retention-days: 90

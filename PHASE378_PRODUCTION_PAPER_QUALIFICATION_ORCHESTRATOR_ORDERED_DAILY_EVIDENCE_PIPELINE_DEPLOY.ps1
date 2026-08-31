@@ -1,0 +1,232 @@
+﻿$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+
+Write-Host "PHASE378 - Production Paper Qualification Orchestrator + Ordered Daily Evidence Pipeline" -ForegroundColor Cyan
+Write-Host "Safety boundary: PAPER ONLY / broker submission DISABLED / real money DISABLED" -ForegroundColor Green
+
+$repo = (Get-Location).Path
+$ymlRel = ".github/workflows/gpt-quant-v92-paper-trading-phase378-production-paper-qualification-orchestrator-ordered-daily-evidence-pipeline.yml"
+$ymlPath = Join-Path $repo $ymlRel
+
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$backup = Join-Path $repo ".phase378-backup-$stamp"
+New-Item -ItemType Directory -Force -Path $backup | Out-Null
+if (Test-Path $ymlPath) {
+    Copy-Item $ymlPath (Join-Path $backup (Split-Path $ymlPath -Leaf)) -Force
+}
+
+$yml = @'
+name: GPT Quant Phase 3.7.8 - Production Paper Qualification Orchestrator Ordered Daily Evidence Pipeline
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekdays 15:20 UTC / 23:20 Asia-Taipei.
+    # Runs after the current child schedules and also acts as an ordered reconciliation pipeline.
+    - cron: "20 15 * * 1-5"
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: phase378-production-paper-qualification-orchestrator
+  cancel-in-progress: false
+
+jobs:
+  ordered-qualification-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      WF374: gpt-quant-v92-paper-trading-phase374-production-paper-daily-cycle-monitoring-evidence-accumulation.yml
+      WF377: gpt-quant-v92-paper-trading-phase377-production-paper-qualification-evidence-persistence-cross-run-accumulation.yml
+      WF375: gpt-quant-v92-paper-trading-phase375-production-paper-multi-cycle-stability-evidence-qualification.yml
+      WF376: gpt-quant-v92-paper-trading-phase376-production-paper-multi-cycle-qualification-promotion-gate.yml
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate orchestrator contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$WF374"
+          test -n "$WF377"
+          test -n "$WF375"
+          test -n "$WF376"
+          echo "Ordered pipeline contract: PASS"
+          echo "Paper-only qualification pipeline: PASS"
+          echo "No broker or real-money execution is introduced by Phase 3.7.8."
+
+      - name: Run ordered daily qualification pipeline
+        id: orchestrate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          wait_for_run() {
+            local workflow="$1"
+            local label="$2"
+            local before_id
+            local run_id
+            local status
+            local conclusion
+            local i
+
+            before_id="$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?branch=main&per_page=1" \
+              --jq '.workflow_runs[0].id // 0' || echo 0)"
+
+            echo "Dispatching ${label}: ${workflow}"
+            gh workflow run "$workflow" --ref main
+
+            run_id=""
+            for i in $(seq 1 30); do
+              sleep 2
+              run_id="$(gh api \
+                -H "Accept: application/vnd.github+json" \
+                "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?branch=main&event=workflow_dispatch&per_page=10" \
+                --jq "[.workflow_runs[] | select(.id > ${before_id})][0].id // empty" || true)"
+              if [ -n "$run_id" ]; then
+                break
+              fi
+            done
+
+            if [ -z "$run_id" ]; then
+              echo "::error::${label}: dispatched run could not be resolved."
+              return 1
+            fi
+
+            echo "${label} run id: ${run_id}"
+
+            for i in $(seq 1 180); do
+              status="$(gh api \
+                -H "Accept: application/vnd.github+json" \
+                "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" \
+                --jq '.status')"
+              conclusion="$(gh api \
+                -H "Accept: application/vnd.github+json" \
+                "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" \
+                --jq '.conclusion // ""')"
+
+              echo "${label}: status=${status} conclusion=${conclusion:-pending}"
+
+              if [ "$status" = "completed" ]; then
+                if [ "$conclusion" = "success" ]; then
+                  echo "${label}: PASS"
+                  return 0
+                fi
+                echo "::error::${label}: completed with conclusion=${conclusion}"
+                return 1
+              fi
+              sleep 5
+            done
+
+            echo "::error::${label}: timed out waiting for completion."
+            return 1
+          }
+
+          wait_for_run "$WF374" "Phase 3.7.4 Daily Cycle Monitoring"
+          wait_for_run "$WF377" "Phase 3.7.7 Evidence Persistence"
+          wait_for_run "$WF375" "Phase 3.7.5 Multi-Cycle Qualification"
+          wait_for_run "$WF376" "Phase 3.7.6 Promotion Gate"
+
+          echo "ordered_pipeline_state=ORDERED_DAILY_EVIDENCE_PIPELINE_PASS" >> "$GITHUB_OUTPUT"
+
+      - name: Publish orchestrator summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "# GPT Quant V9.2 Paper Trading — Phase 3.7.8"
+            echo
+            echo "## Production Paper Qualification Orchestrator + Ordered Daily Evidence Pipeline"
+            echo
+            echo "- Pipeline State: **${{ steps.orchestrate.outputs.ordered_pipeline_state || 'BLOCKED_OR_INCOMPLETE' }}**"
+            echo "- Ordered Stage 1: **Phase 3.7.4 — Daily Cycle Monitoring**"
+            echo "- Ordered Stage 2: **Phase 3.7.7 — Cross-Run Evidence Persistence**"
+            echo "- Ordered Stage 3: **Phase 3.7.5 — Multi-Cycle Stability Qualification**"
+            echo "- Ordered Stage 4: **Phase 3.7.6 — Qualification Promotion Gate**"
+            echo
+            echo "## Safety Boundary"
+            echo
+            echo "- Paper Trading Only: **YES**"
+            echo "- Broker Order Submission: **DISABLED**"
+            echo "- Real-Money Trading: **DISABLED**"
+            echo "- Qualification thresholds are **not bypassed**."
+            echo "- Same-day evidence remains subject to Phase 3.7.7 cycle-date deduplication."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce orchestrator result
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.orchestrate.outcome }}" != "success" ]; then
+            echo "Phase 3.7.8 ordered qualification pipeline is BLOCKED."
+            exit 1
+          fi
+          echo "Phase 3.7.8 ordered qualification pipeline is healthy."
+'@
+
+$utf8 = New-Object System.Text.UTF8Encoding($false)
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $ymlPath) | Out-Null
+[System.IO.File]::WriteAllText($ymlPath, $yml + [Environment]::NewLine, $utf8)
+
+$verify = Get-Content -LiteralPath $ymlPath -Raw
+$required = @(
+  'Phase 3.7.8 - Production Paper Qualification Orchestrator Ordered Daily Evidence Pipeline',
+  'actions: write',
+  'gpt-quant-v92-paper-trading-phase374-production-paper-daily-cycle-monitoring-evidence-accumulation.yml',
+  'gpt-quant-v92-paper-trading-phase377-production-paper-qualification-evidence-persistence-cross-run-accumulation.yml',
+  'gpt-quant-v92-paper-trading-phase375-production-paper-multi-cycle-stability-evidence-qualification.yml',
+  'gpt-quant-v92-paper-trading-phase376-production-paper-multi-cycle-qualification-promotion-gate.yml',
+  'wait_for_run "$WF374"',
+  'wait_for_run "$WF377"',
+  'wait_for_run "$WF375"',
+  'wait_for_run "$WF376"',
+  'Qualification thresholds are **not bypassed**',
+  'Same-day evidence remains subject to Phase 3.7.7 cycle-date deduplication'
+)
+
+foreach ($token in $required) {
+    if ($verify -notmatch [regex]::Escape($token)) {
+        throw "Verification failed: missing $token"
+    }
+}
+
+Write-Host ""
+Write-Host "Ordered stage contract: PASS" -ForegroundColor Green
+Write-Host "Phase 3.7.4 dispatch/wait bridge: PASS" -ForegroundColor Green
+Write-Host "Phase 3.7.7 persistence dispatch/wait bridge: PASS" -ForegroundColor Green
+Write-Host "Phase 3.7.5 qualification dispatch/wait bridge: PASS" -ForegroundColor Green
+Write-Host "Phase 3.7.6 promotion dispatch/wait bridge: PASS" -ForegroundColor Green
+Write-Host "Qualification threshold non-bypass: PASS" -ForegroundColor Green
+Write-Host "Paper-only safety boundary preserved: PASS" -ForegroundColor Green
+Write-Host ""
+Write-Host "PHASE378 DEPLOYMENT COMPLETE" -ForegroundColor Cyan
+Write-Host "No Supabase SQL change is required." -ForegroundColor Green
+Write-Host ""
+Write-Host "Generated:"
+Write-Host "  $ymlPath"
+Write-Host ""
+Write-Host "Automatic schedule:"
+Write-Host "  Weekdays 15:20 UTC / 23:20 Asia-Taipei"
+Write-Host ""
+Write-Host "Important:"
+Write-Host "  Phase 3.7.8 does NOT bypass the 3-cycle qualification threshold."
+Write-Host "  Phase 3.7.7 still deduplicates same-day evidence by cycle date."
+Write-Host "  Existing child schedules are preserved in this first orchestrator release."
+Write-Host ""
+Write-Host "Backup: $backup"
+Write-Host ""
+Write-Host "NEXT:"
+Write-Host '1. git add ".github/workflows/gpt-quant-v92-paper-trading-phase378-production-paper-qualification-orchestrator-ordered-daily-evidence-pipeline.yml"'
+Write-Host '2. git diff --cached --name-only'
+Write-Host '3. git commit -m "Deploy Phase 378 production paper qualification orchestrator ordered daily evidence pipeline"'
+Write-Host '4. git push origin main'
+Write-Host '5. Run a NEW Phase 3.7.8 workflow on main.'

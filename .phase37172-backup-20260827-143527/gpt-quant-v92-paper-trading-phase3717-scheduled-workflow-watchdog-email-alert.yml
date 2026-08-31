@@ -1,0 +1,67 @@
+name: GPT Quant Phase 3.7.17 - Scheduled Workflow Watchdog Email Alert
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "25 19 * * 1-5"
+permissions:
+  contents: read
+  actions: read
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_APP_PASSWORD: ${{ secrets.SMTP_APP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile
+        run: python -m py_compile automation/v92/paper_trading_phase3717_scheduled_workflow_watchdog_email_alert.py
+      - name: Run watchdog
+        id: watchdog
+        continue-on-error: true
+        run: python automation/v92/paper_trading_phase3717_scheduled_workflow_watchdog_email_alert.py
+      - name: Publish summary
+        if: always()
+        run: |
+          if [ -f artifacts/phase3717/phase3717_summary.md ]; then cat artifacts/phase3717/phase3717_summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3717-watchdog-evidence
+          path: artifacts/phase3717
+          if-no-files-found: warn
+          retention-days: 90
+      - name: Enforce Phase 3.7.17 result semantics
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          # PHASE37171_WATCHDOG_ALERT_RESULT_SEMANTICS_FIX
+          evidence_dir="artifacts/phase3717"
+
+          if [ ! -d "$evidence_dir" ]; then
+            echo "::error::Phase 3.7.17 evidence directory missing."
+            exit 1
+          fi
+
+          if grep -Rqs "WATCHDOG_ALERT_DETECTED" "$evidence_dir"; then
+            echo "Phase 3.7.17 watchdog completed successfully and detected alert(s)."
+            echo "Alert evidence and email delivery remain preserved."
+            exit 0
+          fi
+
+          if grep -Rqs "WATCHDOG_HEALTHY" "$evidence_dir"; then
+            echo "Phase 3.7.17 watchdog completed successfully with no alerts."
+            exit 0
+          fi
+
+          echo "::error::Unrecognized or missing Phase 3.7.17 watchdog terminal-state evidence."
+          find "$evidence_dir" -maxdepth 2 -type f -print || true
+          exit 1
