@@ -38,14 +38,7 @@ RUNTIME_TABLES = [
 
 # Evidence sources are intentionally broad/compatible because Phase 3.7.4
 # currently writes GitHub artifacts rather than requiring a dedicated DB table.
-DAILY_EVIDENCE_TABLES = [
-    "paper_daily_cycle_monitoring_v92",
-    "paper_daily_cycle_evidence_v92",
-    "paper_runtime_evidence_v92",
-    "paper_production_evidence_v92",
-    "production_evidence_v92",
-    "paper_evidence_v92",
-]
+DAILY_EVIDENCE_TABLES = ['paper_runtime_evidence_v92', 'paper_production_evidence_v92', 'production_evidence_v92', 'paper_daily_cycle_monitoring_v92', 'paper_daily_cycle_evidence_v92', 'paper_evidence_v92']
 
 VALID_STATES = {
     "DAILY_CYCLE_OPERATIONAL_PASS",
