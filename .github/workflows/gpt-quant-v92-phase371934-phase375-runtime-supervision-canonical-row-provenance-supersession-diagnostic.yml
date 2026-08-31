@@ -1,0 +1,48 @@
+name: GPT Quant Phase 3.7.19.3.4 - Phase 3.7.5 Runtime Supervision Canonical Row Provenance Supersession Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  diagnose:
+    name: runtime-supervision-provenance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile diagnostic
+        run: python -m py_compile automation/v92/phase371934_phase375_runtime_supervision_canonical_row_provenance_supersession_diagnostic.py
+
+      - name: Run read-only diagnostic
+        run: python automation/v92/phase371934_phase375_runtime_supervision_canonical_row_provenance_supersession_diagnostic.py
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase371934/phase371934_runtime_provenance.md ]; then
+            cat artifacts/phase371934/phase371934_runtime_provenance.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase371934-runtime-supervision-provenance
+          path: artifacts/phase371934
+          if-no-files-found: warn
+          retention-days: 90
