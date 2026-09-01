@@ -1,0 +1,43 @@
+name: GPT Quant Phase 3.7.19.3.7 - Phase 3.7.5 Stale Revocation Recovery Execution Path Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  diagnose:
+    name: stale-revocation-recovery-execution-path
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile diagnostic
+        run: python -m py_compile automation/v92/phase371937_phase375_stale_revocation_recovery_execution_path_diagnostic.py
+      - name: Run read-only execution path diagnostic
+        run: python automation/v92/phase371937_phase375_stale_revocation_recovery_execution_path_diagnostic.py
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase371937/phase371937_execution_path.md ]; then
+            cat artifacts/phase371937/phase371937_execution_path.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase371937-stale-revocation-recovery-execution-path
+          path: artifacts/phase371937
+          if-no-files-found: warn
+          retention-days: 90
