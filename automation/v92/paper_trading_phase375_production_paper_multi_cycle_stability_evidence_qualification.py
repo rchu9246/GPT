@@ -500,6 +500,92 @@ def main() -> int:
         runtime_state = "RUNTIME_SUPERVISION_RECOVERED_CANONICAL"
         runtime_reason = "STALE_SAFETY_REVOCATION_SUPERSEDED_BY_NEWER_UPSTREAM_RECOVERY"
 
+
+    # PHASE3719319_V3_CANONICAL_DAILY_EVIDENCE_RUNTIME_ADAPTER
+    # Conservative in-memory bridge only:
+    # - activates only when no dedicated daily evidence table was resolved
+    # - derives rows only from real persisted runtime supervision rows
+    # - one row per real business date (no counter inflation)
+    # - requires reconstructed runtime PASS for each bridged row
+    # - never writes Supabase and never rewrites historical evidence
+    if not ev_table and run_rows:
+        _phase3719319_v3_by_date = {}
+        _phase3719319_v3_valid_state = None
+
+        # Prefer an already-supported operational PASS state.
+        for _candidate_state in (
+            "DAILY_CYCLE_OPERATIONAL_PASS",
+            "DAILY_CYCLE_NO_TRADE_VALID",
+            "PASS",
+            "VALID",
+        ):
+            if _candidate_state in VALID_STATES:
+                _phase3719319_v3_valid_state = _candidate_state
+                break
+
+        if _phase3719319_v3_valid_state is not None:
+            for _runtime_evidence_row in run_rows:
+                try:
+                    (
+                        _phase3719319_v3_row_ok,
+                        _phase3719319_v3_row_state,
+                        _phase3719319_v3_row_reason,
+                    ) = runtime_supervision_reconstruct(_runtime_evidence_row)
+                except Exception:
+                    continue
+
+                if not _phase3719319_v3_row_ok:
+                    continue
+
+                _phase3719319_v3_business_date = str(
+                    _runtime_evidence_row.get("business_date")
+                    or _runtime_evidence_row.get("supervision_date")
+                    or _runtime_evidence_row.get("run_date")
+                    or _runtime_evidence_row.get("cycle_date")
+                    or ""
+                )[:10]
+                if not _phase3719319_v3_business_date:
+                    continue
+
+                _phase3719319_v3_event_time = str(
+                    _runtime_evidence_row.get("updated_at")
+                    or _runtime_evidence_row.get("event_time")
+                    or _runtime_evidence_row.get("created_at")
+                    or ""
+                )
+
+                _phase3719319_v3_existing = _phase3719319_v3_by_date.get(
+                    _phase3719319_v3_business_date
+                )
+                if (
+                    _phase3719319_v3_existing is not None
+                    and str(_phase3719319_v3_existing.get("_bridge_event_time", ""))
+                    >= _phase3719319_v3_event_time
+                ):
+                    continue
+
+                _phase3719319_v3_by_date[_phase3719319_v3_business_date] = {
+                    "business_date": _phase3719319_v3_business_date,
+                    "daily_validation_state": _phase3719319_v3_valid_state,
+                    "state": _phase3719319_v3_valid_state,
+                    "status": _phase3719319_v3_valid_state,
+                    "_bridge_event_time": _phase3719319_v3_event_time,
+                    "_bridge_source": "paper_runtime_supervision_state_v92",
+                    "_bridge_source_row_id": _runtime_evidence_row.get("id"),
+                    "_bridge_runtime_state": _phase3719319_v3_row_state,
+                    "_bridge_runtime_reason": _phase3719319_v3_row_reason,
+                    "_bridge_contract": "PHASE3719319_V3",
+                    "_synthetic_qualification": False,
+                    "_historical_rewrite": False,
+                }
+
+        if _phase3719319_v3_by_date:
+            ev_rows = list(_phase3719319_v3_by_date.values())
+            ev_table = "RUNTIME_SUPERVISION_CANONICAL_DAILY_EVIDENCE_ADAPTER"
+            ev_errs = list(ev_errs or []) + [
+                "PHASE3719319_V3_RUNTIME_SUPERVISION_CANONICAL_DAILY_EVIDENCE_ADAPTER"
+            ]
+
     evidence_counts = count_evidence_states(ev_rows)
 
     # Compatibility mode: if no dedicated daily-evidence table exists yet,
