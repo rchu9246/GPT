@@ -1,0 +1,48 @@
+name: GPT Quant Phase 3.7.19.3.16 - Freshness Recovery Producer Daily Evidence Persistence Boundary Root Cause Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  diagnose:
+    name: freshness-recovery-persistence-boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile diagnostic
+        run: python -m py_compile automation/v92/phase3719316_phase375_freshness_recovery_producer_daily_evidence_persistence_boundary_root_cause_diagnostic.py
+
+      - name: Run read-only diagnostic
+        run: python automation/v92/phase3719316_phase375_freshness_recovery_producer_daily_evidence_persistence_boundary_root_cause_diagnostic.py
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase3719316/phase3719316_persistence_boundary.md ]; then
+            cat artifacts/phase3719316/phase3719316_persistence_boundary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3719316-freshness-recovery-persistence-boundary
+          path: artifacts/phase3719316
+          if-no-files-found: warn
+          retention-days: 90
