@@ -1,0 +1,48 @@
+name: GPT Quant Phase 3.7.19.3.15 - Freshness Recovery Persisted Row Canonical Consumer Recognition Selection Root Cause Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  diagnose:
+    name: freshness-recovery-consumer-recognition
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile diagnostic
+        run: python -m py_compile automation/v92/phase3719315_phase375_freshness_recovery_persisted_row_canonical_consumer_recognition_selection_root_cause_diagnostic.py
+
+      - name: Run read-only diagnostic
+        run: python automation/v92/phase3719315_phase375_freshness_recovery_persisted_row_canonical_consumer_recognition_selection_root_cause_diagnostic.py
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/phase3719315/phase3719315_consumer_recognition_selection.md ]; then
+            cat artifacts/phase3719315/phase3719315_consumer_recognition_selection.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3719315-freshness-recovery-consumer-recognition
+          path: artifacts/phase3719315
+          if-no-files-found: warn
+          retention-days: 90
