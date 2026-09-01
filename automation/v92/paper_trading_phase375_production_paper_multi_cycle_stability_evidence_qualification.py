@@ -443,6 +443,94 @@ def count_evidence_states(rows: List[Dict[str, Any]]) -> Dict[str, int]:
         "no_trade_valid": no_trade,
     }
 
+
+# PHASE3719320_RUNTIME_SUPERVISION_STALE_SUSPENDED_CANONICAL_SUPERSESSION_FIX
+_PHASE3719320_FRESHNESS_FAILURES = {
+    "freshness_readiness",
+    "freshness_health",
+    "freshness_sla",
+    "freshness_master",
+}
+
+def _phase3719320_norm(value: Any) -> str:
+    return str(value or "").strip().upper()
+
+def _phase3719320_list_lower(value: Any) -> List[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(x).strip().lower() for x in value if str(x).strip()]
+
+def _phase3719320_same_row_recovery_supersedes_stale_suspend(
+    runtime_row: Dict[str, Any],
+) -> bool:
+    """
+    Conservative same-row reconciliation for a stale SUSPENDED/EXPLICIT_BLOCK_STATE.
+
+    PASS is allowed only when the same persisted runtime row proves all canonical
+    recovery components are healthy and there is no explicit live incident.
+    This never treats an arbitrary SUSPENDED row as PASS.
+    """
+    if not runtime_row:
+        return False
+
+    supervision_state = _phase3719320_norm(
+        runtime_row.get("supervision_state")
+        or runtime_row.get("runtime_state")
+        or runtime_row.get("state")
+        or runtime_row.get("status")
+    )
+    if supervision_state not in {"SUSPENDED", "BLOCKED", "REVOKED"}:
+        return False
+
+    activation_state = _phase3719320_norm(runtime_row.get("activation_state"))
+    master_state = _phase3719320_norm(runtime_row.get("master_cycle_state"))
+    health_state = _phase3719320_norm(runtime_row.get("health_state"))
+    readiness_state = _phase3719320_norm(runtime_row.get("readiness_state"))
+    qualification_state = _phase3719320_norm(runtime_row.get("qualification_state"))
+
+    if activation_state not in {"ACTIVE", "ACTIVE_WITH_OBSERVATION"}:
+        return False
+    if master_state not in {"PASS", "READY", "ACTIVE", "COMPLETED"}:
+        return False
+    if health_state not in {"HEALTHY", "PASS"}:
+        return False
+    if readiness_state not in {"READY", "READY_WITH_OBSERVATION", "PASS"}:
+        return False
+    if qualification_state not in {
+        "QUALIFIED",
+        "QUALIFIED_WITH_OBSERVATION",
+        "PASS",
+    }:
+        return False
+
+    # Explicit incident / critical severity always wins and remains fail-closed.
+    if runtime_row.get("open_incident_true") is True:
+        return False
+    if runtime_row.get("open_incident") is True:
+        return False
+    if runtime_row.get("critical_severity") is True:
+        return False
+
+    incident_severity = _phase3719320_norm(runtime_row.get("incident_severity"))
+    if incident_severity not in {"", "NONE", "NULL"}:
+        return False
+
+    # Only the known freshness carry-over failures are eligible for reconciliation.
+    critical_failures = set(_phase3719320_list_lower(runtime_row.get("critical_failures")))
+    if not critical_failures:
+        return False
+    if not critical_failures.issubset(_PHASE3719320_FRESHNESS_FAILURES):
+        return False
+
+    warning_failures = _phase3719320_list_lower(runtime_row.get("warning_failures"))
+    if warning_failures:
+        return False
+
+    # Preserve the safety intent: this fix only reconciles a stale revocation flag.
+    # It never enables trading or modifies persistent evidence.
+    return True
+
+
 def main() -> int:
     art = Path("artifacts/phase375")
     art.mkdir(parents=True, exist_ok=True)
@@ -500,6 +588,20 @@ def main() -> int:
         runtime_state = "RUNTIME_SUPERVISION_RECOVERED_CANONICAL"
         runtime_reason = "STALE_SAFETY_REVOCATION_SUPERSEDED_BY_NEWER_UPSTREAM_RECOVERY"
 
+
+
+    # PHASE3719320_STALE_SUSPENDED_CANONICAL_SUPERSESSION_BRIDGE
+    if (
+        not runtime_ok
+        and runtime_reason == "EXPLICIT_BLOCK_STATE"
+        and _phase3719320_same_row_recovery_supersedes_stale_suspend(runtime_row)
+    ):
+        runtime_ok = True
+        runtime_state = "RUNTIME_SUPERVISION_RECOVERED_CANONICAL"
+        runtime_reason = (
+            "STALE_SUSPENDED_FRESHNESS_FAILURES_SUPERSEDED_BY_"
+            "SAME_ROW_CANONICAL_RECOVERY"
+        )
 
     # PHASE3719319_V3_CANONICAL_DAILY_EVIDENCE_RUNTIME_ADAPTER
     # Conservative in-memory bridge only:
