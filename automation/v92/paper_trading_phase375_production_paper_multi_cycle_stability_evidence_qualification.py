@@ -179,6 +179,127 @@ def bool_field(row: Dict[str, Any], *names: str) -> Optional[bool]:
             return False
     return None
 
+
+# PHASE371936_STALE_REVOCATION_RECOVERY_HELPER
+def _phase371936_event_key(row: Dict[str, Any]) -> tuple:
+    if not row:
+        return ("", "", "")
+
+    def first(*names: str) -> str:
+        for name in names:
+            v = row.get(name)
+            if v is not None and str(v).strip():
+                return str(v).strip()
+        return ""
+
+    event = first("updated_at", "created_at", "event_time", "recorded_at", "timestamp", "ts")
+    business = first("supervision_date", "run_date", "business_date", "cycle_date", "date")
+    if business:
+        business = business[:10]
+    elif event:
+        business = event[:10]
+
+    return (event, business, str(row.get("id") or ""))
+
+
+def _phase371936_positive(row: Dict[str, Any], *fields: str) -> bool:
+    if not row:
+        return False
+
+    positives = ("PASS", "READY", "ACTIVE", "QUALIFIED", "COMPLETED", "HEALTHY", "OBSERVATION")
+    for field in fields:
+        v = row.get(field)
+        if v is None:
+            continue
+        text = str(v).strip().upper()
+        if any(token in text for token in positives):
+            return True
+
+    return False
+
+
+def _phase371936_no_live_safety_incident(row: Dict[str, Any]) -> bool:
+    if not row:
+        return False
+
+    if row.get("open_incident") is True:
+        return False
+
+    severity = str(row.get("incident_severity") or "").strip().upper()
+    if severity in {"CRITICAL", "HIGH", "SEVERE", "FATAL"}:
+        return False
+
+    critical = row.get("critical_failures")
+    if isinstance(critical, (list, tuple, set, dict)) and len(critical) > 0:
+        return False
+    if isinstance(critical, str) and critical.strip().upper() not in {"", "[]", "{}", "NONE", "NULL"}:
+        return False
+    if isinstance(critical, (int, float)) and critical > 0:
+        return False
+
+    return True
+
+
+def _phase371936_stale_revocation_superseded(
+    runtime_row: Dict[str, Any],
+    activation_row: Dict[str, Any],
+    master_row: Dict[str, Any],
+) -> bool:
+    # Conservative recovery rule:
+    # 1) runtime row must explicitly carry revocation + blocking state;
+    # 2) no live critical incident may exist;
+    # 3) activation and master must both show recovery;
+    # 4) at least one upstream row must be strictly newer;
+    # 5) ambiguity fails closed.
+    if not runtime_row or not activation_row or not master_row:
+        return False
+
+    if runtime_row.get("safety_revocation_triggered") is not True:
+        return False
+
+    runtime_state_text = " ".join(
+        str(runtime_row.get(k) or "").upper()
+        for k in ("supervision_state", "runtime_state", "operational_state", "state", "status")
+    )
+    if not any(token in runtime_state_text for token in ("SUSPENDED", "REVOKED", "BLOCKED", "FAIL_CLOSED", "HALTED")):
+        return False
+
+    if not _phase371936_no_live_safety_incident(runtime_row):
+        return False
+
+    activation_ok = _phase371936_positive(
+        activation_row,
+        "activation_state",
+        "operational_state",
+        "state",
+        "status",
+        "readiness_state",
+    )
+    master_ok = _phase371936_positive(
+        master_row,
+        "master_cycle_state",
+        "final_state",
+        "state",
+        "status",
+        "readiness_state",
+        "qualification_state",
+    )
+    if not (activation_ok and master_ok):
+        return False
+
+    runtime_key = _phase371936_event_key(runtime_row)
+    activation_key = _phase371936_event_key(activation_row)
+    master_key = _phase371936_event_key(master_row)
+
+    if not runtime_key[0]:
+        return False
+
+    newer_activation = bool(activation_key[0]) and activation_key > runtime_key
+    newer_master = bool(master_key[0]) and master_key > runtime_key
+
+    return newer_activation or newer_master
+
+
 def runtime_supervision_reconstruct(row: Dict[str, Any]) -> Tuple[bool, str, str]:
     """
     Reconstruct the canonical production-paper runtime supervision state.
@@ -364,6 +485,20 @@ def main() -> int:
 
     runtime_row = latest(run_rows)
     runtime_ok, runtime_state, runtime_reason = runtime_supervision_reconstruct(runtime_row)
+
+    # PHASE371936_STALE_REVOCATION_RECOVERY_BRIDGE
+    if (
+        not runtime_ok
+        and runtime_reason == "EXPLICIT_BLOCK_STATE"
+        and _phase371936_stale_revocation_superseded(
+            runtime_row,
+            latest(act_rows),
+            latest(mst_rows),
+        )
+    ):
+        runtime_ok = True
+        runtime_state = "RUNTIME_SUPERVISION_RECOVERED_CANONICAL"
+        runtime_reason = "STALE_SAFETY_REVOCATION_SUPERSEDED_BY_NEWER_UPSTREAM_RECOVERY"
 
     evidence_counts = count_evidence_states(ev_rows)
 
