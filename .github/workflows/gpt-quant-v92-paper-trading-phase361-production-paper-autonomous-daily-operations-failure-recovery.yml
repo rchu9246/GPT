@@ -27,9 +27,6 @@ on:
         default: "2"
         type: string
 
-  schedule:
-    - cron: "45 10 * * 1-5"
-
 permissions:
   contents: read
 
@@ -214,3 +211,4 @@ jobs:
             phase361_output/
           if-no-files-found: warn
           retention-days: 90
+

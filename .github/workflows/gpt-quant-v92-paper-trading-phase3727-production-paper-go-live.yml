@@ -1,4 +1,4 @@
-name: GPT Quant Phase 3.7.2.7 - Production Paper Go-Live
+﻿name: GPT Quant Phase 3.7.2.7 - Production Paper Go-Live
 
 on:
   workflow_dispatch:
@@ -13,10 +13,6 @@ on:
         required: true
         default: V92_PRODUCTION_PAPER_V91
         type: string
-
-  schedule:
-    # 14:05 UTC = 22:05 Asia/Taipei, Monday-Friday
-    - cron: "5 14 * * 1-5"
 
 permissions:
   contents: read

@@ -1,11 +1,7 @@
-name: GPT Quant Phase 3.7.12 - Production Paper Qualification Cross-Day Accumulation Continuity Promotion Threshold Finalization
+﻿name: GPT Quant Phase 3.7.12 - Production Paper Qualification Cross-Day Accumulation Continuity Promotion Threshold Finalization
 
 on:
   workflow_dispatch:
-  schedule:
-    # Weekdays 16:35 UTC / 00:35 Asia-Taipei.
-    - cron: "35 16 * * 1-5"
-
 permissions:
   contents: read
   actions: write
@@ -214,3 +210,4 @@ jobs:
             exit 1
           fi
           echo "Phase 3.7.12 qualification threshold finalization is healthy."
+

@@ -1,4 +1,4 @@
-name: GPT Quant Phase 3.6.8 - Production Paper Daily Autonomous Operations Controller
+﻿name: GPT Quant Phase 3.6.8 - Production Paper Daily Autonomous Operations Controller
 
 on:
   workflow_dispatch:
@@ -18,11 +18,6 @@ on:
         required: true
         default: V92_PRODUCTION_PAPER_V91
         type: string
-
-  schedule:
-    # 12:45 UTC = 20:45 Asia/Taipei, weekdays.
-    # Runs after Phase 3.6.7 scheduled runtime supervision at 12:30 UTC.
-    - cron: "45 12 * * 1-5"
 
 permissions:
   contents: read

@@ -1,4 +1,4 @@
-name: GPT Quant Phase 3.6.5 - Production Paper Autonomous Promotion Control Continuous Qualification Engine
+﻿name: GPT Quant Phase 3.6.5 - Production Paper Autonomous Promotion Control Continuous Qualification Engine
 
 on:
   workflow_dispatch:
@@ -13,10 +13,6 @@ on:
         required: true
         default: V92_PRODUCTION_PAPER_V91
         type: string
-  schedule:
-    # 12:00 UTC = 20:00 Asia/Taipei
-    - cron: "0 12 * * 1-5"
-
 permissions:
   contents: read
 

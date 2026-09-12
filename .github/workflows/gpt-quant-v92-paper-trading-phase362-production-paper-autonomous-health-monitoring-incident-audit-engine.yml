@@ -21,9 +21,6 @@ on:
         default: V92_PRODUCTION_PAPER_V91
         type: string
 
-  schedule:
-    - cron: "0 11 * * 1-5"
-
 permissions:
   contents: read
 
@@ -206,3 +203,4 @@ jobs:
             phase362_output/
           if-no-files-found: warn
           retention-days: 90
+
