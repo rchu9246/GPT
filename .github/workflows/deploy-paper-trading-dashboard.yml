@@ -1,4 +1,4 @@
-name: Deploy Paper Trading Dashboard
+﻿name: Deploy V9.2 Paper Trading Dashboard
 
 on:
   workflow_dispatch:
@@ -14,38 +14,51 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "paper-dashboard-pages"
+  group: pages
   cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify V9.2 dashboard
+        shell: bash
+        run: |
+          test -f dashboard/paper_trading_dashboard.html
+          grep -q "GPT Quant V9.2 Paper Trading Dashboard" dashboard/paper_trading_dashboard.html
 
       - name: Create dashboard config
         env:
           DASHBOARD_SUPABASE_URL: ${{ vars.DASHBOARD_SUPABASE_URL }}
           DASHBOARD_SUPABASE_PUBLISHABLE_KEY: ${{ vars.DASHBOARD_SUPABASE_PUBLISHABLE_KEY }}
+        shell: bash
         run: |
-          test -n "$DASHBOARD_SUPABASE_URL" || (echo "::error::Missing DASHBOARD_SUPABASE_URL" && exit 1)
-          test -n "$DASHBOARD_SUPABASE_PUBLISHABLE_KEY" || (echo "::error::Missing DASHBOARD_SUPABASE_PUBLISHABLE_KEY" && exit 1)
-          cat > dashboard/paper_trading_dashboard_config.js <<EOF
+          test -n "$DASHBOARD_SUPABASE_URL" || (echo "::error::Missing repository variable DASHBOARD_SUPABASE_URL" && exit 1)
+          test -n "$DASHBOARD_SUPABASE_PUBLISHABLE_KEY" || (echo "::error::Missing repository variable DASHBOARD_SUPABASE_PUBLISHABLE_KEY" && exit 1)
+          cat > dashboard/paper_trading_dashboard_config.js <<EOF2
           window.GPTQ_PAPER_DASHBOARD = {
             supabaseUrl: "${DASHBOARD_SUPABASE_URL}",
             publishableKey: "${DASHBOARD_SUPABASE_PUBLISHABLE_KEY}"
           };
-          EOF
+          EOF2
 
       - name: Prepare Pages site
+        shell: bash
         run: |
+          rm -rf site
           mkdir -p site
           cp dashboard/paper_trading_dashboard.html site/index.html
           cp dashboard/paper_trading_dashboard_config.js site/paper_trading_dashboard_config.js
+          touch site/.nojekyll
 
-      - uses: actions/configure-pages@v5
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
 
-      - uses: actions/upload-pages-artifact@v3
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
@@ -56,6 +69,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - name: Deploy
+      - name: Deploy V9.2 dashboard
         id: deployment
         uses: actions/deploy-pages@v4
