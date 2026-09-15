@@ -1,4 +1,4 @@
-import json,os,smtplib,ssl,urllib.request
+import json,os,smtplib,ssl,urllib.request,urllib.parse
 from datetime import datetime,timedelta,timezone
 from email.message import EmailMessage
 from pathlib import Path
@@ -35,12 +35,54 @@ def api(path):
 
 def dt(s): return datetime.fromisoformat(s.replace("Z","+00:00"))
 
+def expected_slot(now,h,m):
+    expected=now.replace(hour=h,minute=m,second=0,microsecond=0)
+    if expected>now:
+        expected-=timedelta(days=1)
+    while expected.weekday()>=5:
+        expected-=timedelta(days=1)
+    return expected
+
+def scheduled_runs(wf,expected,now):
+    # Require a complete, stable result set before deciding a run is missing.
+    runs=[]; seen=set(); total=None
+    for page in range(1,11):
+        query=urllib.parse.urlencode({
+            "branch":"main","event":"schedule","per_page":100,"page":page,
+            "created":expected.isoformat()+".."+now.isoformat(),
+        })
+        result=api("/actions/workflows/"+wf+"/runs?"+query)
+        if not isinstance(result,dict):
+            raise RuntimeError("Invalid watchdog run search response")
+        count=result.get("total_count")
+        batch=result.get("workflow_runs")
+        if type(count) is not int or not 0<=count<=1000 or not isinstance(batch,list):
+            raise RuntimeError("Incomplete watchdog run search or safety limit exceeded")
+        if total is None:
+            total=count
+        if count!=total or len(batch)!=min(100,total-len(runs)):
+            raise RuntimeError("Watchdog run search changed or returned an incomplete page")
+        for run in batch:
+            if not isinstance(run,dict) or type(run.get("id")) is not int:
+                raise RuntimeError("Invalid watchdog run record")
+            if not isinstance(run.get("event"),str) or not isinstance(run.get("status"),str) or "conclusion" not in run:
+                raise RuntimeError("Incomplete watchdog run metadata")
+            if not isinstance(run.get("created_at"),str) or dt(run["created_at"]).tzinfo is None:
+                raise RuntimeError("Invalid watchdog run creation timestamp")
+            if run["id"] in seen:
+                raise RuntimeError("Duplicate watchdog run across search pages")
+            seen.add(run["id"])
+        runs.extend(batch)
+        if len(runs)==total:
+            return runs
+    raise RuntimeError("Watchdog run search safety limit exceeded")
+
 now=datetime.now(timezone.utc); checks=[]; alerts=[]
 for phase,wf,h,m in WORKFLOWS:
-    expected=now.replace(hour=h,minute=m,second=0,microsecond=0)
+    expected=expected_slot(now,h,m)
     grace=expected+timedelta(minutes=GRACE)
-    runs=api("/actions/workflows/"+wf+"/runs?branch=main&per_page=30").get("workflow_runs",[])
-    candidates=[r for r in runs if expected-timedelta(minutes=10)<=dt(r["created_at"])<=grace+timedelta(minutes=20)]
+    runs=scheduled_runs(wf,expected,now)
+    candidates=[r for r in runs if r.get("event")=="schedule" and expected<=dt(r["created_at"])<=now]
     candidates.sort(key=lambda r:r["created_at"],reverse=True)
     run=candidates[0] if candidates else None
     if now<grace: status="GRACE_PERIOD"
