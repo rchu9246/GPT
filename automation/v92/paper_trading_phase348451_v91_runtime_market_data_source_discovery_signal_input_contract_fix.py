@@ -8,6 +8,8 @@ import os
 import subprocess
 import sys
 from collections import defaultdict
+from datetime import date
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -234,9 +236,45 @@ def run_gate(approver: str) -> dict[str, Any]:
     return gate
 
 
+def daily_price_symbols(rows: list[dict[str, Any]]) -> dict[str, str]:
+    """Resolve only daily_prices foreign keys through the authoritative stocks table."""
+    ids = set()
+    for row in rows:
+        stock_id = str(row.get("stock_id", ""))
+        if not stock_id.isascii() or not stock_id.isdigit():
+            raise RuntimeError(f"DAILY_PRICE_STOCK_MAPPING_INVALID_ID: {stock_id!r}")
+        ids.add(stock_id)
+
+    symbols: dict[str, str] = {}
+    ordered_ids = sorted(ids)
+    for offset in range(0, len(ordered_ids), 100):
+        batch = ordered_ids[offset:offset + 100]
+        stocks, error = rest_get("stocks", [
+            ("select", "id,symbol"),
+            ("id", "in.(" + ",".join(batch) + ")"),
+            ("order", "id.asc"),
+            ("limit", "100"),
+        ])
+        if error:
+            raise RuntimeError(f"DAILY_PRICE_STOCK_MAPPING_QUERY_FAILED: {error}")
+        for stock in stocks:
+            stock_id = str(stock.get("id", ""))
+            symbol = stock.get("symbol")
+            if stock_id not in batch or not isinstance(symbol, str) or not symbol.strip():
+                raise RuntimeError("DAILY_PRICE_STOCK_MAPPING_INVALID_ROW")
+            if stock_id in symbols and symbols[stock_id] != symbol.strip():
+                raise RuntimeError(f"DAILY_PRICE_STOCK_MAPPING_AMBIGUOUS: {stock_id}")
+            symbols[stock_id] = symbol.strip()
+        missing = set(batch) - symbols.keys()
+        if missing:
+            raise RuntimeError(f"DAILY_PRICE_STOCK_MAPPING_MISSING: {sorted(missing)}")
+    return symbols
+
+
 def normalize_market_row(
     row: dict[str, Any],
     source: str,
+    stock_symbols: dict[str, str] | None = None,
 ) -> dict[str, Any] | None:
     symbol = str(
         first_value(
@@ -253,6 +291,12 @@ def normalize_market_row(
         )
         or ""
     ).strip()
+
+    if source == "daily_prices":
+        stock_id = str(row.get("stock_id", ""))
+        if stock_symbols is None or stock_id not in stock_symbols:
+            raise RuntimeError(f"DAILY_PRICE_STOCK_MAPPING_MISSING: {stock_id}")
+        symbol = stock_symbols[stock_id]
 
     trade_date = str(
         first_value(
@@ -288,7 +332,19 @@ def normalize_market_row(
     except (TypeError, ValueError):
         return None
 
-    if close <= 0:
+    if source == "daily_prices":
+        # Validate without replacing the source's date or price with derived values.
+        trade_date = row.get("trade_date")
+        close_raw = row.get("close")
+        try:
+            date.fromisoformat(trade_date)
+            exact_close = Decimal(str(close_raw))
+        except (TypeError, ValueError, InvalidOperation):
+            return None
+        if not exact_close.is_finite() or exact_close <= 0:
+            return None
+        close = close_raw
+    elif close <= 0:
         return None
 
     item: dict[str, Any] = {
@@ -349,10 +405,11 @@ def profile_market_table(
     if error:
         return profile, []
 
+    stock_symbols = daily_price_symbols(rows) if table == "daily_prices" else None
     normalized = [
         item
         for row in rows
-        if (item := normalize_market_row(row, table)) is not None
+        if (item := normalize_market_row(row, table, stock_symbols)) is not None
     ]
 
     if not normalized:
