@@ -1013,7 +1013,12 @@ def persist_canonical(
 
     price_rows = [
         {
-            **x,
+            "symbol": x["symbol"],
+            "trade_date": x["trade_date"],
+            "close": x["close"],
+            "source_table": x["source_table"],
+            "source_row_hash": x["source_row_hash"],
+            "synthetic_evidence": x["synthetic_evidence"],
             "canonical_batch_id": batch_id,
         }
         for x in prices
