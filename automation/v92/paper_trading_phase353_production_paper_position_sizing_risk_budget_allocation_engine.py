@@ -296,33 +296,22 @@ def signal_side(row: dict[str, Any]) -> str:
 
 
 def real_price(symbol: str, plan_date: str) -> tuple[str, Decimal]:
-    candidate_params = [
-        [
-            ("select", "*"),
-            ("symbol", f"eq.{symbol}"),
-            ("trade_date", f"lte.{plan_date}"),
-            ("order", "trade_date.desc"),
-            ("limit", "1"),
-        ],
-        [
-            ("select", "*"),
-            ("stock_id", f"eq.{symbol}"),
-            ("date", f"lte.{plan_date}"),
-            ("order", "date.desc"),
-            ("limit", "1"),
-        ],
+    # This dedicated canonical table uses symbol/trade_date, not stock_id/date.
+    params = [
+        ("select", "*"),
+        ("symbol", f"eq.{symbol}"),
+        ("trade_date", f"lte.{plan_date}"),
+        ("order", "trade_date.desc"),
+        ("limit", "1"),
     ]
+    try:
+        rows = rest_get(PRICES_TABLE, params)
+    except Exception as exc:
+        raise RuntimeError(
+            f"CANONICAL_MARKET_PRICE_QUERY_FAILED: {symbol}: {exc}"
+        ) from exc
 
-    for params in candidate_params:
-        try:
-            rows = rest_get(PRICES_TABLE, params)
-        except Exception:
-            continue
-
-        if not rows:
-            continue
-
-        row = rows[0]
+    for row in rows:
         date = str(
             row.get("trade_date")
             or row.get("date")
