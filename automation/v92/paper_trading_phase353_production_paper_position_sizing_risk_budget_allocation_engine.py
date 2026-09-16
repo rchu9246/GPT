@@ -5,6 +5,9 @@ import hashlib
 import json
 import math
 import os
+import io
+import re
+import zipfile
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -14,6 +17,17 @@ from typing import Any
 from urllib.parse import quote
 
 import requests
+
+from paper_trading_phase348451_v91_runtime_market_data_source_discovery_signal_input_contract_fix import (
+    AUTHORITY_REPOSITORY, AUTHORITY_WORKFLOW, AUTHORITY_SCHEMA_VERSION,
+    canonical_rows, normalized_symbol, unique_symbols, validate_authority, finite_number,
+    stable_hash as authority_hash,
+)
+
+PAPER_ONLY = True
+BROKER_ORDER_SUBMISSION_ENABLED = False
+REAL_MONEY_TRADING_ENABLED = False
+HISTORICAL_REWRITE_ALLOWED = False
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "phase353_output"
@@ -115,40 +129,140 @@ def rest_get(table: str, params: list[tuple[str, str]]) -> list[dict[str, Any]]:
             f"{table}: GET HTTP {response.status_code}: {response.text[:900]}"
         )
 
-    data = response.json()
+    data = response.json(parse_float=Decimal)
 
     if not isinstance(data, list):
         raise RuntimeError(f"{table}: expected list response")
 
-    return [x for x in data if isinstance(x, dict)]
+    if any(not isinstance(x, dict) for x in data):
+        raise RuntimeError(f"{table}: non-object row in response")
+    return data
 
 
-def rest_upsert(
-    table: str,
-    rows: list[dict[str, Any]],
-    on_conflict: str,
-) -> None:
-    if not rows:
-        return
+def explicit_producer_reference() -> tuple[str, str]:
+    run_id = os.getenv("PHASE353_PRODUCER_RUN_ID", "").strip()
+    attempt = os.getenv("PHASE353_PRODUCER_RUN_ATTEMPT", "").strip()
+    if not all(re.fullmatch(r"[1-9][0-9]*", value) for value in (run_id, attempt)):
+        raise RuntimeError("EXPLICIT_PRODUCER_RUN_ID_AND_ATTEMPT_REQUIRED")
+    if os.getenv("GITHUB_REPOSITORY") != AUTHORITY_REPOSITORY:
+        raise RuntimeError("AUTHORITY_WRONG_REPOSITORY")
+    return run_id, attempt
 
-    base, headers = supabase()
-    headers = dict(headers)
-    headers["Prefer"] = "resolution=merge-duplicates,return=minimal"
 
-    url = f"{base}/rest/v1/{quote(table, safe='')}"
+def load_explicit_authority() -> dict[str, Any]:
+    run_id, attempt = explicit_producer_reference()
+    token = os.getenv("GH_TOKEN", "")
+    if not token:
+        raise RuntimeError("AUTHORITY_ARTIFACT_READ_TOKEN_REQUIRED")
+    base = f"https://api.github.com/repos/{AUTHORITY_REPOSITORY}"
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
+               "X-GitHub-Api-Version": "2022-11-28"}
 
-    response = requests.post(
-        url,
-        headers=headers,
-        params={"on_conflict": on_conflict},
-        data=json.dumps(rows, ensure_ascii=False, default=str),
-        timeout=25,
-    )
+    def get_json(path: str, params=None):
+        response = requests.get(base + path, headers=headers, params=params, timeout=30)
+        if response.status_code != 200:
+            raise RuntimeError(f"AUTHORITY_METADATA_UNAVAILABLE HTTP={response.status_code}")
+        return response.json()
 
-    if response.status_code >= 400:
-        raise RuntimeError(
-            f"{table}: UPSERT HTTP {response.status_code}: {response.text[:1200]}"
-        )
+    run = get_json(f"/actions/runs/{run_id}/attempts/{attempt}")
+    if (str(run.get("id")) != run_id or str(run.get("run_attempt")) != attempt
+            or run.get("repository", {}).get("full_name") != AUTHORITY_REPOSITORY
+            or run.get("head_repository", {}).get("full_name") != AUTHORITY_REPOSITORY
+            or str(run.get("path", "")).split("@", 1)[0] != AUTHORITY_WORKFLOW
+            or run.get("status") != "completed" or run.get("conclusion") != "success"
+            or not re.fullmatch(r"[0-9a-f]{40}", str(run.get("head_sha", "")))):
+        raise RuntimeError("INVALID_PRODUCER_RUN_IDENTITY_OR_STATE")
+    artifact_name = f"phase348451-market-source-discovery-{run_id}-attempt-{attempt}"
+    artifacts = []
+    for page in range(1, 1001):
+        listing = get_json(f"/actions/runs/{run_id}/artifacts", {"per_page": 100, "page": page})
+        entries = listing["artifacts"]
+        artifacts.extend(entries)
+        if len(artifacts) == listing["total_count"]:
+            break
+        if not entries or len(artifacts) > listing["total_count"]:
+            raise RuntimeError("AMBIGUOUS_ARTIFACT_LIST")
+    else:
+        raise RuntimeError("INCOMPLETE_ARTIFACT_LIST")
+    matches = [a for a in artifacts if a.get("name") == artifact_name]
+    if len(matches) != 1 or matches[0].get("expired") is not False:
+        raise RuntimeError("MISSING_EXPIRED_OR_AMBIGUOUS_AUTHORITY_ARTIFACT")
+    artifact = matches[0]
+    provenance = artifact.get("workflow_run", {})
+    if str(provenance.get("id")) != run_id or provenance.get("head_sha") != run["head_sha"]:
+        raise RuntimeError("ARTIFACT_PRODUCER_MISMATCH")
+    if not isinstance(artifact.get("id"), int):
+        raise RuntimeError("INVALID_ARTIFACT_ID")
+    response = requests.get(base + f"/actions/artifacts/{artifact['id']}/zip", headers=headers, timeout=60)
+    if response.status_code != 200:
+        raise RuntimeError(f"AUTHORITY_ARTIFACT_UNAVAILABLE HTTP={response.status_code}")
+    digest = "sha256:" + hashlib.sha256(response.content).hexdigest()
+    if artifact.get("digest") != digest:
+        raise RuntimeError("INVALID_ARTIFACT_DIGEST")
+    result_path = "phase348451_output/phase348451_signal_input_contract_fix.json"
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        matches = [entry for entry in archive.infolist() if entry.filename == result_path]
+        if len(matches) != 1 or matches[0].file_size > 16 * 1024 * 1024:
+            raise RuntimeError("MISSING_OR_AMBIGUOUS_PRODUCER_RESULT")
+        result = json.loads(archive.read(matches[0]))
+    if result.get("status") != "PASS" or result.get("version") != "3.4.8.4.5.1":
+        raise RuntimeError("INVALID_PRODUCER_RESULT")
+    if result.get("evidence_sha256") != authority_hash({k: v for k, v in result.items() if k != "evidence_sha256"}):
+        raise RuntimeError("INVALID_PRODUCER_RESULT_HASH")
+    authority = result.get("canonical_authority")
+    evidence = result.get("canonical_authority_evidence")
+    if not isinstance(authority, dict) or not isinstance(evidence, dict):
+        raise RuntimeError("PRODUCER_DID_NOT_EMIT_SIZING_AUTHORITY")
+    validate_authority(authority, evidence, run_id, attempt, run["head_sha"])
+    if (result.get("canonical_batch_id") != authority["canonical_batch_id"]
+            or result.get("strategy_version") != "V9.1"
+            or result.get("execution_state") != authority["bridge_execution_state"]):
+        raise RuntimeError("PRODUCER_RESULT_AUTHORITY_MISMATCH")
+    return authority
+
+
+def complete_rows(table: str, params: list[tuple[str, str]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    seen_pages = set()
+    while True:
+        page = rest_get(table, params + [("order", "id.asc"), ("limit", "500"), ("offset", str(len(rows)))])
+        if not page:
+            return rows
+        signature = stable_hash(page)
+        if signature in seen_pages:
+            raise RuntimeError(f"INCOMPLETE_PAGINATION {table}")
+        seen_pages.add(signature)
+        rows.extend(page)
+
+
+def same_batch_inputs(authority: dict, plan_date: str) -> tuple[list[dict], dict[str, tuple[str, Decimal]]]:
+    if STRATEGY != "V9.1" or authority.get("strategy_version") != "V9.1":
+        raise RuntimeError("AUTHORITY_WRONG_STRATEGY")
+    if authority.get("trade_date") != plan_date:
+        raise RuntimeError("AUTHORITY_TRADE_DATE_DOES_NOT_MATCH_LEDGER")
+    if authority.get("authority_schema_version") != AUTHORITY_SCHEMA_VERSION or authority.get("authority_hash") != authority_hash(
+            {k: v for k, v in authority.items() if k != "authority_hash"}):
+        raise RuntimeError("INVALID_AUTHORITY_HASH")
+    batch = authority["canonical_batch_id"]
+    signals = complete_rows(SIGNALS_TABLE, [("select", "*"), ("canonical_batch_id", f"eq.{batch}"),
+                                          ("strategy_version", "eq.V9.1"), ("trade_date", f"eq.{plan_date}")])
+    canonical_signals = canonical_rows(signals, "signal", batch, plan_date)
+    if (len(signals) != authority["signal_count"] or authority_hash(canonical_signals) != authority["signal_rows_hash"]
+            or [s["symbol"] for s in canonical_signals] != authority["validated_symbol_set"]):
+        raise RuntimeError(f"SIGNAL_AUTHORITY_PROVENANCE_MISMATCH batch={batch}")
+    prices = []
+    for signal in canonical_signals:
+        rows = complete_rows(PRICES_TABLE, [("select", "*"), ("canonical_batch_id", f"eq.{batch}"),
+                                            ("trade_date", f"eq.{plan_date}"), ("symbol", f"eq.{signal['symbol']}")])
+        if len(rows) != 1:
+            raise RuntimeError(f"EXACTLY_ONE_SAME_BATCH_PRICE_REQUIRED batch={batch} symbol={signal['symbol']} row_ids={[r.get('id') for r in rows]}")
+        if normalized_symbol(rows[0].get("symbol")) != signal["symbol"]:
+            raise RuntimeError(f"PRICE_SYMBOL_MISMATCH batch={batch}")
+        prices.extend(rows)
+    canonical_prices = canonical_rows(prices, "price", batch, plan_date)
+    if len(prices) != authority["price_count"] or authority_hash(canonical_prices) != authority["price_rows_hash"]:
+        raise RuntimeError(f"PRICE_AUTHORITY_PROVENANCE_MISMATCH batch={batch}")
+    return canonical_signals, {r["symbol"]: (plan_date, D(r["close"])) for r in canonical_prices}
 
 
 def run_upstream() -> tuple[int, dict[str, Any]]:
@@ -237,45 +351,8 @@ def open_positions() -> list[dict[str, Any]]:
     )
 
 
-def latest_signals(plan_date: str) -> list[dict[str, Any]]:
-    queries = [
-        [
-            ("select", "*"),
-            ("strategy_version", f"eq.{STRATEGY}"),
-            ("trade_date", f"eq.{plan_date}"),
-            ("order", "total_score.desc"),
-            ("limit", str(MAX_CANDIDATES * 3)),
-        ],
-        [
-            ("select", "*"),
-            ("strategy_version", f"eq.{STRATEGY}"),
-            ("signal_date", f"eq.{plan_date}"),
-            ("order", "score.desc"),
-            ("limit", str(MAX_CANDIDATES * 3)),
-        ],
-    ]
-
-    last_error = None
-    for params in queries:
-        try:
-            rows = rest_get(SIGNALS_TABLE, params)
-            if rows:
-                return rows
-        except Exception as exc:
-            last_error = exc
-
-    if last_error:
-        print(f"Signal source diagnostic: {last_error}", file=sys.stderr)
-
-    return []
-
-
 def signal_symbol(row: dict[str, Any]) -> str:
-    return str(
-        row.get("symbol")
-        or row.get("stock_id")
-        or ""
-    ).strip()
+    return normalized_symbol(row.get("symbol"))
 
 
 def signal_score(row: dict[str, Any]) -> Decimal:
@@ -293,47 +370,6 @@ def signal_side(row: dict[str, Any]) -> str:
         or row.get("side")
         or "BUY"
     ).upper()
-
-
-def real_price(symbol: str, plan_date: str) -> tuple[str, Decimal]:
-    # This dedicated canonical table uses symbol/trade_date, not stock_id/date.
-    params = [
-        ("select", "*"),
-        ("symbol", f"eq.{symbol}"),
-        ("trade_date", f"lte.{plan_date}"),
-        ("order", "trade_date.desc"),
-        ("limit", "1"),
-    ]
-    try:
-        rows = rest_get(PRICES_TABLE, params)
-    except Exception as exc:
-        raise RuntimeError(
-            f"CANONICAL_MARKET_PRICE_QUERY_FAILED: {symbol}: {exc}"
-        ) from exc
-
-    for row in rows:
-        date = str(
-            row.get("trade_date")
-            or row.get("date")
-            or row.get("market_date")
-            or ""
-        )[:10]
-
-        raw = (
-            row.get("close")
-            or row.get("close_price")
-            or row.get("price")
-        )
-
-        if not date or raw is None:
-            continue
-
-        px = D(raw)
-
-        if px > 0:
-            return date, px
-
-    raise RuntimeError(f"NO_REAL_CANONICAL_MARKET_PRICE: {symbol}")
 
 
 def existing_market_value_by_symbol(
@@ -361,8 +397,11 @@ def build_plan(
     governance: dict[str, Any],
     ledger: dict[str, Any],
     positions: list[dict[str, Any]],
+    authority: dict[str, Any],
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     plan_date = str(ledger["ledger_date"])
+    # Validate ALL selected-batch rows before sorting, truncation or allocation.
+    signals, prices = same_batch_inputs(authority, plan_date)
     nav = D(ledger.get("nav") or 0)
     cash = D(ledger.get("cash") or 0)
     current_market_value = D(ledger.get("market_value") or 0)
@@ -386,7 +425,6 @@ def build_plan(
     theoretical_new_budget = max(D(0), max_total_market_value - current_market_value)
     max_new_capital = min(cash, theoretical_new_budget)
 
-    signals = latest_signals(plan_date)
 
     eligible: list[dict[str, Any]] = []
 
@@ -406,17 +444,12 @@ def build_plan(
 
         eligible.append(row)
 
-    eligible.sort(
-        key=lambda r: signal_score(r),
-        reverse=True,
-    )
+    eligible.sort(key=lambda r: (-signal_score(r), signal_symbol(r)))
     eligible = eligible[:MAX_CANDIDATES]
 
     existing_mv = existing_market_value_by_symbol(positions)
 
-    # Fail-safe semantics:
-    # If governance authorizes entries but there are no persisted canonical signals,
-    # produce a valid zero-allocation plan. Do not manufacture signals.
+    # Only validated authority can reach allocation; governance may still size zero.
     items: list[dict[str, Any]] = []
 
     allocation_available = (
@@ -436,7 +469,7 @@ def build_plan(
         score = signal_score(row)
         existing = existing_mv.get(symbol, D(0))
 
-        mark_date, price = real_price(symbol, plan_date)
+        mark_date, price = prices[symbol]
 
         if allocation_available and score_sum > 0:
             raw_target = max_new_capital * (score / score_sum)
@@ -498,6 +531,7 @@ def build_plan(
         remaining_budget = max(D(0), remaining_budget - estimated_notional)
 
         item_seed = {
+            "canonical_authority_hash": authority["authority_hash"],
             "portfolio_id": PORTFOLIO_ID,
             "plan_date": plan_date,
             "symbol": symbol,
@@ -510,6 +544,7 @@ def build_plan(
         items.append(
             {
                 "symbol": symbol,
+                "canonical_authority_hash": authority["authority_hash"],
                 "rank": rank,
                 "score": str(score),
                 "signal": "BUY",
@@ -549,18 +584,8 @@ def build_plan(
                 f"Concentration limit exceeded for {item['symbol']}"
             )
 
-    plan_seed = {
-        "portfolio_id": PORTFOLIO_ID,
-        "plan_date": plan_date,
-        "risk_state": risk_state,
-        "nav": str(nav),
-        "cash": str(cash),
-        "effective_budget_pct": str(effective_budget_pct),
-        "eligible_signals": len(eligible),
-        "total_allocated": str(total_allocated),
-    }
-
     plan = {
+        "canonical_authority": authority,
         "portfolio_id": PORTFOLIO_ID,
         "strategy_version": STRATEGY,
         "plan_date": plan_date,
@@ -594,9 +619,11 @@ def build_plan(
         "real_money_trading_enabled": False,
         "live_money_release_authorized": False,
         "fail_closed_policy": True,
-        "evidence_sha256": stable_hash(plan_seed),
     }
 
+    plan["evidence_sha256"] = stable_hash({
+        "plan": {k: v for k, v in plan.items() if k != "evidence_sha256"}, "items": items,
+    })
     return plan, items
 
 
@@ -604,26 +631,23 @@ def persist_plan(
     plan: dict[str, Any],
     items: list[dict[str, Any]],
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    plan_seed = {
-        "portfolio_id": plan["portfolio_id"],
-        "plan_date": plan["plan_date"],
-        "risk_state": plan["risk_state"],
-        "evidence_sha256": plan["evidence_sha256"],
-    }
-
-    plan_id = "P353P-" + stable_hash(plan_seed)[:28]
-
+    authority = plan["canonical_authority"]
+    # Bind the immutable producer identity into the existing ID; no schema change.
+    plan_id = "P353P-" + stable_hash({
+        "portfolio_id": plan["portfolio_id"], "plan_date": plan["plan_date"],
+        "canonical_authority_hash": authority["authority_hash"],
+    })[:28]
+    unique_symbols(items, authority["canonical_batch_id"])
+    for item in items:
+        if (item.get("canonical_authority_hash") != authority["authority_hash"]
+                or normalized_symbol(item["symbol"]) not in authority["validated_symbol_set"]
+                or item["symbol"] != normalized_symbol(item["symbol"])):
+            raise RuntimeError("ITEM_AUTHORITY_MISMATCH")
     row = {
         "plan_id": plan_id,
-        **plan,
+        **{k: v for k, v in plan.items() if k != "canonical_authority"},
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
-
-    rest_upsert(
-        PLAN_TABLE,
-        [row],
-        "portfolio_id,plan_date",
-    )
 
     persisted_items: list[dict[str, Any]] = []
 
@@ -668,27 +692,85 @@ def persist_plan(
 
         persisted_items.append(item_row)
 
-    if persisted_items:
-        rest_upsert(
-            ITEM_TABLE,
-            persisted_items,
-            "plan_id,symbol",
-        )
+    if (len({(r["plan_id"], normalized_symbol(r["symbol"])) for r in persisted_items}) != len(persisted_items)
+            or len({r["item_id"] for r in persisted_items}) != len(persisted_items)):
+        raise RuntimeError("DUPLICATE_PLAN_ITEM_IDENTITY")
 
-    rows = rest_get(
-        PLAN_TABLE,
-        [
-            ("select", "*"),
-            ("portfolio_id", f"eq.{PORTFOLIO_ID}"),
-            ("plan_date", f"eq.{plan['plan_date']}"),
-            ("limit", "1"),
-        ],
-    )
+    # All item validation precedes EITHER write. Legacy/different-authority plans
+    # are never rewritten. Inserts (not merge-upserts) also close the race between
+    # simultaneous callers: the existing portfolio/date UNIQUE key is the arbiter.
+    existing = rest_get(PLAN_TABLE, [("select", "*"), ("portfolio_id", f"eq.{plan['portfolio_id']}"),
+                                    ("plan_date", f"eq.{plan['plan_date']}")])
+    if existing:
+        if len(existing) != 1 or existing[0].get("plan_id") != plan_id:
+            raise RuntimeError("SAME_DAY_PLAN_AUTHORITY_CONFLICT: historical provenance will not be overwritten")
+        if existing[0].get("evidence_sha256") != plan["evidence_sha256"]:
+            raise RuntimeError("SAME_AUTHORITY_PLAN_CONTENT_CONFLICT")
+        if not persisted_row_matches(row, existing[0]):
+            raise RuntimeError("EXISTING_PLAN_CONTENT_DOES_NOT_MATCH_EVIDENCE")
+        old_items = complete_rows_by_plan(plan_id)
+        expected = {(r["item_id"], r["symbol"], r["evidence_sha256"]) for r in persisted_items}
+        actual = {(r.get("item_id"), r.get("symbol"), r.get("evidence_sha256")) for r in old_items}
+        if len(old_items) != len(persisted_items) or actual != expected:
+            raise RuntimeError("EXISTING_PLAN_ITEMS_INCOMPLETE_OR_CONFLICTING")
+        by_id = {r["item_id"]: r for r in old_items}
+        if any(not persisted_row_matches(r, by_id[r["item_id"]]) for r in persisted_items):
+            raise RuntimeError("EXISTING_ITEM_CONTENT_DOES_NOT_MATCH_EVIDENCE")
+        return existing[0], old_items
 
+    rest_insert_only(PLAN_TABLE, [row])
+    rest_insert_only(ITEM_TABLE, persisted_items)
+    return row, persisted_items
+
+
+def complete_rows_by_plan(plan_id: str) -> list[dict[str, Any]]:
+    # Item tables have item_id rather than a numeric id.
+    rows = []
+    seen = set()
+    while True:
+        page = rest_get(ITEM_TABLE, [("select", "*"), ("plan_id", f"eq.{plan_id}"),
+                                    ("order", "item_id.asc"), ("limit", "500"), ("offset", str(len(rows)))])
+        if not page:
+            return rows
+        digest = stable_hash(page)
+        if digest in seen:
+            raise RuntimeError("INCOMPLETE_PLAN_ITEM_PAGINATION")
+        seen.add(digest)
+        rows.extend(page)
+
+
+def rest_insert_only(table: str, rows: list[dict[str, Any]]) -> None:
     if not rows:
-        raise RuntimeError("Position sizing plan persistence verification failed")
+        return
+    base, headers = supabase()
+    response = requests.post(f"{base}/rest/v1/{quote(table, safe='')}",
+                             headers={**headers, "Prefer": "return=minimal"},
+                             data=json.dumps(rows, ensure_ascii=False, default=str), timeout=25)
+    if response.status_code >= 400:
+        raise RuntimeError(f"PLAN_INSERT_FAILED_CLOSED {table} HTTP={response.status_code}")
 
-    return rows[0], persisted_items
+
+def persisted_row_matches(expected: dict, actual: dict) -> bool:
+    # PostgREST returns numeric columns as numbers, while the sizing engine uses
+    # decimal strings. Compare these semantically, never coercing identifiers.
+    numbers = {"risk_reduction_factor", "nav", "cash", "current_market_value", "current_portfolio_exposure",
+               "base_risk_budget_pct", "effective_risk_budget_pct", "max_position_pct", "max_new_capital",
+               "total_allocated_capital", "remaining_risk_budget", "eligible_signals", "sized_candidates",
+               "rank", "score", "real_market_price", "existing_position_market_value", "raw_target_capital",
+               "concentration_capital_limit", "risk_budget_capital_limit", "final_target_capital", "round_lot",
+               "paper_quantity", "estimated_notional"}
+    for key, value in expected.items():
+        if key == "updated_at":
+            continue
+        if key in numbers:
+            try:
+                if finite_number(value) != finite_number(actual.get(key)):
+                    return False
+            except RuntimeError:
+                return False
+        elif actual.get(key) != value:
+            return False
+    return True
 
 
 def write_summary(result: dict[str, Any]) -> None:
@@ -784,6 +866,10 @@ def main() -> int:
     if MODE != "SHADOW_ONLY_NO_BROKER":
         raise RuntimeError("Safety violation: paper-only mode required")
 
+    authority = load_explicit_authority()
+    ledger = latest_ledger()
+    # Date/provenance failures must precede upstream execution and allocation.
+    same_batch_inputs(authority, str(ledger["ledger_date"]))
     upstream_exit, governance = run_upstream()
     validate_governance(governance)
 
@@ -794,6 +880,7 @@ def main() -> int:
         governance,
         ledger,
         positions,
+        authority,
     )
 
     persisted_plan, persisted_items = persist_plan(
@@ -803,6 +890,7 @@ def main() -> int:
 
     result = {
         "version": "3.5.3",
+        "canonical_authority": authority,
         "status": "PASS",
         "strategy_version": STRATEGY,
         "trading_mode": MODE,

@@ -3,6 +3,16 @@
 on:
   workflow_dispatch:
     inputs:
+      producer_run_id:
+        description: Exact Phase 3.4.8.4.5.1 producer run ID (no latest-run fallback)
+        required: true
+        type: string
+
+      producer_run_attempt:
+        description: Exact producer run attempt
+        required: true
+        type: string
+
       strategy_version:
         description: Strategy version
         required: true
@@ -38,6 +48,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: gpt-quant-phase353-production-paper-position-sizing
@@ -49,6 +60,9 @@ jobs:
     timeout-minutes: 50
 
     env:
+      GH_TOKEN: ${{ github.token }}
+      PHASE353_PRODUCER_RUN_ID: ${{ inputs.producer_run_id }}
+      PHASE353_PRODUCER_RUN_ATTEMPT: ${{ inputs.producer_run_attempt }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 

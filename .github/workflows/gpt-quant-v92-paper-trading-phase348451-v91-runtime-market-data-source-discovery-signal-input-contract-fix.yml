@@ -174,7 +174,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: phase348451-market-source-discovery-${{ github.run_id }}
+          name: phase348451-market-source-discovery-${{ github.run_id }}-attempt-${{ github.run_attempt }}
           path: |
             phase21_output/
             phase3421_output/
