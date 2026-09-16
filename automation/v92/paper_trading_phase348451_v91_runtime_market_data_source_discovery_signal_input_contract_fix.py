@@ -5,6 +5,9 @@ import argparse
 import hashlib
 import json
 import os
+import re
+import unicodedata
+from decimal import Decimal, InvalidOperation
 import subprocess
 import sys
 from collections import defaultdict
@@ -78,6 +81,176 @@ def stable_hash(payload: Any) -> str:
         separators=(",", ":"),
     ).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
+
+
+# Versioned, content-addressed sizing authority. No database writes in these helpers.
+AUTHORITY_SCHEMA_VERSION = 1
+AUTHORITY_REPOSITORY = "rchu9246/GPT"
+AUTHORITY_WORKFLOW = ".github/workflows/gpt-quant-v92-paper-trading-phase348451-v91-runtime-market-data-source-discovery-signal-input-contract-fix.yml"
+AUTHORITY_STATES = {"REAL_CANONICAL_EVIDENCE_EXECUTED", "REAL_EVIDENCE_BUT_ZERO_SIZED_ORDERS"}
+SIGNAL_ADAPTER_PATH = "phase348451_output/canonical_signals.runtime.json"
+PRICE_ADAPTER_PATH = "phase348451_output/canonical_market_prices.runtime.json"
+PAPER_ONLY = True
+BROKER_ORDER_SUBMISSION_ENABLED = False
+REAL_MONEY_TRADING_ENABLED = False
+HISTORICAL_REWRITE_ALLOWED = False
+
+
+def normalized_symbol(value: Any) -> str:
+    symbol = unicodedata.normalize("NFKC", str(value or "")).strip().upper()
+    if not symbol:
+        raise RuntimeError("AUTHORITY_EMPTY_SYMBOL")
+    return symbol
+
+
+def finite_number(value: Any, positive: bool = False) -> str:
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        raise RuntimeError("AUTHORITY_INVALID_NUMBER") from None
+    if not number.is_finite() or (positive and number <= 0):
+        raise RuntimeError("AUTHORITY_INVALID_NUMBER")
+    return str(number.normalize())
+
+
+def unique_symbols(rows: list[dict[str, Any]], batch_id: str) -> None:
+    groups: dict[str, list[Any]] = defaultdict(list)
+    for row in rows:
+        groups[normalized_symbol(row.get("symbol"))].append(row.get("id"))
+    duplicates = {symbol: ids for symbol, ids in groups.items() if len(ids) != 1}
+    if duplicates:
+        raise RuntimeError(f"DUPLICATE_NORMALIZED_SYMBOL batch={batch_id} symbols/row_ids={duplicates}")
+
+
+def canonical_rows(rows: list[dict[str, Any]], kind: str, batch_id: str, trade_date: str) -> list[dict[str, Any]]:
+    unique_symbols(rows, batch_id)
+    result = []
+    for row in rows:
+        if (row.get("canonical_batch_id") != batch_id or row.get("trade_date") != trade_date
+                or row.get("synthetic_evidence") is not False):
+            raise RuntimeError(f"INVALID_SAME_BATCH_{kind.upper()} batch={batch_id} row={row.get('id')}")
+        if not row.get("source_table") or not re.fullmatch(r"[0-9a-f]{64}", str(row.get("source_row_hash", ""))):
+            raise RuntimeError(f"MISSING_ROW_PROVENANCE batch={batch_id}")
+        item = {key: row[key] for key in ("canonical_batch_id", "trade_date", "source_table", "source_row_hash", "synthetic_evidence")}
+        item["symbol"] = normalized_symbol(row.get("symbol"))
+        if kind == "signal":
+            if row.get("strategy_version") != "V9.1":
+                raise RuntimeError("AUTHORITY_WRONG_STRATEGY")
+            item.update(strategy_version="V9.1", signal=str(row.get("signal", "")).strip().upper(),
+                        total_score=finite_number(row.get("total_score")))
+            if item["signal"] not in {"BUY", "LONG"}:
+                raise RuntimeError("AUTHORITY_INVALID_SIGNAL_SIDE")
+        else:
+            item["close"] = finite_number(row.get("close"), positive=True)
+        result.append(item)
+    return sorted(result, key=lambda row: row["symbol"])
+
+
+def read_canonical_batch(table: str, batch_id: str) -> list[dict[str, Any]]:
+    rows, pages = [], set()
+    while True:
+        page, error = rest_get(table, [("select", "*"), ("canonical_batch_id", f"eq.{batch_id}"),
+                                       ("order", "id.asc"), ("limit", "500"), ("offset", str(len(rows)))])
+        if error:
+            raise RuntimeError(error)
+        if not page:
+            return rows
+        digest = stable_hash(page)
+        if digest in pages:
+            raise RuntimeError(f"INCOMPLETE_CANONICAL_BATCH_READ batch={batch_id}")
+        pages.add(digest)
+        rows.extend(page)
+
+
+def adapter_payloads(signals: list[dict[str, Any]], prices: list[dict[str, Any]]) -> tuple[dict, dict]:
+    return (
+        {"signals": [{"symbol": normalized_symbol(r["symbol"]), "trade_date": r["trade_date"],
+                      "strategy_version": r["strategy_version"], "total_score": float(r["total_score"]),
+                      "signal": r["signal"], "canonical_batch_id": r["canonical_batch_id"],
+                      "source": f"supabase:{SIGNAL_STORE}", "synthetic_evidence": False} for r in signals]},
+        {"data": [{"symbol": normalized_symbol(r["symbol"]), "market_date": r["trade_date"],
+                   "close": float(r["close"]), "canonical_batch_id": r["canonical_batch_id"],
+                   "source": f"supabase:{MARKET_STORE}", "synthetic_evidence": False} for r in prices]},
+    )
+
+
+def validate_bridge_provenance(bridge: dict, signals: list[dict], prices: list[dict]) -> None:
+    if (bridge.get("execution_state") not in AUTHORITY_STATES or bridge.get("status") != "PASS"
+            or bridge.get("strategy_version") != "V9.1" or bridge.get("runtime_execution_gate") != "OPEN"
+            or bridge.get("canonical_signal_source") != SIGNAL_ADAPTER_PATH):
+        raise RuntimeError("BRIDGE_AUTHORITY_NOT_PROVEN")
+    for flag in ("synthetic_fallback_allowed", "synthetic_evidence_present", "broker_api_used",
+                 "broker_credentials_used", "broker_order_submission_enabled", "real_money_trading_enabled",
+                 "live_money_release_authorized", "fail_closed_triggered"):
+        if bridge.get(flag) is not False:
+            raise RuntimeError(f"BRIDGE_SAFETY_VIOLATION {flag}")
+    if bridge.get("fail_closed_policy") is not True or bridge.get("errors"):
+        raise RuntimeError("BRIDGE_FAIL_CLOSED")
+    unsigned = {k: v for k, v in bridge.items() if k != "evidence_sha256"}
+    if bridge.get("evidence_sha256") != stable_hash(unsigned):
+        raise RuntimeError("INVALID_BRIDGE_EVIDENCE_HASH")
+    candidates = bridge.get("canonical_candidates", [])
+    unique_symbols(candidates, signals[0]["canonical_batch_id"])
+    if (len(candidates) != len(signals) or bridge.get("canonical_signals_found") != len(signals)
+            or bridge.get("signals_with_real_market_price") != len(signals)):
+        raise RuntimeError("BRIDGE_CANDIDATE_COUNT_MISMATCH")
+    sigs = {r["symbol"]: r for r in signals}
+    px = {r["symbol"]: r for r in prices}
+    for candidate in candidates:
+        symbol = normalized_symbol(candidate.get("symbol"))
+        signal = sigs.get(symbol)
+        if (signal is None or candidate.get("signal_source") != SIGNAL_ADAPTER_PATH
+                or candidate.get("market_price_source") != PRICE_ADAPTER_PATH
+                or candidate.get("trade_date") != signal["trade_date"]
+                or candidate.get("strategy_version") != "V9.1" or candidate.get("signal") != "BUY"
+                or candidate.get("synthetic_evidence") is not False
+                or finite_number(candidate.get("score")) != signal["total_score"]
+                or finite_number(candidate.get("market_price"), True) != px[symbol]["close"]):
+            raise RuntimeError(f"BRIDGE_FALLBACK_OR_PROVENANCE_MISMATCH symbol={symbol}")
+
+
+def build_authority(batch_id: str, trade_date: str, signals: list[dict], prices: list[dict],
+                    signal_adapter: dict, price_adapter: dict, bridge: dict, context: dict) -> tuple[dict, dict]:
+    if not batch_id or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", trade_date):
+        raise RuntimeError("AUTHORITY_MISSING_BATCH_OR_DATE")
+    sigs = canonical_rows(signals, "signal", batch_id, trade_date)
+    px = canonical_rows(prices, "price", batch_id, trade_date)
+    if not sigs or [r["symbol"] for r in sigs] != [r["symbol"] for r in px]:
+        raise RuntimeError("AUTHORITY_REQUIRES_EXACTLY_ONE_PRICE_PER_SIGNAL")
+    expected_signals, expected_prices = adapter_payloads(signals, prices)
+    if signal_adapter != expected_signals or price_adapter != expected_prices:
+        raise RuntimeError("CANONICAL_ADAPTER_MISMATCH")
+    validate_bridge_provenance(bridge, sigs, px)
+    if (context.get("repository") != AUTHORITY_REPOSITORY or context.get("workflow") != AUTHORITY_WORKFLOW
+            or not all(re.fullmatch(r"[1-9][0-9]*", str(context.get(k, ""))) for k in ("producer_run_id", "producer_run_attempt"))):
+        raise RuntimeError("AUTHORITY_REQUIRES_EXPLICIT_PRODUCER_IDENTITY")
+    authority = {
+        **context, "authority_schema_version": AUTHORITY_SCHEMA_VERSION,
+        "canonical_batch_id": batch_id, "trade_date": trade_date, "strategy_version": "V9.1",
+        "producer_version": "3.4.8.4.5.1", "bridge_execution_state": bridge["execution_state"],
+        "bridge_evidence_hash": stable_hash(bridge), "signal_adapter_hash": stable_hash(signal_adapter),
+        "price_adapter_hash": stable_hash(price_adapter), "validated_symbol_set": [r["symbol"] for r in sigs],
+        "signal_count": len(sigs), "price_count": len(px),
+        "signal_rows_hash": stable_hash(sigs), "price_rows_hash": stable_hash(px),
+        "paper_only": True, "broker_order_submission_enabled": False,
+        "real_money_trading_enabled": False, "historical_rewrite_allowed": False,
+    }
+    authority["authority_hash"] = stable_hash(authority)
+    evidence = {"signals": signals, "prices": prices, "signal_adapter": signal_adapter,
+                "price_adapter": price_adapter, "bridge": bridge}
+    return authority, evidence
+
+
+def validate_authority(authority: dict, evidence: dict, run_id: str, attempt: str, commit_sha: str) -> None:
+    context = {k: authority.get(k) for k in ("repository", "workflow", "producer_run_id", "producer_run_attempt", "producer_commit_sha")}
+    if (context["producer_run_id"] != run_id or context["producer_run_attempt"] != attempt
+            or context["producer_commit_sha"] != commit_sha):
+        raise RuntimeError("AUTHORITY_RUN_ATTEMPT_OR_COMMIT_MISMATCH")
+    rebuilt, _ = build_authority(authority.get("canonical_batch_id", ""), authority.get("trade_date", ""),
+                                 evidence["signals"], evidence["prices"], evidence["signal_adapter"],
+                                 evidence["price_adapter"], evidence["bridge"], context)
+    if authority != rebuilt:
+        raise RuntimeError("INVALID_AUTHORITY_SCHEMA_HASH_OR_PROVENANCE")
 
 
 def dump_json(path: Path, payload: Any) -> None:
@@ -1062,27 +1235,13 @@ def persist_canonical(
         }],
     )
 
-    persisted_signals, sig_error = rest_get(
-        SIGNAL_STORE,
-        [
-            ("select", "*"),
-            ("canonical_batch_id", f"eq.{batch_id}"),
-        ],
-    )
-
-    if sig_error:
-        raise RuntimeError(sig_error)
-
-    persisted_prices, price_error = rest_get(
-        MARKET_STORE,
-        [
-            ("select", "*"),
-            ("canonical_batch_id", f"eq.{batch_id}"),
-        ],
-    )
-
-    if price_error:
-        raise RuntimeError(price_error)
+    persisted_signals = read_canonical_batch(SIGNAL_STORE, batch_id)
+    persisted_prices = read_canonical_batch(MARKET_STORE, batch_id)
+    if signals:
+        day = signals[0]["trade_date"]
+        for kind, expected, actual in (("signal", signal_rows, persisted_signals), ("price", price_rows, persisted_prices)):
+            if canonical_rows(expected, kind, batch_id, day) != canonical_rows(actual, kind, batch_id, day):
+                raise RuntimeError(f"PERSISTED_BATCH_DIFFERS_FROM_PRODUCER_INPUT batch={batch_id} kind={kind}")
 
     return batch_id, persisted_signals, persisted_prices
 
@@ -1091,41 +1250,13 @@ def write_phase348_adapters(
     signals: list[dict[str, Any]],
     prices: list[dict[str, Any]],
 ) -> None:
-    dump_json(
-        CANONICAL_SIGNALS,
-        {
-            "signals": [
-                {
-                    "symbol": row["symbol"],
-                    "trade_date": row["trade_date"],
-                    "strategy_version": row["strategy_version"],
-                    "total_score": float(row["total_score"]),
-                    "signal": row["signal"],
-                    "canonical_batch_id": row["canonical_batch_id"],
-                    "source": f"supabase:{SIGNAL_STORE}",
-                    "synthetic_evidence": False,
-                }
-                for row in signals
-            ]
-        },
-    )
-
-    dump_json(
-        CANONICAL_MARKET,
-        {
-            "data": [
-                {
-                    "symbol": row["symbol"],
-                    "market_date": row["trade_date"],
-                    "close": float(row["close"]),
-                    "canonical_batch_id": row["canonical_batch_id"],
-                    "source": f"supabase:{MARKET_STORE}",
-                    "synthetic_evidence": False,
-                }
-                for row in prices
-            ]
-        },
-    )
+    if signals:
+        batch, day = signals[0]["canonical_batch_id"], signals[0]["trade_date"]
+        canonical_rows(signals, "signal", batch, day)
+        canonical_rows(prices, "price", batch, day)
+    signal_payload, price_payload = adapter_payloads(signals, prices)
+    dump_json(CANONICAL_SIGNALS, signal_payload)
+    dump_json(CANONICAL_MARKET, price_payload)
 
 
 def run_phase348(
@@ -1141,6 +1272,9 @@ def run_phase348(
     env["PHASE348_SCORE_THRESHOLD"] = str(SCORE_THRESHOLD)
     env["PHASE348_MAX_CANDIDATES"] = str(MAX_CANDIDATES)
 
+    # Stale output or changed adapters must never authorize a new run.
+    P348_JSON.unlink(missing_ok=True)
+    adapter_hashes = (stable_hash(load_json(CANONICAL_SIGNALS)), stable_hash(load_json(CANONICAL_MARKET)))
     proc = run_python(
         PHASE348,
         ["--approver", approver],
@@ -1156,6 +1290,8 @@ def run_phase348(
         )
 
     result = load_json(P348_JSON)
+    if adapter_hashes != (stable_hash(load_json(CANONICAL_SIGNALS)), stable_hash(load_json(CANONICAL_MARKET))):
+        raise RuntimeError("BRIDGE_ADAPTER_CHANGED_DURING_EXECUTION")
 
     if result.get("synthetic_fallback_allowed") is not False:
         raise RuntimeError("Synthetic fallback violation")
@@ -1164,6 +1300,8 @@ def run_phase348(
         raise RuntimeError("Synthetic evidence violation")
 
     execution_state = result.get("execution_state")
+    if execution_state in AUTHORITY_STATES and proc.returncode != 0:
+        raise RuntimeError("BRIDGE_EXECUTION_FAILED_NO_AUTHORITY")
 
     safe_states = {
         "REAL_CANONICAL_EVIDENCE_EXECUTED",
@@ -1415,6 +1553,25 @@ def main() -> int:
         raise RuntimeError(
             "Safety violation: paper orders created without real eligible signals."
         )
+
+    # Authority is optional for legacy safe-zero states, mandatory for sizing.
+    # Never infer authority from a PASS status alone.
+    try:
+        if STRATEGY != "V9.1":
+            raise RuntimeError("AUTHORITY_WRONG_STRATEGY")
+        context = {
+            "repository": os.getenv("GITHUB_REPOSITORY", ""),
+            "workflow": os.getenv("GITHUB_WORKFLOW_REF", "").split("@", 1)[0].removeprefix(AUTHORITY_REPOSITORY + "/"),
+            "producer_run_id": os.getenv("GITHUB_RUN_ID", ""),
+            "producer_run_attempt": os.getenv("GITHUB_RUN_ATTEMPT", ""),
+            "producer_commit_sha": os.getenv("GITHUB_SHA", ""),
+        }
+        result["canonical_authority"], result["canonical_authority_evidence"] = build_authority(
+            batch_id, signals[0]["trade_date"] if signals else "", persisted_signals, persisted_prices,
+            load_json(CANONICAL_SIGNALS), load_json(CANONICAL_MARKET), phase348, context,
+        )
+    except RuntimeError as exc:
+        result["authority_unavailable_reason"] = str(exc)
 
     write_summary(result)
 
