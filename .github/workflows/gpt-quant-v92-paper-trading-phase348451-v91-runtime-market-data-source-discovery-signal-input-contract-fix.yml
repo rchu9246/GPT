@@ -3,6 +3,13 @@
 on:
   workflow_dispatch:
     inputs:
+      handoff_consumer:
+        description: Consumer to dispatch only after this producer completes successfully
+        required: true
+        default: none
+        type: choice
+        options: [none, '353', '354', '355']
+
       strategy_version:
         description: Strategy version
         required: true
@@ -40,6 +47,7 @@ jobs:
     timeout-minutes: 45
 
     env:
+      PHASE348451_HANDOFF_CONSUMER: ${{ inputs.handoff_consumer }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}

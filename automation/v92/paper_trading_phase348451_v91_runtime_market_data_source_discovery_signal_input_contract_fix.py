@@ -1477,6 +1477,7 @@ def main() -> int:
 
     result = {
         "version": "3.4.8.4.5.1",
+        "handoff_consumer": os.getenv("PHASE348451_HANDOFF_CONSUMER", "none"),
         "status": "PASS",
         "strategy_version": STRATEGY,
         "trading_mode": MODE,

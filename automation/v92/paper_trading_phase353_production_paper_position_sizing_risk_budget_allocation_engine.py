@@ -87,9 +87,16 @@ def stable_hash(payload: Any) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def output_json_default(value: Any) -> str:
+    # Output boundary only: never round or coerce the values used for validation.
+    if isinstance(value, Decimal) and value.is_finite():
+        return str(value)
+    raise TypeError(f"Unsupported JSON output value: {type(value).__name__}")
+
+
 def dump_json(path: Path, payload: Any) -> None:
     path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n",
+        json.dumps(payload, ensure_ascii=False, indent=2, default=output_json_default) + "\n",
         encoding="utf-8",
     )
 
@@ -149,7 +156,7 @@ def explicit_producer_reference() -> tuple[str, str]:
     return run_id, attempt
 
 
-def load_explicit_authority() -> dict[str, Any]:
+def load_explicit_producer_result() -> dict[str, Any]:
     run_id, attempt = explicit_producer_reference()
     token = os.getenv("GH_TOKEN", "")
     if not token:
@@ -218,7 +225,11 @@ def load_explicit_authority() -> dict[str, Any]:
             or result.get("strategy_version") != "V9.1"
             or result.get("execution_state") != authority["bridge_execution_state"]):
         raise RuntimeError("PRODUCER_RESULT_AUTHORITY_MISMATCH")
-    return authority
+    return result
+
+
+def load_explicit_authority() -> dict[str, Any]:
+    return load_explicit_producer_result()["canonical_authority"]
 
 
 def complete_rows(table: str, params: list[tuple[str, str]]) -> list[dict[str, Any]]:
@@ -972,7 +983,7 @@ def main() -> int:
     dump_json(RESULT_JSON, result)
     write_summary(result)
 
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(json.dumps(result, ensure_ascii=False, indent=2, default=output_json_default))
     print(
         "PHASE353 PASS: paper position sizing + risk-budget allocation complete. "
         f"state={result['risk_state']}, "

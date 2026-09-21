@@ -1,5 +1,7 @@
 """Offline producer/artifact/consumer contract tests; all I/O is mocked."""
 import copy
+from contextlib import redirect_stdout
+from decimal import Decimal
 import hashlib
 import importlib
 import io
@@ -314,6 +316,64 @@ class AuthorityTests(unittest.TestCase):
             rows = sizing.rest_get("fixture", [])
         self.assertTrue(sizing.persisted_row_matches(
             {"current_portfolio_exposure": "0.1234567890123456789012345678"}, rows[0]))
+
+    def test_full_main_identical_plan_fractional_decimal_rerun(self):
+        # Create the expected plan through the real allocator/persistence encoder.
+        plan, items = self.plan()
+        with patch.object(sizing, "rest_get", return_value=[]), patch.object(sizing, "rest_insert_only"):
+            header, stored = sizing.persist_plan(plan, items)
+        # PostgREST numeric tokens arrive as Decimal, including fractional values.
+        for row in stored:
+            for key in ("score", "real_market_price", "paper_quantity", "estimated_notional",
+                        "raw_target_capital", "final_target_capital"):
+                row[key] = Decimal(row[key])
+        self.assertTrue(any(r["raw_target_capital"] % 1 for r in stored))
+        governance = dict(status="PASS", risk_state="NORMAL", governance_date=DAY,
+                          risk_reduction_factor=1, new_paper_entries_authorized=True, paper_halt=False)
+        for flag in ("synthetic_market_data", "synthetic_signals", "fake_prices_allowed",
+                     "broker_api_used", "broker_credentials_used", "broker_order_submission_enabled",
+                     "real_money_trading_enabled", "live_money_release_authorized"):
+            governance[flag] = False
+        governance["fail_closed_policy"] = True
+        ledger = dict(ledger_date=DAY, nav=1000000, cash=1000000, market_value=0)
+
+        def database(table, params):
+            if table == sizing.PLAN_TABLE:
+                return copy.deepcopy([header])
+            if table == sizing.ITEM_TABLE:
+                offset = int(dict(params)["offset"])
+                return copy.deepcopy(stored[offset:offset + 1])
+            return self.database(table, params)
+
+        emitted = {}
+
+        def write_text(path, text, **kwargs):
+            emitted[path.name] = text
+            return len(text)
+
+        with self.artifact_mock(), \
+                patch.object(sizing, "rest_get", side_effect=database), \
+                patch.object(sizing, "latest_ledger", return_value=ledger), \
+                patch.object(sizing, "open_positions", return_value=[]), \
+                patch.object(sizing, "run_upstream", return_value=(0, governance)), \
+                patch.object(sizing, "rest_insert_only") as write, \
+                patch.object(Path, "write_text", autospec=True, side_effect=write_text), \
+                patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": ""}), redirect_stdout(io.StringIO()) as stdout:
+            self.assertEqual(sizing.main(), 0)
+            write.assert_not_called()
+            evidence = json.loads(emitted[sizing.RESULT_JSON.name])
+            console, _ = json.JSONDecoder().raw_decode(stdout.getvalue())
+            self.assertEqual(console, evidence)
+            self.assertEqual(evidence["items"][0]["raw_target_capital"], str(stored[0]["raw_target_capital"]))
+            self.assertIn("phase353_position_sizing.md", emitted)
+
+    def test_output_decimal_serialization_preserves_all_digits(self):
+        value = Decimal("0.123456789012345678901234567890123456789")
+        rendered = json.dumps({"value": value}, default=sizing.output_json_default)
+        self.assertEqual(json.loads(rendered)["value"], str(value))
+        for invalid in (Decimal("NaN"), Decimal("Infinity"), object()):
+            with self.assertRaises(TypeError):
+                json.dumps(invalid, default=sizing.output_json_default)
 
     def test_missing_or_ambiguous_artifact_fails(self):
         for count in (0, 2):

@@ -3,6 +3,15 @@
 on:
   workflow_dispatch:
     inputs:
+      producer_run_id:
+        description: Exact completed Phase 3.4.8.4.5.1 producer run ID
+        required: true
+        type: string
+      producer_run_attempt:
+        description: Exact producer run attempt
+        required: true
+        type: string
+
       strategy_version:
         description: Strategy version
         required: true
@@ -21,6 +30,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: phase368-production-paper-daily-autonomous-controller
@@ -32,6 +42,9 @@ jobs:
     timeout-minutes: 90
 
     env:
+      GH_TOKEN: ${{ github.token }}
+      PHASE353_PRODUCER_RUN_ID: ${{ inputs.producer_run_id }}
+      PHASE353_PRODUCER_RUN_ATTEMPT: ${{ inputs.producer_run_attempt }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -92,6 +105,9 @@ jobs:
 
       - name: Install runtime dependencies
         run: python -m pip install --upgrade pip requests
+
+      - name: Validate explicit producer authority
+        run: python automation/v92/phase353_authority_handoff.py validate
 
       - name: Compile Phase 3.6.8
         shell: bash

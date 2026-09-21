@@ -56,6 +56,7 @@ concurrency:
 
 jobs:
   production-paper-position-sizing:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 50
 
@@ -105,6 +106,9 @@ jobs:
 
       - name: Install runtime dependencies
         run: python -m pip install --upgrade pip requests
+
+      - name: Validate explicit producer authority
+        run: python automation/v92/phase353_authority_handoff.py validate
 
       - name: Validate Phase 3.5.3 safety contract
         shell: bash
@@ -211,3 +215,21 @@ jobs:
             phase353_output/
           if-no-files-found: warn
           retention-days: 90
+
+  request-producer:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install requests
+      - name: Request dedicated producer (completion performs the handoff)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python automation/v92/phase353_authority_handoff.py request --consumer 353
