@@ -229,7 +229,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install requests
-      - name: Request dedicated producer (completion performs the handoff)
+      - name: Request one producer for the complete 353/354/355 cycle
         env:
           GH_TOKEN: ${{ github.token }}
         run: python automation/v92/phase353_authority_handoff.py request --consumer 353

@@ -33,11 +33,11 @@ class HandoffTests(unittest.TestCase):
         return self.contract.artifact_mock(mutate_result=lambda r: r.update(handoff_consumer="353"), **kwargs)
 
     def test_scheduled_request_only_dispatches_dedicated_producer(self):
-        with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "schedule"}), \
+        with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "schedule", "GITHUB_RUN_ATTEMPT": "1"}), \
                 patch.object(handoff.requests, "post", return_value=Mock(status_code=204)) as post:
             handoff.request_producer("353")
         self.assertTrue(post.call_args.args[0].endswith(producer.AUTHORITY_WORKFLOW.split("/")[-1] + "/dispatches"))
-        self.assertEqual(post.call_args.kwargs["json"], {"ref": "main", "inputs": {"handoff_consumer": "353"}})
+        self.assertEqual(post.call_args.kwargs["json"], {"ref": "main", "inputs": {"handoff_consumer": "355"}})
 
     def test_completed_scheduled_producer_passes_exact_tuple_without_dispatch_inputs(self):
         with patch.dict(os.environ, {"PHASE353_PRODUCER_RUN_ID": "", "PHASE353_PRODUCER_RUN_ATTEMPT": ""}), \
@@ -137,7 +137,7 @@ class HandoffTests(unittest.TestCase):
             self.assertIn(f'cron: "{cron}"', text)
             self.assertIn("if: github.event_name == 'schedule'", text)
             self.assertIn("if: github.event_name != 'schedule'", text)
-            self.assertIn(f"request --consumer {phase}", text)
+            self.assertIn(f"{'request' if phase == '353' else 'ownership'} --consumer {phase}", text)
         for phase in ("353", "354", "355", "360", "361", "362", "363", "364", "368"):
             text = next(root.glob(f"*phase{phase}-production-*.yml")).read_text(encoding="utf-8-sig")
             self.assertIn("PHASE353_PRODUCER_RUN_ID: ${{ inputs.producer_run_id }}", text)

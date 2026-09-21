@@ -1,4 +1,12 @@
-"""Completion-bound GitHub wiring; no database or trading operations."""
+"""Completion-bound GitHub wiring; no database or trading operations.
+
+353's schedule owns one producer request. 354/355 schedules actively verify
+ownership without dispatching. Successful completion invokes the existing 355
+entrypoint, whose subprocesses perform 353 sizing, 354 execution, then 355
+settlement with the same inherited tuple. This is at-least-once delivery, not
+exactly-once: replay never requests a producer and never changes its tuple.
+See docs/phase353-scheduled-authority.md for retry and failure boundaries.
+"""
 from __future__ import annotations
 
 import argparse
@@ -36,11 +44,33 @@ def dispatch(workflow: str, inputs: dict[str, str]) -> None:
 
 
 def request_producer(consumer: str) -> None:
-    if os.getenv("GITHUB_EVENT_NAME") != "schedule" or consumer not in CONSUMERS:
+    if os.getenv("GITHUB_EVENT_NAME") != "schedule" or consumer != "353":
         raise RuntimeError("INVALID_SCHEDULED_AUTHORITY_REQUEST")
-    # No run discovery: only the producer's eventual completion event selects a run.
-    dispatch(AUTHORITY_WORKFLOW.rsplit("/", 1)[1], {"handoff_consumer": consumer})
+    # Only the 353 schedule owns production. The existing 355 -> 354 -> 353
+    # subprocess chain runs sizing before execution before settlement, with one
+    # inherited tuple. The later cron ticks validate ownership; they never dispatch.
+    if os.getenv("GITHUB_RUN_ATTEMPT") != "1":
+        raise RuntimeError("SCHEDULED_OWNER_RETRY_REQUIRES_EXPLICIT_PRODUCER")
+    dispatch(AUTHORITY_WORKFLOW.rsplit("/", 1)[1], {"handoff_consumer": "355"})
     print("Producer requested; sizing is pending validated producer completion.")
+
+
+def verify_scheduled_ownership(consumer: str) -> None:
+    """Active later cron check: validate wiring, never discover or launch runs."""
+    if os.getenv("GITHUB_EVENT_NAME") != "schedule" or consumer not in {"354", "355"}:
+        raise RuntimeError("INVALID_SCHEDULED_OWNERSHIP_CHECK")
+    root = Path(__file__).resolve().parents[2] / ".github/workflows"
+    owner = (root / CONSUMERS["353"]).read_text(encoding="utf-8-sig")
+    if "phase353_authority_handoff.py request --consumer 353" not in owner:
+        raise RuntimeError("SCHEDULED_AUTHORITY_OWNER_MISSING")
+    for phase in ("354", "355"):
+        text = (root / CONSUMERS[phase]).read_text(encoding="utf-8-sig")
+        if ("phase353_authority_handoff.py request" in text
+                or f"phase353_authority_handoff.py ownership --consumer {phase}" not in text):
+            raise RuntimeError("MULTIPLE_OR_MISSING_SCHEDULED_AUTHORITY_OWNERS")
+    print(f"Phase {consumer} scheduled ownership check PASS: 353 owns the producer; "
+          "validated completion invokes the ordered 353/354/355 chain. "
+          "This check does not assert that the trading cycle succeeded.")
 
 
 def completed_producer_reference(event: dict) -> tuple[str, str, str]:
@@ -79,11 +109,13 @@ def complete_handoff(event: dict) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=("request", "complete", "validate"))
+    parser.add_argument("operation", choices=("request", "complete", "validate", "ownership"))
     parser.add_argument("--consumer", choices=tuple(CONSUMERS))
     args = parser.parse_args()
     if args.operation == "request":
         request_producer(args.consumer)
+    elif args.operation == "ownership":
+        verify_scheduled_ownership(args.consumer)
     elif args.operation == "complete":
         complete_handoff(json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8")))
     else:

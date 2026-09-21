@@ -205,20 +205,18 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-  request-producer:
+  scheduled-ownership-check:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
-      actions: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: python -m pip install requests
-      - name: Request dedicated producer (completion performs the handoff)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python automation/v92/phase353_authority_handoff.py request --consumer 354
+      - name: Verify the single scheduled authority owner
+        run: python automation/v92/phase353_authority_handoff.py ownership --consumer 354
