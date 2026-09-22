@@ -11,6 +11,10 @@ on:
         description: Exact producer run attempt
         required: true
         type: string
+      business_date:
+        description: Canonical producer trade date (YYYY-MM-DD)
+        required: true
+        type: string
 
       strategy_version:
         description: Strategy version
@@ -45,6 +49,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       PHASE353_PRODUCER_RUN_ID: ${{ inputs.producer_run_id }}
       PHASE353_PRODUCER_RUN_ATTEMPT: ${{ inputs.producer_run_attempt }}
+      PHASE368_BUSINESS_DATE: ${{ inputs.business_date }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -149,6 +154,7 @@ jobs:
           mkdir -p artifacts/phase368
 
           python automation/v92/paper_trading_phase368_production_paper_daily_autonomous_operations_controller.py \
+            --controller-date "$PHASE368_BUSINESS_DATE" \
             --strategy-version "$STRATEGY_VERSION" \
             --portfolio-id "$PORTFOLIO_ID" \
             --approver "$PHASE368_APPROVER" \
@@ -166,7 +172,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: phase368-daily-autonomous-controller-evidence
+          name: phase368-controller-${{ github.run_id }}-attempt-${{ github.run_attempt }}
           path: artifacts/phase368/
           if-no-files-found: warn
           retention-days: 30

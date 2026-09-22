@@ -12,6 +12,8 @@ import urllib.request
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from paper_trading_phase353_production_paper_position_sizing_risk_budget_allocation_engine import load_explicit_producer_result
+
 CONTRACT = "PHASE368_PRODUCTION_PAPER_DAILY_AUTONOMOUS_OPERATIONS_CONTROLLER"
 PORTFOLIO_DEFAULT = "V92_PRODUCTION_PAPER_V91"
 STRATEGY_DEFAULT = "V9.1"
@@ -96,24 +98,56 @@ class Supabase:
         value = self.request("GET", table, query=query)
         return value if isinstance(value, list) else []
 
-    def upsert(self, table: str, payload: Dict[str, Any], on_conflict: str) -> None:
-        query = "on_conflict=" + urllib.parse.quote(on_conflict, safe=",")
-        self.request(
-            "POST",
-            table,
-            query=query,
-            payload=payload,
-            prefer="resolution=merge-duplicates,return=minimal",
-        )
-
-def latest(sb: Supabase, table: str, portfolio_id: str, order_column: str) -> Optional[Dict[str, Any]]:
-    query = (
-        "select=*"
-        "&portfolio_id=eq." + urllib.parse.quote(portfolio_id, safe="")
-        + f"&order={order_column}.desc&limit=1"
-    )
+def exact_date(sb: Supabase, table: str, portfolio_id: str, date_column: str, business_date: str) -> Optional[Dict[str, Any]]:
+    query = ("select=*&portfolio_id=eq." + urllib.parse.quote(portfolio_id, safe="")
+             + "&" + date_column + "=eq." + urllib.parse.quote(business_date, safe="") + "&limit=2")
     rows = sb.get(table, query)
+    if len(rows) > 1:
+        raise RuntimeError("AMBIGUOUS_SAME_DATE_EVIDENCE")
     return rows[0] if rows else None
+
+def provenance(result: Dict[str, Any], business_date: str) -> Dict[str, Any]:
+    authority = result["canonical_authority"]
+    if authority["trade_date"] != business_date:
+        raise RuntimeError("CONTROLLER_DATE_DOES_NOT_MATCH_PRODUCER_TRADE_DATE")
+    return {
+        "producer_run_id": authority["producer_run_id"],
+        "producer_run_attempt": int(authority["producer_run_attempt"]),
+        "canonical_authority_hash": authority["authority_hash"],
+        "source_evidence_sha256": result["evidence_sha256"],
+    }
+
+def verify_existing(row: Dict[str, Any], identity: Dict[str, Any], supervision_hash: str, master_hash: str) -> str:
+    if any(str(row.get(k) or "") != str(v) for k, v in identity.items()):
+        raise RuntimeError("SAME_DAY_CONTROLLER_AUTHORITY_CONFLICT_OR_LEGACY_PROVENANCE")
+    if row.get("controller_state") not in {CONTROLLER_COMPLETED, CONTROLLER_COMPLETED_OBSERVATION}:
+        raise RuntimeError("INCOMPLETE_SAME_DAY_CONTROLLER_EVIDENCE")
+    if (row.get("source_supervision_evidence_sha256") != supervision_hash
+            or row.get("source_master_evidence_sha256") != master_hash
+            or not row.get("evidence_sha256")):
+        raise RuntimeError("SAME_AUTHORITY_CONTROLLER_CONTENT_CONFLICT")
+    return str(row["evidence_sha256"])
+
+def verify_audit(sb: Supabase, args: argparse.Namespace, sha: str) -> None:
+    audit = exact_date(sb, "paper_daily_autonomous_controller_audit_v92", args.portfolio_id,
+                       "controller_date", args.controller_date)
+    if (audit is None or audit.get("evidence_sha256") != sha
+            or any(str(audit.get(k) or "") != str(v) for k, v in args.provenance.items())):
+        raise RuntimeError("INCOMPLETE_CONTROLLER_AUDIT_EVIDENCE")
+
+def write_artifact(args: argparse.Namespace, state: str, sha: str) -> None:
+    identity = {
+        "contract": CONTRACT, "portfolio_id": args.portfolio_id,
+        "business_date": args.controller_date, "strategy_version": args.strategy_version, **args.provenance,
+        "controller_state": state, "controller_evidence_sha256": sha,
+        "controller_run_id": os.environ["GITHUB_RUN_ID"],
+        "controller_run_attempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+    }
+    identity["artifact_sha256"] = stable_hash(identity)
+    out_dir = os.path.join(os.getcwd(), "artifacts", "phase368")
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, "daily_autonomous_controller_evidence.json"), "w", encoding="utf-8") as handle:
+        json.dump(identity, handle, sort_keys=True, indent=2)
 
 def master_state(row: Optional[Dict[str, Any]]) -> str:
     if not row:
@@ -223,6 +257,9 @@ def persist(
         "master_cycle_state": final_master_state,
         "daily_paper_cycle_executed": executed,
         "master_exit_code": exit_code,
+        **args.provenance,
+        "source_supervision_evidence_sha256": args.supervision_hash,
+        "source_master_evidence_sha256": str((master or {}).get("evidence_sha256") or ""),
         "reason_codes": reasons,
         "safety": {
             "paper_only": True,
@@ -261,9 +298,22 @@ def persist(
         "live_money_release_authorized": False,
         "fail_closed_policy": True,
         "evidence_sha256": sha,
+        **args.provenance,
+        "source_supervision_evidence_sha256": args.supervision_hash,
+        "source_master_evidence_sha256": str((master or {}).get("evidence_sha256") or ""),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
-    sb.upsert("paper_daily_autonomous_controller_v92", payload, "portfolio_id,controller_date")
+    existing = exact_date(sb, "paper_daily_autonomous_controller_v92", args.portfolio_id, "controller_date", args.controller_date)
+    if existing is not None:
+        old_sha = verify_existing(existing, args.provenance, args.supervision_hash,
+                                  payload["source_master_evidence_sha256"])
+        if old_sha != sha or existing["controller_state"] != state:
+            raise RuntimeError("SAME_AUTHORITY_CONTROLLER_CONTENT_CONFLICT")
+        verify_audit(sb, args, old_sha)
+        write_artifact(args, state, old_sha)
+        return old_sha
+    # The unique (portfolio_id, controller_date) key closes a concurrent insert race.
+    sb.request("POST", "paper_daily_autonomous_controller_v92", payload=payload, prefer="return=minimal")
 
     audit = dict(payload)
     audit.pop("updated_at", None)
@@ -276,6 +326,7 @@ def persist(
         payload=audit,
         prefer="return=minimal",
     )
+    write_artifact(args, state, sha)
     return sha
 
 def print_summary(
@@ -326,7 +377,7 @@ def main() -> int:
     parser.add_argument("--portfolio-id", default=PORTFOLIO_DEFAULT)
     parser.add_argument("--strategy-version", default=STRATEGY_DEFAULT)
     parser.add_argument("--approver", default=os.getenv("PHASE368_APPROVER", "rchu9246"))
-    parser.add_argument("--controller-date", default=str(date.today()))
+    parser.add_argument("--controller-date", required=True)
     args = parser.parse_args()
 
     # Validate date early.
@@ -344,14 +395,37 @@ def main() -> int:
     if not url or not key:
         raise RuntimeError("Missing Supabase URL/key")
 
+    result = load_explicit_producer_result()
+    args.provenance = provenance(result, args.controller_date)
     sb = Supabase(url, key)
 
-    supervision = latest(
+    supervision = exact_date(
         sb,
         "paper_runtime_supervision_state_v92",
         args.portfolio_id,
         "supervision_date",
+        args.controller_date,
     )
+    if supervision is None:
+        raise RuntimeError("SAME_DATE_RUNTIME_SUPERVISION_MISSING")
+    args.supervision_hash = str(supervision.get("evidence_sha256") or "")
+    if not args.supervision_hash:
+        raise RuntimeError("RUNTIME_SUPERVISION_HASH_MISSING")
+    args.provenance["controller_input_sha256"] = stable_hash({
+        "business_date": args.controller_date, "portfolio_id": args.portfolio_id,
+        "strategy_version": args.strategy_version, "approver": args.approver,
+        "supervision_evidence_sha256": args.supervision_hash,
+        "controller_code_sha": os.environ["GITHUB_SHA"],
+    })
+    existing = exact_date(sb, "paper_daily_autonomous_controller_v92", args.portfolio_id,
+                          "controller_date", args.controller_date)
+    if existing is not None:
+        master = exact_date(sb, "paper_master_cycles_v92", args.portfolio_id, "cycle_date", args.controller_date)
+        sha = verify_existing(existing, args.provenance, args.supervision_hash,
+                              str((master or {}).get("evidence_sha256") or ""))
+        verify_audit(sb, args, sha)
+        write_artifact(args, existing["controller_state"], sha)
+        return 0
     pre = preflight(supervision)
 
     if not pre["authorized"]:
@@ -362,7 +436,7 @@ def main() -> int:
         print_summary(args, CONTROLLER_FAIL_CLOSED, pre, None, False, reasons, sha)
         return 2
 
-    before_master = latest(sb, "paper_master_cycles_v92", args.portfolio_id, "cycle_date")
+    before_master = exact_date(sb, "paper_master_cycles_v92", args.portfolio_id, "cycle_date", args.controller_date)
 
     proc = run_master(args.approver.strip(), args.portfolio_id, args.strategy_version)
 
@@ -371,8 +445,10 @@ def main() -> int:
     if proc.stderr:
         print(proc.stderr, file=sys.stderr)
 
-    after_master = latest(sb, "paper_master_cycles_v92", args.portfolio_id, "cycle_date")
+    after_master = exact_date(sb, "paper_master_cycles_v92", args.portfolio_id, "cycle_date", args.controller_date)
     final_master = after_master or before_master
+    if final_master is None:
+        raise RuntimeError("SAME_DATE_MASTER_CYCLE_MISSING")
     final_master_state = master_state(final_master)
 
     if proc.returncode != 0:
@@ -435,25 +511,6 @@ def main() -> int:
         proc.stderr,
     )
     print_summary(args, state, pre, final_master, True, reasons, sha)
-
-    out_dir = os.path.join(os.getcwd(), "artifacts", "phase368")
-    os.makedirs(out_dir, exist_ok=True)
-    evidence = {
-        "contract": CONTRACT,
-        "controller_state": state,
-        "portfolio_id": args.portfolio_id,
-        "controller_date": args.controller_date,
-        "preflight": pre,
-        "master_cycle_state": master_state(final_master),
-        "reason_codes": reasons,
-        "evidence_sha256": sha,
-    }
-    with open(
-        os.path.join(out_dir, "daily_autonomous_controller_evidence.json"),
-        "w",
-        encoding="utf-8",
-    ) as handle:
-        json.dump(evidence, handle, ensure_ascii=False, indent=2)
 
     return 0
 

@@ -37,7 +37,7 @@ class HandoffTests(unittest.TestCase):
                 patch.object(handoff.requests, "post", return_value=Mock(status_code=204)) as post:
             handoff.request_producer("353")
         self.assertTrue(post.call_args.args[0].endswith(producer.AUTHORITY_WORKFLOW.split("/")[-1] + "/dispatches"))
-        self.assertEqual(post.call_args.kwargs["json"], {"ref": "main", "inputs": {"handoff_consumer": "355"}})
+        self.assertEqual(post.call_args.kwargs["json"], {"ref": "main", "inputs": {"handoff_consumer": "368"}})
 
     def test_completed_scheduled_producer_passes_exact_tuple_without_dispatch_inputs(self):
         with patch.dict(os.environ, {"PHASE353_PRODUCER_RUN_ID": "", "PHASE353_PRODUCER_RUN_ATTEMPT": ""}), \
@@ -54,6 +54,13 @@ class HandoffTests(unittest.TestCase):
                 handoff.complete_handoff(self.event)
                 dispatch.assert_called_once_with(handoff.CONSUMERS[target],
                                                  {"producer_run_id": "123", "producer_run_attempt": "2"})
+
+    def test_controller_handoff_uses_exact_authority_trade_date(self):
+        with self.contract.artifact_mock(mutate_result=lambda r: r.update(handoff_consumer="368")), \
+                patch.object(handoff, "dispatch") as dispatch:
+            handoff.complete_handoff(self.event)
+        dispatch.assert_called_once_with(handoff.CONSUMERS["368"],
+            {"producer_run_id": "123", "producer_run_attempt": "2", "business_date": contract_tests.DAY})
 
     def test_wrong_workflow_branch_repository_state_or_attempt_rejected(self):
         for changes in ({"path": "other.yml"}, {"head_branch": "untrusted"},

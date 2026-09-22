@@ -1,9 +1,9 @@
 """Completion-bound GitHub wiring; no database or trading operations.
 
 353's schedule owns one producer request. 354/355 schedules actively verify
-ownership without dispatching. Successful completion invokes the existing 355
-entrypoint, whose subprocesses perform 353 sizing, 354 execution, then 355
-settlement with the same inherited tuple. This is at-least-once delivery, not
+ownership without dispatching. Successful completion invokes the 368 controller,
+whose 360 subprocess includes the ordered 353/354/355 execution with the same
+inherited tuple. This is at-least-once delivery, not
 exactly-once: replay never requests a producer and never changes its tuple.
 See docs/phase353-scheduled-authority.md for retry and failure boundaries.
 """
@@ -24,6 +24,7 @@ CONSUMERS = {
     "353": "gpt-quant-v92-paper-trading-phase353-production-paper-position-sizing-risk-budget-allocation-engine.yml",
     "354": "gpt-quant-v92-paper-trading-phase354-production-paper-order-intent-simulated-execution-lifecycle-engine.yml",
     "355": "gpt-quant-v92-paper-trading-phase355-production-paper-position-reconciliation-execution-settlement-engine.yml",
+    "368": "gpt-quant-v92-paper-trading-phase368-production-paper-daily-autonomous-operations-controller.yml",
 }
 
 
@@ -46,12 +47,12 @@ def dispatch(workflow: str, inputs: dict[str, str]) -> None:
 def request_producer(consumer: str) -> None:
     if os.getenv("GITHUB_EVENT_NAME") != "schedule" or consumer != "353":
         raise RuntimeError("INVALID_SCHEDULED_AUTHORITY_REQUEST")
-    # Only the 353 schedule owns production. The existing 355 -> 354 -> 353
-    # subprocess chain runs sizing before execution before settlement, with one
+    # Only the 353 schedule owns production. 368 -> 360 contains the ordered
+    # 353/354/355 subprocess chain, with one
     # inherited tuple. The later cron ticks validate ownership; they never dispatch.
     if os.getenv("GITHUB_RUN_ATTEMPT") != "1":
         raise RuntimeError("SCHEDULED_OWNER_RETRY_REQUIRES_EXPLICIT_PRODUCER")
-    dispatch(AUTHORITY_WORKFLOW.rsplit("/", 1)[1], {"handoff_consumer": "355"})
+    dispatch(AUTHORITY_WORKFLOW.rsplit("/", 1)[1], {"handoff_consumer": "368"})
     print("Producer requested; sizing is pending validated producer completion.")
 
 
@@ -69,7 +70,7 @@ def verify_scheduled_ownership(consumer: str) -> None:
                 or f"phase353_authority_handoff.py ownership --consumer {phase}" not in text):
             raise RuntimeError("MULTIPLE_OR_MISSING_SCHEDULED_AUTHORITY_OWNERS")
     print(f"Phase {consumer} scheduled ownership check PASS: 353 owns the producer; "
-          "validated completion invokes the ordered 353/354/355 chain. "
+          "validated completion invokes the 368 -> 360 ordered chain. "
           "This check does not assert that the trading cycle succeeded.")
 
 
@@ -103,7 +104,10 @@ def complete_handoff(event: dict) -> None:
     if consumer not in CONSUMERS:
         raise RuntimeError("INVALID_AUTHORITY_HANDOFF_CONSUMER")
     # Target is covered by the producer result hash and the exact artifact digest.
-    dispatch(CONSUMERS[consumer], {"producer_run_id": run_id, "producer_run_attempt": attempt})
+    inputs = {"producer_run_id": run_id, "producer_run_attempt": attempt}
+    if consumer == "368":
+        inputs["business_date"] = result["canonical_authority"]["trade_date"]
+    dispatch(CONSUMERS[consumer], inputs)
     print(f"Dispatched Phase {consumer} with producer={run_id} attempt={attempt}.")
 
 
