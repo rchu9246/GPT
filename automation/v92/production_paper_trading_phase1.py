@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import requests
+import gptq_accounting_runtime_v1 as accounting
 
 TIMEOUT = 60
 
@@ -79,6 +80,9 @@ def upsert(table: str, payload: dict[str, Any], on_conflict: str) -> dict[str, A
 
 
 def insert(table: str, payload: dict[str, Any]) -> dict[str, Any]:
+    if table == "gptq_paper_orders" and accounting.enabled():
+        order, closing_cash = accounting.post_order(payload)
+        return {**order, "_accounting_cash": float(closing_cash)}
     r = session.post(
         api_url(table),
         headers={"Prefer": "return=representation"},
@@ -215,11 +219,32 @@ def historical_score(window: list[dict[str, Any]]) -> tuple[float, str]:
 
 
 def main() -> int:
+    prior_snapshots = [] if accounting.enabled() else fetch_all("gptq_paper_equity_snapshots", {
+        "select": "cash,run_date",
+        "strategy_version": f"eq.{STRATEGY_VERSION}",
+        "order": "run_date.desc",
+        "limit": "1",
+    })
+    if accounting.enabled():
+        opening_cash = float(accounting.opening_cash(STRATEGY_VERSION, RUN_DATE))
+    elif prior_snapshots:
+        opening_cash = fnum(prior_snapshots[0]["cash"])
+    else:
+        prior_runs = fetch_all("gptq_paper_runs", {
+            "select": "id", "strategy_version": f"eq.{STRATEGY_VERSION}", "limit": "1",
+        })
+        prior_positions = fetch_all("gptq_paper_positions", {
+            "select": "id", "strategy_version": f"eq.{STRATEGY_VERSION}", "limit": "1",
+        })
+        if prior_runs or prior_positions:
+            raise RuntimeError("MISSING_PRIOR_ACCOUNTING_STATE: initial capital fallback forbidden")
+        opening_cash = INITIAL_CAPITAL
+
     run = upsert("gptq_paper_runs", {
         "run_date": RUN_DATE,
         "strategy_version": STRATEGY_VERSION,
         "status": "RUNNING",
-        "starting_cash": INITIAL_CAPITAL,
+        "starting_cash": round(opening_cash, 2),
     }, "run_date,strategy_version")
     run_id = run.get("id")
 
@@ -265,9 +290,10 @@ def main() -> int:
 
     signals.sort(key=lambda x: (-x["score"], x["symbol"] or ""))
 
-    cash = INITIAL_CAPITAL
-    for p in existing_positions:
-        cash -= fnum(p["average_price"]) * int(p["shares"])
+    # Cash is carried from the last persisted state. Existing positions have
+    # already been paid for; subtracting their cost again or rebuilding from
+    # INITIAL_CAPITAL silently erases prior realized P&L and fees.
+    cash = opening_cash
 
     new_capacity = max(0, MAX_OPEN_POSITIONS - len(existing_positions))
     selected = [
@@ -289,7 +315,8 @@ def main() -> int:
         if total_cost > cash:
             continue
 
-        cash -= total_cost
+        if not accounting.enabled():
+            cash -= total_cost
 
         order = insert("gptq_paper_orders", {
             "run_id": run_id,
@@ -307,6 +334,8 @@ def main() -> int:
             "status": "FILLED",
             "reason": "SHADOW_ENTRY",
         })
+        if accounting.enabled():
+            cash = order.pop("_accounting_cash")
         orders.append(order)
 
         upsert("gptq_paper_positions", {
@@ -353,7 +382,8 @@ def main() -> int:
 
     total_equity = cash + market_value
 
-    upsert("gptq_paper_equity_snapshots", {
+    if not accounting.enabled():
+        upsert("gptq_paper_equity_snapshots", {
         "run_date": RUN_DATE,
         "strategy_version": STRATEGY_VERSION,
         "cash": round(cash, 2),
@@ -362,7 +392,7 @@ def main() -> int:
         "realized_pnl": 0,
         "unrealized_pnl": round(unrealized, 2),
         "open_positions": len(positions),
-    }, "run_date,strategy_version")
+        }, "run_date,strategy_version")
 
     if run_id is not None:
         patch("gptq_paper_runs", "id", run_id, {

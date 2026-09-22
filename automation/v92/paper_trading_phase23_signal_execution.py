@@ -3,6 +3,7 @@ import json, os
 from datetime import date, datetime, timezone
 from pathlib import Path
 import requests
+import gptq_accounting_runtime_v1 as accounting
 
 TIMEOUT = 60
 SUPABASE_URL = os.environ["SUPABASE_URL"].rstrip("/")
@@ -38,6 +39,9 @@ def check(r,c):
 def fetch_all(t,p):
     r=s.get(u(t),params=p,timeout=TIMEOUT); check(r,f"fetch {t}"); return r.json()
 def insert(t,p):
+    if t == "gptq_paper_orders" and accounting.enabled():
+        order, closing_cash = accounting.post_order(p)
+        return {**order, "_accounting_cash": float(closing_cash)}
     r=s.post(u(t),headers={"Prefer":"return=representation"},json=p,timeout=TIMEOUT); check(r,f"insert {t}")
     x=r.json(); return x[0] if x else p
 def upsert(t,p,c):
@@ -66,7 +70,9 @@ def eligible_signals():
 def get_or_create_run():
     x=fetch_all("gptq_paper_runs",{"select":"*","run_date":f"eq.{RUN_DATE}","strategy_version":f"eq.{STRATEGY_VERSION}","limit":"1"})
     if x: return x[0]
-    return upsert("gptq_paper_runs",{"run_date":RUN_DATE,"strategy_version":STRATEGY_VERSION,"status":"RUNNING","starting_cash":INITIAL_CAPITAL},"run_date,strategy_version")
+    starting_cash = (float(accounting.opening_cash(STRATEGY_VERSION, RUN_DATE))
+                     if accounting.enabled() else INITIAL_CAPITAL)
+    return upsert("gptq_paper_runs",{"run_date":RUN_DATE,"strategy_version":STRATEGY_VERSION,"status":"RUNNING","starting_cash":starting_cash},"run_date,strategy_version")
 
 def already_executed(signal_id):
     return bool(fetch_all("gptq_paper_orders",{"select":"id","source_signal_id":f"eq.{signal_id}","strategy_version":f"eq.{STRATEGY_VERSION}","side":"eq.BUY","limit":"1"}))
@@ -84,7 +90,8 @@ def main():
     sigs=eligible_signals()
     pos=current_positions()
     snap=latest_snapshot()
-    cash=fnum(snap.get("cash")) if snap else INITIAL_CAPITAL
+    cash=(float(accounting.opening_cash(STRATEGY_VERSION, RUN_DATE))
+          if accounting.enabled() else fnum(snap.get("cash")) if snap else INITIAL_CAPITAL)
     mv=sum(fnum(p.get("market_value")) for p in pos)
     equity=cash+mv
     starting_cash,starting_equity=cash,equity
@@ -110,6 +117,11 @@ def main():
         if sid in open_ids:
             log_decision(sig,"REJECTED","POSITION_ALREADY_OPEN"); rejected+=1; continue
         if already_executed(signal_id):
+            if accounting.enabled():
+                raise RuntimeError(
+                    "ACCOUNTING_REPLAY_REQUIRES_POSITION_RECONCILIATION: "
+                    f"BUY order exists without open position for signal {signal_id}"
+                )
             log_decision(sig,"REJECTED","SIGNAL_ALREADY_EXECUTED"); rejected+=1; continue
 
         ref=fnum(sig.get("reference_price"))
@@ -141,7 +153,7 @@ def main():
             log_decision(sig,"REJECTED","RISK_LIMIT_EXCEEDED",fill,shares,notional,projected_exp); rejected+=1; continue
 
         try:
-            insert("gptq_paper_orders",{
+            order = insert("gptq_paper_orders",{
                 "run_id":run_id,"run_date":RUN_DATE,"strategy_version":STRATEGY_VERSION,
                 "stock_id":sid,"symbol":sig.get("symbol"),"side":"BUY",
                 "signal_score":sig.get("score"),"signal_label":sig.get("signal_label"),
@@ -151,7 +163,7 @@ def main():
                 "execution_mode":"SHADOW_ONLY_NO_BROKER","source_signal_id":signal_id,
                 "risk_approved":True,"risk_reason":"ALL_RISK_GATES_PASSED"
             })
-            cash-=total_cost
+            cash = (order["_accounting_cash"] if accounting.enabled() else cash-total_cost)
             upsert("gptq_paper_positions",{
                 "strategy_version":STRATEGY_VERSION,"stock_id":sid,"symbol":sig.get("symbol"),
                 "shares":shares,"average_price":round(fill,4),"last_price":round(ref,4),
@@ -177,11 +189,12 @@ def main():
     final_eq=cash+final_mv
     gross=final_mv/final_eq if final_eq>0 else 0
 
-    upsert("gptq_paper_equity_snapshots",{
+    if not accounting.enabled():
+        upsert("gptq_paper_equity_snapshots",{
         "run_date":RUN_DATE,"strategy_version":STRATEGY_VERSION,"cash":round(cash,2),
         "market_value":round(final_mv,2),"total_equity":round(final_eq,2),
         "realized_pnl":0,"unrealized_pnl":round(final_upnl,2),"open_positions":len(pos)
-    },"run_date,strategy_version")
+        },"run_date,strategy_version")
 
     status="COMPLETED" if not errors else "COMPLETED_WITH_ERRORS"
     patch_where("gptq_paper_execution_runs",{"id":f"eq.{exrun['id']}"},{

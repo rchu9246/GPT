@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import requests
+import gptq_accounting_runtime_v1 as accounting
 
 TIMEOUT = 60
 SUPABASE_URL = os.environ["SUPABASE_URL"].rstrip("/")
@@ -48,6 +49,9 @@ def fetch(table: str, params: dict[str, str]) -> list[dict[str, Any]]:
     return r.json()
 
 def insert(table: str, payload: dict[str, Any]) -> dict[str, Any]:
+    if table == "gptq_paper_orders" and accounting.enabled():
+        order, closing_cash = accounting.post_order(payload)
+        return {**order, "_accounting_cash": float(closing_cash)}
     r = s.post(
         url(table),
         headers={"Prefer": "return=representation"},
@@ -142,7 +146,8 @@ def get_or_create_paper_run() -> dict[str, Any]:
         return rows[0]
 
     snap = latest_snapshot()
-    cash = fnum(snap.get("cash")) if snap else 1000000.0
+    cash = (float(accounting.opening_cash(STRATEGY_VERSION, RUN_DATE))
+            if accounting.enabled() else fnum(snap.get("cash")) if snap else 1000000.0)
     return upsert("gptq_paper_runs", {
         "run_date": RUN_DATE,
         "strategy_version": STRATEGY_VERSION,
@@ -180,7 +185,8 @@ def log_decision(
 def main() -> int:
     positions_before = current_positions()
     snapshot = latest_snapshot()
-    cash = fnum(snapshot.get("cash")) if snapshot else 1000000.0
+    cash = (float(accounting.opening_cash(STRATEGY_VERSION, RUN_DATE))
+            if accounting.enabled() else fnum(snapshot.get("cash")) if snapshot else 1000000.0)
     starting_cash = cash
 
     run = get_or_create_paper_run()
@@ -248,10 +254,11 @@ def main() -> int:
                 tax = gross_proceeds * TRANSACTION_TAX_RATE
                 net_proceeds = gross_proceeds - commission - tax
                 realized = (exit_fill - entry) * shares - commission - tax
-                cash += net_proceeds
+                if not accounting.enabled():
+                    cash += net_proceeds
                 realized_today += realized
 
-                insert("gptq_paper_orders", {
+                order = insert("gptq_paper_orders", {
                     "run_id": run_id,
                     "run_date": RUN_DATE,
                     "strategy_version": STRATEGY_VERSION,
@@ -267,6 +274,7 @@ def main() -> int:
                     "status": "FILLED",
                     "reason": reason,
                     "realized_pnl": round(realized, 2),
+                    "accounting_cost_basis": round(entry * shares, 2),
                     "holding_days": holding_days,
                     "execution_mode": "SHADOW_ONLY_NO_BROKER",
                     "source_signal_id": pos.get("source_signal_id"),
@@ -275,6 +283,8 @@ def main() -> int:
                     "commission": round(commission + tax, 2),
                     "slippage": round(last * SELL_SLIPPAGE_RATE * shares, 2),
                 })
+                if accounting.enabled():
+                    cash = order["_accounting_cash"]
 
                 delete("gptq_paper_positions", {
                     "strategy_version": f"eq.{STRATEGY_VERSION}",
@@ -339,8 +349,13 @@ def main() -> int:
     ending_mv = sum(fnum(p.get("market_value")) for p in remaining)
     ending_upnl = sum(fnum(p.get("unrealized_pnl")) for p in remaining)
     ending_eq = cash + ending_mv
+    if accounting.enabled():
+        owner_state = accounting.latest_state(STRATEGY_VERSION, RUN_DATE)
+        realized_today = (fnum(owner_state["daily_realized_pnl"])
+                          if owner_state["business_date"] == RUN_DATE else 0.0)
 
-    upsert("gptq_paper_equity_snapshots", {
+    if not accounting.enabled():
+        upsert("gptq_paper_equity_snapshots", {
         "run_date": RUN_DATE,
         "strategy_version": STRATEGY_VERSION,
         "cash": round(cash, 2),
@@ -349,7 +364,7 @@ def main() -> int:
         "realized_pnl": round(realized_today, 2),
         "unrealized_pnl": round(ending_upnl, 2),
         "open_positions": len(remaining),
-    }, "run_date,strategy_version")
+        }, "run_date,strategy_version")
 
     status = "COMPLETED" if not errors else "COMPLETED_WITH_ERRORS"
 
