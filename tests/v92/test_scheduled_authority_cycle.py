@@ -100,16 +100,16 @@ class ScheduledCycleTests(unittest.TestCase):
             handoff.verify_scheduled_ownership("354")
             handoff.verify_scheduled_ownership("355")
             post.assert_called_once()
-            self.assertEqual(post.call_args.kwargs["json"]["inputs"], {"handoff_consumer": "355"})
+            self.assertEqual(post.call_args.kwargs["json"]["inputs"], {"handoff_consumer": "368"})
 
         results = []
         def delivery(workflow, inputs):
-            self.assertEqual(workflow, handoff.CONSUMERS["355"])
-            self.assertEqual(inputs, {"producer_run_id": "123", "producer_run_attempt": "2"})
+            self.assertEqual(workflow, handoff.CONSUMERS["368"])
+            self.assertEqual(inputs, {"producer_run_id": "123", "producer_run_attempt": "2", "business_date": contract.DAY})
             results.append(self.execute_sizing_chain())
 
         for _ in range(2):
-            with self.contract.artifact_mock(mutate_result=lambda r: r.update(handoff_consumer="355")), \
+            with self.contract.artifact_mock(mutate_result=lambda r: r.update(handoff_consumer="368")), \
                     patch.object(handoff, "dispatch", side_effect=delivery):
                 handoff.complete_handoff(self.events.event)
         self.assertEqual(self.tuples, [(phase, "123", "2") for _ in range(2) for phase in ("355", "354", "353")])
