@@ -8,7 +8,7 @@ import os
 import subprocess
 import sys
 from datetime import datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -190,7 +190,7 @@ def ensure_portfolio() -> dict[str, Any]:
         "real_money_trading_enabled": False,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
-    rest_upsert(PORTFOLIO_TABLE, [row], "portfolio_id")
+    # Stage new portfolios in memory; persist_state runs only after all marks resolve.
     return row
 
 
@@ -206,50 +206,41 @@ def load_positions() -> list[dict[str, Any]]:
 
 
 def load_real_price(symbol: str) -> tuple[str, Decimal]:
+    stocks = rest_get(
+        "stocks",
+        [("select", "id"), ("symbol", f"eq.{symbol}"), ("limit", "2")],
+    )
+    if len(stocks) != 1:
+        raise RuntimeError(
+            f"STOCK_MAPPING_NOT_UNIQUE: {symbol} matches={len(stocks)}; expected 1"
+        )
+    stock_id = stocks[0].get("id")
+    if type(stock_id) is not int or stock_id <= 0:
+        raise RuntimeError(f"INVALID_STOCK_ID: {symbol} id={stock_id!r}")
+
     rows = rest_get(
         MARKET_TABLE,
         [
-            ("select", "*"),
-            ("symbol", f"eq.{symbol}"),
-            ("order", "date.desc"),
+            ("select", "trade_date,close"),
+            ("stock_id", f"eq.{stock_id}"),
+            ("order", "trade_date.desc"),
             ("limit", "1"),
         ],
     )
-
     if not rows:
-        # try stock_id alias if daily_prices uses stock_id
-        rows = rest_get(
-            MARKET_TABLE,
-            [
-                ("select", "*"),
-                ("stock_id", f"eq.{symbol}"),
-                ("order", "date.desc"),
-                ("limit", "1"),
-            ],
-        )
-
-    if not rows:
-        raise RuntimeError(f"NO_REAL_MARKET_PRICE: {symbol}")
+        raise RuntimeError(f"NO_REAL_MARKET_PRICE: {symbol} stock_id={stock_id}")
 
     row = rows[0]
-    market_date = str(
-        row.get("date")
-        or row.get("trade_date")
-        or row.get("market_date")
-        or ""
-    )[:10]
-
-    raw_price = (
-        row.get("close")
-        or row.get("close_price")
-        or row.get("price")
-    )
-
+    market_date = str(row.get("trade_date") or "")[:10]
+    raw_price = row.get("close")
     if not market_date or raw_price is None:
         raise RuntimeError(f"INVALID_REAL_MARKET_PRICE_ROW: {symbol}")
 
-    price = D(raw_price)
-    if price <= 0:
+    try:
+        price = D(raw_price)
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise RuntimeError(f"INVALID_REAL_MARKET_PRICE: {symbol}={raw_price!r}") from exc
+    if not price.is_finite() or price <= 0:
         raise RuntimeError(f"INVALID_REAL_MARKET_PRICE: {symbol}={price}")
 
     return market_date, price
