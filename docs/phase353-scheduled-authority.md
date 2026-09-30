@@ -83,4 +83,3 @@ authority, historical rewrite or fallback is introduced.
 Incomplete historical plans block their own portfolio/plan date. A future plan
 date is not selected by that query; ledger/authority date checks still apply.
 No schema, history, qualifications, safety flags or trading calculations change.
-
