@@ -181,3 +181,18 @@ where repository = 'VALIDATION_ONLY_PHASE353_REPOSITORY'
 `exact_row_count` must be `1`. This is a manual live database gate; offline mocks
 or sequential calls do not satisfy it. The validation does not activate or call
 any production workflow.
+
+### Post-COMMIT diagnostic checkpoints
+
+If the full validation fails after its first commit without a PostgreSQL line or
+context, run `.github/supabase/validation/phase353_handoff_receipt_post_commit_diagnostic.sql`
+as one fresh SQL Editor query. It recreates all temporary/helper state and uses
+only `VALIDATION_ONLY_PHASE353_DIAGNOSTIC_*` receipt identities.
+
+Success returns `PHASE353_POST_COMMIT_DIAGNOSTIC_PASS`. Failure is rethrown as:
+
+    PHASE353_DIAG_DNN_CHECK_NAME [SQLSTATE] original message
+
+The checkpoint ID identifies the exact logical statement block. Before rerunning
+after a failure, execute the exact recovery statement in the diagnostic file's
+header. No diagnostic table persists outside that SQL Editor session.
