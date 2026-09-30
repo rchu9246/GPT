@@ -67,6 +67,40 @@ class Phase353LiveValidationSqlTests(unittest.TestCase):
         self.assertIn("pg_sleep(20)", self.doc)
         self.assertIn("exact_row_count` must be `1`", self.doc)
 
+    def test_result_collector_survives_validation_commit(self):
+        create_at = self.lower.index("create temporary table phase353_validation_results")
+        first_commit_after_create = self.lower.index("commit;", create_at)
+        last_reference = self.lower.rindex("pg_temp.phase353_validation_results")
+        self.assertIn("on commit preserve rows", self.lower[create_at:first_commit_after_create])
+        self.assertGreater(last_reference, first_commit_after_create)
+        self.assertIn("temporary result collector did not survive", self.lower)
+        self.assertNotIn("on commit drop", self.lower)
+
+    def test_result_collector_references_are_temp_schema_qualified(self):
+        references = [line.strip() for line in self.sql.splitlines()
+                      if "phase353_validation_results" in line
+                      and not line.strip().lower().startswith("create temporary table")]
+        self.assertTrue(references)
+        self.assertTrue(all("pg_temp.phase353_validation_results" in line for line in references))
+
+    def test_expected_error_blocks_cannot_drop_collector(self):
+        self.assertNotRegex(self.lower, r"drop\s+table\s+(?:if\s+exists\s+)?(?:pg_temp\.)?phase353_validation_results")
+        self.assertLess(self.lower.index("create temporary table phase353_validation_results"),
+                        self.lower.index("do $block$"))
+
+    def test_no_persistent_validation_table_is_created(self):
+        self.assertNotRegex(self.lower, r"create\s+table\s+(?:public\.)?phase353_validation_results")
+        self.assertIn("create temporary table phase353_validation_results", self.lower)
+
+    def test_migration_removes_service_role_mutation_privileges(self):
+        migration = (ROOT / ".github/supabase/migrations/015_phase353_handoff_receipts.sql").read_text(encoding="utf-8").lower()
+        revoke = "revoke all privileges on table public.phase353_handoff_receipts from service_role;"
+        grant = "grant select on table public.phase353_handoff_receipts to service_role;"
+        self.assertIn(revoke, migration)
+        self.assertIn(grant, migration)
+        self.assertLess(migration.index(revoke), migration.index(grant))
+        self.assertNotIn("grant update on table public.phase353_handoff_receipts", migration)
+
 
 if __name__ == "__main__":
     unittest.main()

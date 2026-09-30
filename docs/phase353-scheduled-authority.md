@@ -107,6 +107,13 @@ No schema, history, qualifications, safety flags or trading calculations change.
 The receipt migration and its RPC behavior must be proven in Supabase before any
 workflow integration. Use the SQL Editor in this exact order:
 
+Live validation found that the deployed Supabase default privileges had left
+`service_role` with direct table mutation privileges even though migration 015
+granted only `SELECT`. The database was manually corrected to `SELECT` only.
+Migration 015 now explicitly revokes all table privileges from `service_role`
+before granting `SELECT`, so fresh and repeated deployments converge on the same
+least-privilege state. This source hardening does not reapply the migration.
+
 1. Execute `.github/supabase/migrations/015_phase353_handoff_receipts.sql` once.
 2. Confirm the migration transaction commits without error.
 3. Execute `.github/supabase/validation/phase353_handoff_receipt_live_validation.sql`
