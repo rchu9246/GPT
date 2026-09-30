@@ -24,11 +24,57 @@ cycle success. Execution is completion-bound and may precede the later ticks;
 those times are not execution barriers. Inspect producer/consumer results for
 cycle success, not the ownership-check result.
 
-## At-least-once delivery and retry boundaries
+## Current completion delivery and durable receipt foundation
 
-Completion replay or handler rerun can dispatch again with the SAME tuple. It
-cannot dispatch another producer or change authority. Concurrency serializes
-consumer executions; it is not persistent deduplication or guaranteed delivery.
+The live producer completion trigger remains broken for producers dispatched by
+the repository `GITHUB_TOKEN`: those producer runs do not create the expected
+`workflow_run` handler run. The existing handler is unchanged and no replacement
+completion path is active.
+
+Migration `015_phase353_handoff_receipts.sql` provides a dormant durable receipt
+foundation. It atomically claims repository, producer workflow, run ID, attempt,
+and consumer with immutable producer SHA and optional authority hash/business
+date. Receipt states distinguish `CLAIMED`, `DISPATCH_ACCEPTED`, `COMPLETED`, and
+`FAILED`. Dispatch HTTP 204 can mean only `DISPATCH_ACCEPTED`.
+
+The enforced transition graph is:
+
+    CLAIMED -> DISPATCH_ACCEPTED -> FAILED
+       |                              (terminal)
+       +-----------> FAILED
+
+`COMPLETED` is also terminal but deliberately unreachable: this foundation has no
+completion RPC. A future `DISPATCH_ACCEPTED -> COMPLETED` transition must require
+the exact receipt identity, consumer run identity, and explicit downstream
+evidence identity/hash. Dispatch acceptance alone can never set `COMPLETED`.
+
+A database trigger rejects direct status changes, reverse transitions, terminal
+state exits, and direct `last_error` edits. Approved RPCs set a transaction-local
+transition marker immediately before their guarded update. Failure requires the
+exact immutable receipt identity, caller-expected current status, and a non-empty
+diagnostic. An identical failure replay is idempotent; a conflicting replay fails
+closed. `last_error` is writable only by that failure RPC and is cleared by a
+successful dispatch-acceptance transition.
+
+The migration is not applied and no production workflow calls its RPCs or Python
+adapter. The current live chain therefore has neither reliable completion
+delivery nor an integrated exactly-once claim. Completion replay or handler rerun
+can still dispatch the same tuple. Concurrency remains execution serialization,
+not persistent deduplication or guaranteed delivery.
+
+The future target sequence is:
+
+    producer completion
+    -> exact authority validation
+    -> atomic receipt claim
+    -> dispatch accepted
+    -> downstream completion evidence
+    -> receipt completed
+
+Only the service role may claim or transition a receipt. A failed dispatch is
+recorded as terminal `FAILED`; automatic redispatch is prohibited. A later
+reconciliation design must explicitly define any retry behavior. `COMPLETED`
+requires downstream evidence and is not implemented by the dormant adapter.
 
 An identical complete sizing plan returns existing header/items without inserts.
 Tests route two completion deliveries through actual 355/354 subprocess environment
