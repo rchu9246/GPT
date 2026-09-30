@@ -93,6 +93,43 @@ class Phase353HandoffReceiptTests(unittest.TestCase):
         self.assertNotIn("set status = 'COMPLETED'", body)
         self.assertIn("set status = 'DISPATCH_ACCEPTED'", body)
 
+    def test_claimed_to_dispatch_accepted_is_guarded_and_allowed(self):
+        self.assertIn("v_transition = 'CLAIMED->DISPATCH_ACCEPTED'", self.sql)
+        self.assertIn("set_config('app.phase353_handoff_transition', 'CLAIMED->DISPATCH_ACCEPTED', true)", self.sql)
+
+    def test_claimed_and_dispatch_accepted_may_fail(self):
+        self.assertIn("old.status in ('CLAIMED', 'DISPATCH_ACCEPTED')", self.sql)
+        self.assertIn("v_transition = old.status || '->FAILED'", self.sql)
+
+    def test_completed_and_failed_are_terminal(self):
+        guard_start = self.sql_lower.index("create or replace function public.phase353_guard_handoff_state_change")
+        guard_end = self.sql_lower.index("drop trigger if exists phase353_handoff_receipts_status_guard")
+        guard = self.sql_lower[guard_start:guard_end]
+        self.assertNotIn("old.status = 'completed'", guard)
+        self.assertNotIn("old.status = 'failed'", guard)
+
+    def test_reverse_and_direct_transitions_are_rejected(self):
+        self.assertIn("PHASE353_HANDOFF_INVALID_STATUS_TRANSITION", self.sql)
+        self.assertIn("before update of status, last_error", self.sql_lower)
+        self.assertIn("current_setting('app.phase353_handoff_transition', true)", self.sql)
+
+    def test_failure_requires_nonempty_error(self):
+        self.assertIn("nullif(btrim(p_last_error), '') is null", self.sql)
+        self.assertIn("PHASE353_HANDOFF_INVALID_FAILURE_REQUEST", self.sql)
+
+    def test_identical_failure_replay_is_idempotent(self):
+        self.assertIn("if v_receipt.last_error = p_last_error then", self.sql)
+        self.assertIn("'ALREADY_FAILED'::text", self.sql)
+
+    def test_conflicting_failure_replay_fails_closed(self):
+        self.assertIn("PHASE353_HANDOFF_CONFLICTING_FAILURE", self.sql)
+        self.assertIn("PHASE353_HANDOFF_EXPECTED_STATUS_CONFLICT", self.sql)
+
+    def test_last_error_only_changes_through_failure_transition(self):
+        self.assertIn("PHASE353_HANDOFF_LAST_ERROR_REQUIRES_FAILURE_TRANSITION", self.sql)
+        self.assertIn("set status = 'FAILED', last_error = p_last_error", self.sql)
+        self.assertIn("set status = 'DISPATCH_ACCEPTED', dispatched_at = clock_timestamp(), last_error = null", self.sql)
+
     def test_09_immutable_identity_has_update_trigger(self):
         self.assertIn("before update on public.phase353_handoff_receipts", self.sql_lower)
         for column in ("repository", "producer_workflow", "producer_run_id", "producer_run_attempt",
@@ -100,10 +137,12 @@ class Phase353HandoffReceiptTests(unittest.TestCase):
             self.assertIn(f"new.{column} is distinct from old.{column}", self.sql_lower)
 
     def test_10_untrusted_roles_cannot_execute_mutations(self):
-        for function in ("claim_phase353_handoff", "mark_phase353_handoff_dispatch_accepted"):
+        for function in ("claim_phase353_handoff", "mark_phase353_handoff_dispatch_accepted",
+                         "mark_phase353_handoff_failed"):
             signature = self.sql_lower[self.sql_lower.index(f"revoke all on function public.{function}"):]
             self.assertIn("from public, anon, authenticated", signature.split(";", 1)[0])
-        self.assertEqual(self.sql_lower.count("to service_role;"), 3)
+        self.assertEqual(self.sql_lower.count("to service_role;"), 4)
+        self.assertNotIn("grant update on table", self.sql_lower)
 
     def test_11_migration_is_transactional(self):
         stripped = self.sql_lower.strip()
@@ -112,14 +151,14 @@ class Phase353HandoffReceiptTests(unittest.TestCase):
 
     def test_12_migration_is_idempotent(self):
         self.assertIn("create table if not exists", self.sql_lower)
-        self.assertEqual(self.sql_lower.count("create or replace function"), 3)
+        self.assertEqual(self.sql_lower.count("create or replace function"), 5)
         self.assertIn("drop trigger if exists", self.sql_lower)
 
     def test_13_no_historical_trading_rows_are_touched(self):
         self.assertNotIn("delete from", self.sql_lower)
         self.assertNotIn("truncate", self.sql_lower)
         updates = [line.strip() for line in self.sql_lower.splitlines() if line.strip().startswith("update ")]
-        self.assertEqual(updates, ["update public.phase353_handoff_receipts"])
+        self.assertEqual(updates, ["update public.phase353_handoff_receipts"] * 2)
 
     def test_14_no_production_workflow_integration_exists(self):
         workflow_text = "\n".join(path.read_text(encoding="utf-8-sig")
@@ -144,6 +183,19 @@ class Phase353HandoffReceiptTests(unittest.TestCase):
         )
         self.assertEqual(result["receipt_status"], "DISPATCH_ACCEPTED")
         self.assertTrue(session.calls[0][1].endswith("/rpc/mark_phase353_handoff_dispatch_accepted"))
+
+    def test_runtime_failure_adapter_calls_only_failure_rpc(self):
+        session = Session(post_payload=[{"transition_result": "FAILED", "receipt_id": 1,
+                                        "receipt_status": "FAILED"}])
+        result = receipt.mark_handoff_failed(
+            receipt_id=1, repository="rchu9246/GPT", producer_workflow="producer.yml",
+            producer_run_id=123, producer_run_attempt=2, consumer="355", producer_sha="a" * 40,
+            expected_status="DISPATCH_ACCEPTED", last_error="downstream dispatch failed",
+            base_url="https://example.supabase.co", service_role_key="secret", session=session,
+        )
+        self.assertEqual(result["receipt_status"], "FAILED")
+        self.assertTrue(session.calls[0][1].endswith("/rpc/mark_phase353_handoff_failed"))
+        self.assertEqual(session.calls[0][2]["json"]["p_expected_status"], "DISPATCH_ACCEPTED")
 
     def test_read_receipt_uses_exact_identity(self):
         session = Session(get_payload=[])
