@@ -196,3 +196,9 @@ Success returns `PHASE353_POST_COMMIT_DIAGNOSTIC_PASS`. Failure is rethrown as:
 The checkpoint ID identifies the exact logical statement block. Before rerunning
 after a failure, execute the exact recovery statement in the diagnostic file's
 header. No diagnostic table persists outside that SQL Editor session.
+
+For a differential audit covering catalog preflight and post-commit operations
+in one request, run `.github/supabase/validation/phase353_handoff_receipt_full_live_diagnostic.sql`.
+It uses only `VALIDATION_ONLY_PHASE353_LIVE_DIAG_*` identities. Success returns
+`PHASE353_FULL_LIVE_DIAGNOSTIC_PASS`; failures begin with
+`PHASE353_LIVE_DIAG_LNN_CHECK_NAME` and preserve SQLSTATE and the original error.
