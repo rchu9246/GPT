@@ -182,4 +182,3 @@ grant execute on function public.claim_phase353_handoff(text, text, bigint, inte
 grant execute on function public.mark_phase353_handoff_dispatch_accepted(bigint, text, text, bigint, integer, text, text) to service_role;
 
 commit;
-
