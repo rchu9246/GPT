@@ -294,6 +294,7 @@ revoke all on function public.claim_phase353_handoff(text, text, bigint, integer
 revoke all on function public.mark_phase353_handoff_dispatch_accepted(bigint, text, text, bigint, integer, text, text) from public, anon, authenticated;
 revoke all on function public.mark_phase353_handoff_failed(bigint, text, text, bigint, integer, text, text, text, text) from public, anon, authenticated;
 
+revoke all privileges on table public.phase353_handoff_receipts from service_role;
 grant select on table public.phase353_handoff_receipts to service_role;
 grant execute on function public.claim_phase353_handoff(text, text, bigint, integer, text, text, date, text) to service_role;
 grant execute on function public.mark_phase353_handoff_dispatch_accepted(bigint, text, text, bigint, integer, text, text) to service_role;
