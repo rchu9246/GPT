@@ -98,4 +98,3 @@ def read_receipt(*, repository: str, producer_workflow: str, producer_run_id: in
     if not isinstance(rows, list) or len(rows) > 1:
         raise RuntimeError("receipt read violated unique identity")
     return rows[0] if rows else None
-
