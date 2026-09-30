@@ -1,20 +1,19 @@
 # Scheduled canonical authority ownership
 
 The Phase 3.5.3 weekday cron is the only scheduled producer requester. Its first
-attempt dispatches the dedicated Phase 3.4.8.4.5.1 with `handoff_consumer=355`.
+attempt dispatches the dedicated Phase 3.4.8.4.5.1 with `handoff_consumer=368`.
 No producer runs are selected or listed. Rerunning that scheduled requester fails
 closed rather than requesting another producer. An ambiguous dispatch response
 requires investigation; there is no automatic retry or replacement authority.
 
 The successful producer completion event supplies its exact run ID and attempt.
 The handler checks repository, workflow, main branch, success, attempt-specific
-artifact, producer SHA and artifact digest, then dispatches 355 with that tuple:
+artifact, producer SHA and artifact digest, then dispatches 368 with that tuple
+and the validated canonical trade date:
 
-    353 cron -> dedicated producer -> validated completion -> 355 entrypoint
-                                                            -> 354 entrypoint
-                                                               -> 353 sizing
-                                                            <- 354 execution
-                                                         <- 355 settlement
+    353 cron -> dedicated producer -> validated completion -> 368 controller
+        -> 360 master -> 350...356 (including 355 -> 354 -> 353)
+        -> finalized same-date controller artifact -> exact completion -> 369
 
 The existing subprocesses inherit one tuple. No 354/355 trading Python changes.
 All three cron strings and schedules remain enabled. Later 354/355 cron jobs
@@ -29,6 +28,9 @@ cycle success, not the ownership-check result.
 Completion replay or handler rerun can dispatch again with the SAME tuple. It
 cannot dispatch another producer or change authority. Concurrency serializes
 consumer executions; it is not persistent deduplication or guaranteed delivery.
+The 368 and 369 canonical rows use insert-only persistence and reject a
+different same-date authority; an identical finalized result returns without
+another audit append. Legacy rows without authority provenance fail closed.
 
 An identical complete sizing plan returns existing header/items without inserts.
 Tests route two completion deliveries through actual 355/354 subprocess environment
@@ -54,4 +56,7 @@ authority, historical rewrite or fallback is introduced.
 
 Incomplete historical plans block their own portfolio/plan date. A future plan
 date is not selected by that query; ledger/authority date checks still apply.
-No schema, history, qualifications, safety flags or trading calculations change.
+The forward-only 368/369 provenance migration adds nullable fields and does not
+backfill or rewrite history. The 368 preflight requires same-date supervision;
+if that prerequisite is missing, the controller fails closed before running 360.
+No qualification, approval, safety flag or trading calculation changes.

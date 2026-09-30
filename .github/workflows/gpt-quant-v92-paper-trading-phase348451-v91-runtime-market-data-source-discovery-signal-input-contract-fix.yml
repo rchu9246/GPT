@@ -8,7 +8,7 @@ on:
         required: true
         default: none
         type: choice
-        options: [none, '353', '354', '355']
+        options: [none, '353', '354', '355', '368']
 
       strategy_version:
         description: Strategy version

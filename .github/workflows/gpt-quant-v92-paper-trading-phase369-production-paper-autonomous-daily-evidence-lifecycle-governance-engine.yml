@@ -1,26 +1,14 @@
 name: GPT Quant Phase 3.6.9 - Production Paper Autonomous Daily Evidence Lifecycle Governance Engine
 
 on:
-  workflow_dispatch:
-    inputs:
-      strategy_version:
-        description: Strategy version
-        required: true
-        default: V9.1
-        type: string
-      portfolio_id:
-        description: Persistent paper portfolio ID
-        required: true
-        default: V92_PRODUCTION_PAPER_V91
-        type: string
-
-  schedule:
-    # 13:00 UTC = 21:00 Asia/Taipei, weekdays.
-    # Runs after Phase 3.6.8 scheduled controller at 12:45 UTC.
-    - cron: "0 13 * * 1-5"
+  workflow_run:
+    workflows: ['GPT Quant Phase 3.6.8 - Production Paper Daily Autonomous Operations Controller']
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: phase369-production-paper-daily-evidence-governance
@@ -28,14 +16,16 @@ concurrency:
 
 jobs:
   daily-evidence-lifecycle-governance:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      STRATEGY_VERSION: ${{ inputs.strategy_version || 'V9.1' }}
-      PORTFOLIO_ID: ${{ inputs.portfolio_id || 'V92_PRODUCTION_PAPER_V91' }}
+      STRATEGY_VERSION: V9.1
+      PORTFOLIO_ID: V92_PRODUCTION_PAPER_V91
+      GH_TOKEN: ${{ github.token }}
 
     steps:
       - name: Checkout
@@ -46,10 +36,14 @@ jobs:
         with:
           python-version: "3.14"
 
+      - name: Install completion validation dependency
+        run: python -m pip install requests
+
       - name: Compile Phase 3.6.9
         shell: bash
         run: |
           python -m py_compile automation/v92/paper_trading_phase369_production_paper_autonomous_daily_evidence_lifecycle_governance_engine.py
+          python -m py_compile automation/v92/phase369_controller_completion.py
 
       - name: Validate Phase 3.6.9 safety and evidence contract
         shell: bash
@@ -84,9 +78,7 @@ jobs:
         run: |
           mkdir -p artifacts/phase369
 
-          python automation/v92/paper_trading_phase369_production_paper_autonomous_daily_evidence_lifecycle_governance_engine.py \
-            --strategy-version "$STRATEGY_VERSION" \
-            --portfolio-id "$PORTFOLIO_ID" \
+          python automation/v92/phase369_controller_completion.py \
             | tee artifacts/phase369/summary.md
 
       - name: Publish summary

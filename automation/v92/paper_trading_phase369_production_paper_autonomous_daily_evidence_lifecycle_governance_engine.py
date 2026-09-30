@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import os
-import sys
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -93,23 +91,15 @@ class Supabase:
         value = self.request("GET", table, query=query)
         return value if isinstance(value, list) else []
 
-    def upsert(self, table: str, payload: Dict[str, Any], on_conflict: str) -> None:
-        query = "on_conflict=" + urllib.parse.quote(on_conflict, safe=",")
-        self.request(
-            "POST",
-            table,
-            query=query,
-            payload=payload,
-            prefer="resolution=merge-duplicates,return=minimal",
-        )
-
-def latest(sb: Supabase, table: str, portfolio_id: str, order_column: str) -> Optional[Dict[str, Any]]:
+def exact_date(sb: Supabase, table: str, portfolio_id: str, date_column: str, business_date: str) -> Optional[Dict[str, Any]]:
     query = (
         "select=*"
         "&portfolio_id=eq." + urllib.parse.quote(portfolio_id, safe="")
-        + f"&order={order_column}.desc&limit=1"
+        + "&" + date_column + "=eq." + urllib.parse.quote(business_date, safe="") + "&limit=2"
     )
     rows = sb.get(table, query)
+    if len(rows) > 1:
+        raise RuntimeError("AMBIGUOUS_SAME_DATE_EVIDENCE")
     return rows[0] if rows else None
 
 def latest_before(
@@ -214,14 +204,14 @@ def evaluate(controller: Dict[str, Any]) -> Dict[str, Any]:
         "safety_revocation_triggered": safety_revocation,
     }
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--portfolio-id", default=PORTFOLIO_DEFAULT)
-    parser.add_argument("--strategy-version", default=STRATEGY_DEFAULT)
-    parser.add_argument("--evidence-date", default=str(date.today()))
-    args = parser.parse_args()
-
-    date.fromisoformat(args.evidence_date)
+def main(artifact: Dict[str, Any]) -> int:
+    # Only phase369_controller_completion supplies an exact, digest-verified artifact.
+    if not isinstance(artifact, dict) or not artifact.get("artifact_sha256"):
+        raise RuntimeError("VERIFIED_CONTROLLER_COMPLETION_REQUIRED")
+    business_date = artifact["business_date"]
+    date.fromisoformat(business_date)
+    portfolio_id = artifact["portfolio_id"]
+    strategy_version = artifact["strategy_version"]
 
     url = env_first("SUPABASE_URL", "VITE_SUPABASE_URL")
     key = env_first(
@@ -235,34 +225,43 @@ def main() -> int:
 
     sb = Supabase(url, key)
 
-    controller = latest(
+    controller = exact_date(
         sb,
         "paper_daily_autonomous_controller_v92",
-        args.portfolio_id,
+        portfolio_id,
         "controller_date",
+        business_date,
     )
     if controller is None:
         raise RuntimeError("Canonical Phase 3.6.8 controller evidence missing")
 
-    controller_date = str(controller.get("controller_date") or "")
-    if controller_date != args.evidence_date:
-        raise RuntimeError(
-            f"Latest controller date mismatch: expected={args.evidence_date}, actual={controller_date}"
-        )
+    for key in ("producer_run_id", "producer_run_attempt", "canonical_authority_hash", "controller_input_sha256", "source_evidence_sha256"):
+        if str(controller.get(key) or "") != str(artifact.get(key) or ""):
+            raise RuntimeError("CONTROLLER_ARTIFACT_DATABASE_AUTHORITY_MISMATCH")
+    if (controller.get("evidence_sha256") != artifact["controller_evidence_sha256"]
+            or controller.get("controller_state") != artifact["controller_state"]
+            or controller.get("strategy_version") != strategy_version):
+        raise RuntimeError("CONTROLLER_ARTIFACT_DATABASE_HASH_MISMATCH")
 
-    master = latest(
+    master = exact_date(
         sb,
         "paper_master_cycles_v92",
-        args.portfolio_id,
+        portfolio_id,
         "cycle_date",
+        business_date,
     )
+    if (str(controller.get("source_master_evidence_sha256") or "")
+            != str((master or {}).get("evidence_sha256") or "")):
+        raise RuntimeError("SAME_DATE_MASTER_SOURCE_HASH_MISMATCH")
+    if controller.get("controller_passed") and master is None:
+        raise RuntimeError("SAME_DATE_MASTER_CYCLE_MISSING")
 
     previous = latest_before(
         sb,
         "paper_daily_lifecycle_evidence_v92",
-        args.portfolio_id,
+        portfolio_id,
         "evidence_date",
-        args.evidence_date,
+        business_date,
     )
 
     evaluation = evaluate(controller)
@@ -273,9 +272,9 @@ def main() -> int:
 
     evidence_document = {
         "contract": CONTRACT,
-        "portfolio_id": args.portfolio_id,
-        "strategy_version": args.strategy_version,
-        "evidence_date": args.evidence_date,
+        "portfolio_id": portfolio_id,
+        "strategy_version": strategy_version,
+        "evidence_date": business_date,
         "lifecycle_sequence": lifecycle_sequence,
         "previous_evidence_sha256": previous_sha,
         "controller": {
@@ -307,10 +306,15 @@ def main() -> int:
     evidence_sha = stable_hash(evidence_document)
 
     payload = {
-        "evidence_date": args.evidence_date,
-        "portfolio_id": args.portfolio_id,
-        "strategy_version": args.strategy_version,
+        "evidence_date": business_date,
+        "portfolio_id": portfolio_id,
+        "strategy_version": strategy_version,
         "contract": CONTRACT,
+        "producer_run_id": artifact["producer_run_id"],
+        "producer_run_attempt": int(artifact["producer_run_attempt"]),
+        "canonical_authority_hash": artifact["canonical_authority_hash"],
+        "controller_run_id": artifact["controller_run_id"],
+        "controller_run_attempt": int(artifact["controller_run_attempt"]),
 
         "lifecycle_sequence": lifecycle_sequence,
         "lifecycle_state": evaluation["lifecycle_state"],
@@ -356,11 +360,25 @@ def main() -> int:
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    sb.upsert(
-        "paper_daily_lifecycle_evidence_v92",
-        payload,
-        "portfolio_id,evidence_date",
-    )
+    existing = exact_date(sb, "paper_daily_lifecycle_evidence_v92", portfolio_id, "evidence_date", business_date)
+    if existing is not None:
+        for key in ("producer_run_id", "producer_run_attempt", "canonical_authority_hash"):
+            if str(existing.get(key) or "") != str(payload[key]):
+                raise RuntimeError("SAME_DAY_LIFECYCLE_AUTHORITY_CONFLICT_OR_LEGACY_PROVENANCE")
+        if (not existing.get("evidence_sha256") or not existing.get("lifecycle_state")
+                or existing.get("source_controller_evidence_sha256") != payload["source_controller_evidence_sha256"]
+                or existing.get("evidence_sha256") != evidence_sha):
+            raise RuntimeError("SAME_AUTHORITY_LIFECYCLE_CONTENT_CONFLICT")
+        audit_row = exact_date(sb, "paper_daily_lifecycle_evidence_audit_v92", portfolio_id,
+                               "evidence_date", business_date)
+        if (audit_row is None or audit_row.get("evidence_sha256") != evidence_sha
+                or any(str(audit_row.get(k) or "") != str(payload[k]) for k in
+                       ("producer_run_id", "producer_run_attempt", "canonical_authority_hash"))):
+            raise RuntimeError("INCOMPLETE_LIFECYCLE_AUDIT_EVIDENCE")
+        # An exact controller retry may have a distinct controller workflow run ID.
+        # Content/authority is immutable; do not append another audit row.
+        return 0
+    sb.request("POST", "paper_daily_lifecycle_evidence_v92", payload=payload, prefer="return=minimal")
 
     audit = dict(payload)
     audit.pop("updated_at", None)
@@ -379,8 +397,8 @@ def main() -> int:
     print("## Production Paper Autonomous Daily Evidence + Lifecycle Governance Engine")
     print()
     print(f"- Contract: `{CONTRACT}`")
-    print(f"- Portfolio ID: `{args.portfolio_id}`")
-    print(f"- Evidence Date: `{args.evidence_date}`")
+    print(f"- Portfolio ID: `{portfolio_id}`")
+    print(f"- Evidence Date: `{business_date}`")
     print(f"- Lifecycle Sequence: **{lifecycle_sequence}**")
     print(f"- Lifecycle State: **{evaluation['lifecycle_state']}**")
     print(f"- Lifecycle Passed: **{'YES' if evaluation['lifecycle_passed'] else 'NO'}**")
@@ -444,8 +462,4 @@ def main() -> int:
     return 0
 
 if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except Exception as exc:
-        print(f"PHASE369_FATAL: {exc}", file=sys.stderr)
-        raise
+    raise SystemExit("VERIFIED_CONTROLLER_COMPLETION_REQUIRED")
