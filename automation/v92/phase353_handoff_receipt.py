@@ -17,6 +17,7 @@ import requests
 TABLE = "phase353_handoff_receipts"
 CLAIM_RPC = "claim_phase353_handoff"
 ACCEPT_RPC = "mark_phase353_handoff_dispatch_accepted"
+FAIL_RPC = "mark_phase353_handoff_failed"
 
 
 def _connection(base_url: str | None, service_role_key: str | None) -> tuple[str, str]:
@@ -77,6 +78,24 @@ def mark_dispatch_accepted(*, receipt_id: int, repository: str, producer_workflo
               "p_producer_sha": producer_sha},
     )
     return _one(response, "dispatch acceptance transition")
+
+
+def mark_handoff_failed(*, receipt_id: int, repository: str, producer_workflow: str,
+                        producer_run_id: int, producer_run_attempt: int, consumer: str,
+                        producer_sha: str, expected_status: str, last_error: str,
+                        base_url: str | None = None, service_role_key: str | None = None,
+                        session: Any = requests) -> dict[str, Any]:
+    """Move CLAIMED or DISPATCH_ACCEPTED to terminal FAILED through the guarded RPC."""
+    url, key = _connection(base_url, service_role_key)
+    response = session.post(
+        f"{url}/rest/v1/rpc/{FAIL_RPC}", headers=_headers(key), timeout=30,
+        json={"p_receipt_id": receipt_id, "p_repository": repository,
+              "p_producer_workflow": producer_workflow, "p_producer_run_id": producer_run_id,
+              "p_producer_run_attempt": producer_run_attempt, "p_consumer": consumer,
+              "p_producer_sha": producer_sha, "p_expected_status": expected_status,
+              "p_last_error": last_error},
+    )
+    return _one(response, "handoff failure transition")
 
 
 def read_receipt(*, repository: str, producer_workflow: str, producer_run_id: int,
