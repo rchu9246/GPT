@@ -37,6 +37,25 @@ and consumer with immutable producer SHA and optional authority hash/business
 date. Receipt states distinguish `CLAIMED`, `DISPATCH_ACCEPTED`, `COMPLETED`, and
 `FAILED`. Dispatch HTTP 204 can mean only `DISPATCH_ACCEPTED`.
 
+The enforced transition graph is:
+
+    CLAIMED -> DISPATCH_ACCEPTED -> FAILED
+       |                              (terminal)
+       +-----------> FAILED
+
+`COMPLETED` is also terminal but deliberately unreachable: this foundation has no
+completion RPC. A future `DISPATCH_ACCEPTED -> COMPLETED` transition must require
+the exact receipt identity, consumer run identity, and explicit downstream
+evidence identity/hash. Dispatch acceptance alone can never set `COMPLETED`.
+
+A database trigger rejects direct status changes, reverse transitions, terminal
+state exits, and direct `last_error` edits. Approved RPCs set a transaction-local
+transition marker immediately before their guarded update. Failure requires the
+exact immutable receipt identity, caller-expected current status, and a non-empty
+diagnostic. An identical failure replay is idempotent; a conflicting replay fails
+closed. `last_error` is writable only by that failure RPC and is cleared by a
+successful dispatch-acceptance transition.
+
 The migration is not applied and no production workflow calls its RPCs or Python
 adapter. The current live chain therefore has neither reliable completion
 delivery nor an integrated exactly-once claim. Completion replay or handler rerun
@@ -52,11 +71,10 @@ The future target sequence is:
     -> downstream completion evidence
     -> receipt completed
 
-Only the service role may claim or transition a receipt. A failed dispatch may
-leave `CLAIMED` with diagnostic `last_error`; automatic redispatch is prohibited.
-A later reconciliation design must decide whether and how that claim can be
-retried. `COMPLETED` must require explicit downstream evidence identity and is
-not implemented by the dormant adapter.
+Only the service role may claim or transition a receipt. A failed dispatch is
+recorded as terminal `FAILED`; automatic redispatch is prohibited. A later
+reconciliation design must explicitly define any retry behavior. `COMPLETED`
+requires downstream evidence and is not implemented by the dormant adapter.
 
 An identical complete sizing plan returns existing header/items without inserts.
 Tests route two completion deliveries through actual 355/354 subprocess environment
