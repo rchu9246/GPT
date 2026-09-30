@@ -118,11 +118,11 @@ create temporary table phase353_validation_results (
   result text not null,
   receipt_id bigint,
   receipt_status text
-) on commit drop;
-grant select, insert on phase353_validation_results to service_role;
+) on commit preserve rows;
+grant select, insert on pg_temp.phase353_validation_results to service_role;
 
 set local role service_role;
-insert into phase353_validation_results
+insert into pg_temp.phase353_validation_results
 select 'first_claim', claim_result, receipt_id, receipt_status
 from public.claim_phase353_handoff(
   'VALIDATION_ONLY_PHASE353_REPOSITORY',
@@ -134,7 +134,7 @@ from public.claim_phase353_handoff(
   'VALIDATION_ONLY_PHASE353_AUTHORITY_HASH'
 );
 
-insert into phase353_validation_results
+insert into pg_temp.phase353_validation_results
 select 'identical_replay', claim_result, receipt_id, receipt_status
 from public.claim_phase353_handoff(
   'VALIDATION_ONLY_PHASE353_REPOSITORY',
@@ -149,12 +149,12 @@ reset role;
 
 select pg_temp.phase353_assert(
   (select result = 'CLAIM_ACQUIRED' and receipt_status = 'CLAIMED'
-   from phase353_validation_results where check_name = 'first_claim'),
+   from pg_temp.phase353_validation_results where check_name = 'first_claim'),
   'first claim did not return CLAIM_ACQUIRED/CLAIMED'
 );
 select pg_temp.phase353_assert(
   (select result = 'ALREADY_CLAIMED' and receipt_status = 'CLAIMED'
-   from phase353_validation_results where check_name = 'identical_replay'),
+   from pg_temp.phase353_validation_results where check_name = 'identical_replay'),
   'identical replay did not return ALREADY_CLAIMED/CLAIMED'
 );
 select pg_temp.phase353_assert(
@@ -207,18 +207,18 @@ end;
 $block$;
 
 set local role service_role;
-insert into phase353_validation_results
+insert into pg_temp.phase353_validation_results
 select 'dispatch_accepted', transition_result, receipt_id, receipt_status
 from public.mark_phase353_handoff_dispatch_accepted(
-  (select receipt_id from phase353_validation_results where check_name = 'first_claim'),
+  (select receipt_id from pg_temp.phase353_validation_results where check_name = 'first_claim'),
   'VALIDATION_ONLY_PHASE353_REPOSITORY', 'VALIDATION_ONLY_PHASE353_WORKFLOW',
   935300001, 1, 'VALIDATION_ONLY_PHASE353_CONSUMER',
   '1111111111111111111111111111111111111111'
 );
-insert into phase353_validation_results
+insert into pg_temp.phase353_validation_results
 select 'dispatch_replay', transition_result, receipt_id, receipt_status
 from public.mark_phase353_handoff_dispatch_accepted(
-  (select receipt_id from phase353_validation_results where check_name = 'first_claim'),
+  (select receipt_id from pg_temp.phase353_validation_results where check_name = 'first_claim'),
   'VALIDATION_ONLY_PHASE353_REPOSITORY', 'VALIDATION_ONLY_PHASE353_WORKFLOW',
   935300001, 1, 'VALIDATION_ONLY_PHASE353_CONSUMER',
   '1111111111111111111111111111111111111111'
@@ -227,18 +227,18 @@ reset role;
 
 select pg_temp.phase353_assert(
   (select result = 'DISPATCH_ACCEPTED' and receipt_status = 'DISPATCH_ACCEPTED'
-   from phase353_validation_results where check_name = 'dispatch_accepted'),
+   from pg_temp.phase353_validation_results where check_name = 'dispatch_accepted'),
   'CLAIMED to DISPATCH_ACCEPTED failed'
 );
 select pg_temp.phase353_assert(
   (select result = 'ALREADY_DISPATCH_ACCEPTED' and receipt_status = 'DISPATCH_ACCEPTED'
-   from phase353_validation_results where check_name = 'dispatch_replay'),
+   from pg_temp.phase353_validation_results where check_name = 'dispatch_replay'),
   'dispatch acceptance replay was not idempotent'
 );
 select pg_temp.phase353_assert(
   (select status = 'DISPATCH_ACCEPTED' and status <> 'COMPLETED'
    from public.phase353_handoff_receipts
-   where id = (select receipt_id from phase353_validation_results where check_name = 'first_claim')),
+   where id = (select receipt_id from pg_temp.phase353_validation_results where check_name = 'first_claim')),
   'HTTP acceptance state was not preserved as DISPATCH_ACCEPTED'
 );
 
@@ -254,6 +254,12 @@ begin
   end if;
 end;
 $function$;
+
+select pg_temp.phase353_assert(
+  to_regclass('pg_temp.phase353_validation_results') is not null
+  and (select count(*) = 4 from pg_temp.phase353_validation_results),
+  'temporary result collector did not survive the validation transaction boundary'
+);
 
 select pg_temp.phase353_assert(
   coalesce(current_setting('app.phase353_handoff_transition', true), '') = '',
