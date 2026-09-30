@@ -101,3 +101,76 @@ authority, historical rewrite or fallback is introduced.
 Incomplete historical plans block their own portfolio/plan date. A future plan
 date is not selected by that query; ledger/authority date checks still apply.
 No schema, history, qualifications, safety flags or trading calculations change.
+
+## Live database validation procedure
+
+The receipt migration and its RPC behavior must be proven in Supabase before any
+workflow integration. Use the SQL Editor in this exact order:
+
+1. Execute `.github/supabase/migrations/015_phase353_handoff_receipts.sql` once.
+2. Confirm the migration transaction commits without error.
+3. Execute `.github/supabase/validation/phase353_handoff_receipt_live_validation.sql`
+   in full. Its final row must be `PHASE353_HANDOFF_RECEIPT_LIVE_VALIDATION_PASS`.
+4. Open two independent SQL Editor sessions and run the concurrency steps below.
+5. Record results without copying database credentials into logs or artifacts.
+
+If the validation script stops after its first commit, run this exact recovery:
+
+```sql
+delete from public.phase353_handoff_receipts
+where repository = 'VALIDATION_ONLY_PHASE353_REPOSITORY'
+  and producer_workflow = 'VALIDATION_ONLY_PHASE353_WORKFLOW'
+  and producer_run_id in (935300001, 935300002, 935300003)
+  and producer_run_attempt = 1
+  and consumer = 'VALIDATION_ONLY_PHASE353_CONSUMER';
+```
+
+### Controlled two-session concurrency validation
+
+First run the exact recovery statement above. In session A, run:
+
+```sql
+begin;
+select * from public.claim_phase353_handoff(
+  'VALIDATION_ONLY_PHASE353_REPOSITORY', 'VALIDATION_ONLY_PHASE353_WORKFLOW',
+  935300002, 1, 'VALIDATION_ONLY_PHASE353_CONSUMER',
+  '2222222222222222222222222222222222222222', null, null
+);
+select pg_sleep(20);
+commit;
+```
+
+Immediately after session A returns `CLAIM_ACQUIRED` and begins sleeping, run in
+session B:
+
+```sql
+select * from public.claim_phase353_handoff(
+  'VALIDATION_ONLY_PHASE353_REPOSITORY', 'VALIDATION_ONLY_PHASE353_WORKFLOW',
+  935300002, 1, 'VALIDATION_ONLY_PHASE353_CONSUMER',
+  '2222222222222222222222222222222222222222', null, null
+);
+```
+
+Session B must wait for session A and then return `ALREADY_CLAIMED`. Verify and
+clean up with:
+
+```sql
+select count(*) as exact_row_count
+from public.phase353_handoff_receipts
+where repository = 'VALIDATION_ONLY_PHASE353_REPOSITORY'
+  and producer_workflow = 'VALIDATION_ONLY_PHASE353_WORKFLOW'
+  and producer_run_id = 935300002
+  and producer_run_attempt = 1
+  and consumer = 'VALIDATION_ONLY_PHASE353_CONSUMER';
+
+delete from public.phase353_handoff_receipts
+where repository = 'VALIDATION_ONLY_PHASE353_REPOSITORY'
+  and producer_workflow = 'VALIDATION_ONLY_PHASE353_WORKFLOW'
+  and producer_run_id = 935300002
+  and producer_run_attempt = 1
+  and consumer = 'VALIDATION_ONLY_PHASE353_CONSUMER';
+```
+
+`exact_row_count` must be `1`. This is a manual live database gate; offline mocks
+or sequential calls do not satisfy it. The validation does not activate or call
+any production workflow.
