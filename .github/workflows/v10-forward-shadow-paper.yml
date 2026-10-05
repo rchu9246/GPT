@@ -1,6 +1,8 @@
 name: V10 Forward Shadow Paper Validation
 
 on:
+  schedule:
+    - cron: "0 8 * * 1-5"
   workflow_dispatch:
     inputs:
       enable_forward_validation:
@@ -13,9 +15,13 @@ permissions:
   contents: read
   actions: read
 
+concurrency:
+  group: v10-forward-shadow-paper
+  cancel-in-progress: false
+
 jobs:
   forward-shadow:
-    if: inputs.enable_forward_validation == true
+    if: github.event_name == 'schedule' || inputs.enable_forward_validation == true
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -32,16 +38,23 @@ jobs:
           if [ -n "$artifact_id" ]; then
             gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > "$RUNNER_TEMP/previous-forward-store.zip"
             unzip -q "$RUNNER_TEMP/previous-forward-store.zip" -d "$RUNNER_TEMP/v10_forward_store"
+          else
+            cp -a artifacts/v10_forward_store/. "$RUNNER_TEMP/v10_forward_store/"
           fi
       - name: Verify safety and run one shadow day
         run: |
-          python -m unittest discover -s tests/v10 -p "test_v10_*.py"
-          python -m automation.v10.forward_daily_run --cache "$RUNNER_TEMP/v10_twse_cache" --store "$RUNNER_TEMP/v10_forward_store"
-      - name: Preserve append-only shadow evidence
+          set -o pipefail
+          python -m unittest discover -s tests/v10 -p "test_v10_*.py" 2>&1 | tee "$RUNNER_TEMP/v10-forward-tests.log"
+          python -m automation.v10.forward_daily_run --cache "$RUNNER_TEMP/v10_twse_cache" --store "$RUNNER_TEMP/v10_forward_store" 2>&1 | tee "$RUNNER_TEMP/v10-forward-run.log"
+      - name: Preserve append-only shadow evidence and diagnostics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: v10-forward-store
-          path: ${{ runner.temp }}/v10_forward_store
+          path: |
+            ${{ runner.temp }}/v10_forward_store
+            ${{ runner.temp }}/v10-forward-tests.log
+            ${{ runner.temp }}/v10-forward-run.log
           if-no-files-found: error
           retention-days: 90
 
