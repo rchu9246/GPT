@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   forward-shadow:
@@ -22,14 +23,25 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Verify V10 safety and tests
+      - name: Restore latest append-only forward store
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/v10_forward_store"
+          artifact_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=v10-forward-store&per_page=100" --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | reverse | .[0].id // empty')"
+          if [ -n "$artifact_id" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > "$RUNNER_TEMP/previous-forward-store.zip"
+            unzip -q "$RUNNER_TEMP/previous-forward-store.zip" -d "$RUNNER_TEMP/v10_forward_store"
+          fi
+      - name: Verify safety and run one shadow day
         run: |
           python -m unittest discover -s tests/v10 -p "test_v10_*.py"
           python -m automation.v10.forward_daily_run --cache "$RUNNER_TEMP/v10_twse_cache" --store "$RUNNER_TEMP/v10_forward_store"
-      - name: Preserve shadow evidence for review
+      - name: Preserve append-only shadow evidence
         uses: actions/upload-artifact@v4
         with:
-          name: v10-forward-shadow-${{ github.run_id }}
+          name: v10-forward-store
           path: ${{ runner.temp }}/v10_forward_store
           if-no-files-found: error
+          retention-days: 90
 
