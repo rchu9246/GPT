@@ -1,0 +1,762 @@
+{
+  "registry_fingerprint": "ceb2654fe2a70c5233976ba03c6356984a0c4ece14f6e01932a7ac6fb9decddd",
+  "strategies": [
+    {
+      "cost_model_version": "TWSE_NET_V1",
+      "factor_version": "V10_OHLCV_FACTORS_V1",
+      "hypothesis": "H1_EQUAL_FACTOR",
+      "labels": [
+        "RESEARCH_ONLY",
+        "UNPROMOTED",
+        "SHADOW_PAPER"
+      ],
+      "rebalance_frequency": "WEEKLY",
+      "risk_version": "V10_LONG_ONLY_RISK_V1",
+      "spec_fingerprint": "f69f884efe666b4d78f70456b21809de2d6a699f68a0a435506c2b653362ad3c",
+      "strategy_id": "V10_SHADOW_H1_EQUAL_FACTOR_TOP5_WEEKLY_V1",
+      "top_n": 5,
+      "universe_version": "TWSE_DAILY_ELIGIBLE_V1",
+      "weights": [
+        [
+          "breakout",
+          "1"
+        ],
+        [
+          "liquidity",
+          "1"
+        ],
+        [
+          "low_volatility",
+          "1"
+        ],
+        [
+          "momentum",
+          "1"
+        ],
+        [
+          "relative_strength",
+          "1"
+        ],
+        [
+          "trend",
+          "1"
+        ]
+      ]
+    },
+    {
+      "cost_model_version": "TWSE_NET_V1",
+      "factor_version": "V10_OHLCV_FACTORS_V1",
+      "hypothesis": "H1_EQUAL_FACTOR",
+      "labels": [
+        "RESEARCH_ONLY",
+        "UNPROMOTED",
+        "SHADOW_PAPER"
+      ],
+      "rebalance_frequency": "MONTHLY",
+      "risk_version": "V10_LONG_ONLY_RISK_V1",
+      "spec_fingerprint": "5264cb3e3aa69bedf192c94ab117e5b9781d57ae9a3d2b24f782d5557b7d77e5",
+      "strategy_id": "V10_SHADOW_H1_EQUAL_FACTOR_TOP5_MONTHLY_V1",
+      "top_n": 5,
+      "universe_version": "TWSE_DAILY_ELIGIBLE_V1",
+      "weights": [
+        [
+          "breakout",
+          "1"
+        ],
+        [
+          "liquidity",
+          "1"
+        ],
+        [
+          "low_volatility",
+          "1"
+        ],
+        [
+          "momentum",
+          "1"
+        ],
+        [
+          "relative_strength",
+          "1"
+        ],
+        [
+          "trend",
+          "1"
+        ]
+      ]
+    },
+    {
+      "cost_model_version": "TWSE_NET_V1",
+      "factor_version": "V10_OHLCV_FACTORS_V1",
+      "hypothesis": "H1_EQUAL_FACTOR",
+      "labels": [
+        "RESEARCH_ONLY",
+        "UNPROMOTED",
+        "SHADOW_PAPER"
+      ],
+      "rebalance_frequency": "WEEKLY",
+      "risk_version": "V10_LONG_ONLY_RISK_V1",
+      "spec_fingerprint": "1c665d848528f7bcc1984c931d44f58534389dde9a523c0ad2b2db9a624d8686",
+      "strategy_id": "V10_SHADOW_H1_EQUAL_FACTOR_TOP10_WEEKLY_V1",
+      "top_n": 10,
+      "universe_version": "TWSE_DAILY_ELIGIBLE_V1",
+      "weights": [
+        [
+          "breakout",
+          "1"
+        ],
+        [
+          "liquidity",
+          "1"
+        ],
+        [
+          "low_volatility",
+          "1"
+        ],
+        [
+          "momentum",
+          "1"
+        ],
+        [
+          "relative_strength",
+          "1"
+        ],
+        [
+          "trend",
+          "1"
+        ]
+      ]
+    },
+    {
+      "cost_model_version": "TWSE_NET_V1",
+      "factor_version": "V10_OHLCV_FACTORS_V1",
+      "hypothesis": "H1_EQUAL_FACTOR",
+      "labels": [
+        "RESEARCH_ONLY",
+        "UNPROMOTED",
+        "SHADOW_PAPER"
+      ],
+      "rebalance_frequency": "MONTHLY",
+      "risk_version": "V10_LONG_ONLY_RISK_V1",
+      "spec_fingerprint": "618ae6b514c01dee14d2a82a4e72afa02153a0e18edb9f5c1005dcf6c634158a",
+      "strategy_id": "V10_SHADOW_H1_EQUAL_FACTOR_TOP10_MONTHLY_V1",
+      "top_n": 10,
+      "universe_version": "TWSE_DAILY_ELIGIBLE_V1",
+      "weights": [
+        [
+          "breakout",
+          "1"
+        ],
+        [
+          "liquidity",
+          "1"
+        ],
+        [
+          "low_volatility",
+          "1"
+        ],
+        [
+          "momentum",
+          "1"
+        ],
+        [
+          "relative_strength",
+          "1"
+        ],
+        [
+          "trend",
+          "1"
+        ]
+      ]
+    },
+    {
+      "cost_model_version": "TWSE_NET_V1",
+      "factor_version": "V10_OHLCV_FACTORS_V1",
+      "hypothesis": "H1_EQUAL_FACTOR",
+      "labels": [
+        "RESEARCH_ONLY",
+        "UNPROMOTED",
+        "SHADOW_PAPER"
+      ],
+      "rebalance_frequency": "WEEKLY",
+      "risk_version": "V10_LONG_ONLY_RISK_V1",
+      "spec_fingerprint": "242494841176ba99f57d3e32739b275e448fde392be54cd203c08ecaaf6137eb",
+      "strategy_id": "V10_SHADOW_H1_EQUAL_FACTOR_TOP20_WEEKLY_V1",
+      "top_n": 20,
+      "universe_version": "TWSE_DAILY_ELIGIBLE_V1",
+      "weights": [
+        [
+          "breakout",
+          "1"
+        ],
+        [
+          "liquidity",
+          "1"
+        ],
+        [
+          "low_volatility",
+          "1"
+        ],
+        [
+          "momentum",
+          "1"
+        ],
+        [
+          "relative_strength",
+          "1"
+        ],
+        [
+          "trend",
+          "1"
+        ]
+      ]
+    },
+    {
+      "cost_model_version": "TWSE_NET_V1",
+      "factor_version": "V10_OHLCV_FACTORS_V1",
+      "hypothesis": "H1_EQUAL_FACTOR",
+      "labels": [
+        "RESEARCH_ONLY",
+        "UNPROMOTED",
+        "SHADOW_PAPER"
+      ],
+      "rebalance_frequency": "MONTHLY",
+      "risk_version": "V10_LONG_ONLY_RISK_V1",
+      "spec_fingerprint": "1185835d4daacf0356b078de0370d5178a424310261e2696ea3ba02df2796e1b",
+      "strategy_id": "V10_SHADOW_H1_EQUAL_FACTOR_TOP20_MONTHLY_V1",
+      "top_n": 20,
+      "universe_version": "TWSE_DAILY_ELIGIBLE_V1",
+      "weights": [
+        [
+          "breakout",
+          "1"
+        ],
+        [
+          "liquidity",
+          "1"
+        ],
+        [
+          "low_volatility",
+          "1"
+        ],
+        [
+          "momentum",
+          "1"
+        ],
+        [
+          "relative_strength",
+          "1"
+        ],
+        [
+          "trend",
+          "1"
+        ]
+      ]
+    },
+    {
+      "cost_model_version": "TWSE_NET_V1",
+      "factor_version": "V10_OHLCV_FACTORS_V1",
+      "hypothesis": "H2_TREND_MOMENTUM",
+      "labels": [
+        "RESEARCH_ONLY",
+        "UNPROMOTED",
+        "SHADOW_PAPER"
+      ],
+      "rebalance_frequency": "WEEKLY",
+      "risk_version": "V10_LONG_ONLY_RISK_V1",
+      "spec_fingerprint": "a39a5086b7c6b0d1ca469a690ea63dc5bd14f074938993a18b90a3f876962586",
+      "strategy_id": "V10_SHADOW_H2_TREND_MOMENTUM_TOP5_WEEKLY_V1",
+      "top_n": 5,
+      "universe_version": "TWSE_DAILY_ELIGIBLE_V1",
+      "weights": [
+        [
+          "breakout",
+          "1"
+        ],
+        [
+          "liquidity",
+          "1"
+        ],
+        [
+          "low_volatility",
+          "1"
+        ],
+        [
+          "momentum",
+          "2"
+        ],
+        [
+          "relative_strength",
+          "1"
+        ],
+        [
+          "trend",
+          "2"
+        ]
+      ]
+    },
+    {
+      "cost_model_version": "TWSE_NET_V1",
+      "factor_version": "V10_OHLCV_FACTORS_V1",
+      "hypothesis": "H2_TREND_MOMENTUM",
+      "labels": [
+        "RESEARCH_ONLY",
+        "UNPROMOTED",
+        "SHADOW_PAPER"
+      ],
+      "rebalance_frequency": "MONTHLY",
+      "risk_version": "V10_LONG_ONLY_RISK_V1",
+      "spec_fingerprint": "8ff3dba2b7aaf2944e08d388efdfc1bf1cdd7b45caf1df55d37596542a8106b5",
+      "strategy_id": "V10_SHADOW_H2_TREND_MOMENTUM_TOP5_MONTHLY_V1",
+      "top_n": 5,
+      "universe_version": "TWSE_DAILY_ELIGIBLE_V1",
+      "weights": [
+        [
+          "breakout",
+          "1"
+        ],
+        [
+          "liquidity",
+          "1"
+        ],
+        [
+          "low_volatility",
+          "1"
+        ],
+        [
+          "momentum",
+          "2"
+        ],
+        [
+          "relative_strength",
+          "1"
+        ],
+        [
+          "trend",
+          "2"
+        ]
+      ]
+    },
+    {
+      "cost_model_version": "TWSE_NET_V1",
+      "factor_version": "V10_OHLCV_FACTORS_V1",
+      "hypothesis": "H2_TREND_MOMENTUM",
+      "labels": [
+        "RESEARCH_ONLY",
+        "UNPROMOTED",
+        "SHADOW_PAPER"
+      ],
+      "rebalance_frequency": "WEEKLY",
+      "risk_version": "V10_LONG_ONLY_RISK_V1",
+      "spec_fingerprint": "938be656a854f45190703ade3fb5200233f6722e29bb0baeabbf67f28a5691f1",
+      "strategy_id": "V10_SHADOW_H2_TREND_MOMENTUM_TOP10_WEEKLY_V1",
+      "top_n": 10,
+      "universe_version": "TWSE_DAILY_ELIGIBLE_V1",
+      "weights": [
+        [
+          "breakout",
+          "1"
+        ],
+        [
+          "liquidity",
+          "1"
+        ],
+        [
+          "low_volatility",
+          "1"
+        ],
+        [
+          "momentum",
+          "2"
+        ],
+        [
+          "relative_strength",
+          "1"
+        ],
+        [
+          "trend",
+          "2"
+        ]
+      ]
+    },
+    {
+      "cost_model_version": "TWSE_NET_V1",
+      "factor_version": "V10_OHLCV_FACTORS_V1",
+      "hypothesis": "H2_TREND_MOMENTUM",
+      "labels": [
+        "RESEARCH_ONLY",
+        "UNPROMOTED",
+        "SHADOW_PAPER"
+      ],
+      "rebalance_frequency": "MONTHLY",
+      "risk_version": "V10_LONG_ONLY_RISK_V1",
+      "spec_fingerprint": "18cf4f394a241a65e2000d845c8883a10bebc96729de06cc0ce3d310608d1f7d",
+      "strategy_id": "V10_SHADOW_H2_TREND_MOMENTUM_TOP10_MONTHLY_V1",
+      "top_n": 10,
+      "universe_version": "TWSE_DAILY_ELIGIBLE_V1",
+      "weights": [
+        [
+          "breakout",
+          "1"
+        ],
+        [
+          "liquidity",
+          "1"
+        ],
+        [
+          "low_volatility",
+          "1"
+        ],
+        [
+          "momentum",
+          "2"
+        ],
+        [
+          "relative_strength",
+          "1"
+        ],
+        [
+          "trend",
+          "2"
+        ]
+      ]
+    },
+    {
+      "cost_model_version": "TWSE_NET_V1",
+      "factor_version": "V10_OHLCV_FACTORS_V1",
+      "hypothesis": "H2_TREND_MOMENTUM",
+      "labels": [
+        "RESEARCH_ONLY",
+        "UNPROMOTED",
+        "SHADOW_PAPER"
+      ],
+      "rebalance_frequency": "WEEKLY",
+      "risk_version": "V10_LONG_ONLY_RISK_V1",
+      "spec_fingerprint": "6b4c9edb179126963953841c4cb488c10dbc4976f2abba601fbfdec28939f6c0",
+      "strategy_id": "V10_SHADOW_H2_TREND_MOMENTUM_TOP20_WEEKLY_V1",
+      "top_n": 20,
+      "universe_version": "TWSE_DAILY_ELIGIBLE_V1",
+      "weights": [
+        [
+          "breakout",
+          "1"
+        ],
+        [
+          "liquidity",
+          "1"
+        ],
+        [
+          "low_volatility",
+          "1"
+        ],
+        [
+          "momentum",
+          "2"
+        ],
+        [
+          "relative_strength",
+          "1"
+        ],
+        [
+          "trend",
+          "2"
+        ]
+      ]
+    },
+    {
+      "cost_model_version": "TWSE_NET_V1",
+      "factor_version": "V10_OHLCV_FACTORS_V1",
+      "hypothesis": "H2_TREND_MOMENTUM",
+      "labels": [
+        "RESEARCH_ONLY",
+        "UNPROMOTED",
+        "SHADOW_PAPER"
+      ],
+      "rebalance_frequency": "MONTHLY",
+      "risk_version": "V10_LONG_ONLY_RISK_V1",
+      "spec_fingerprint": "4f10303cf6939aa3e18f20b2ce51cdd6202364be9a7f6f9bbb539ca8eb09e322",
+      "strategy_id": "V10_SHADOW_H2_TREND_MOMENTUM_TOP20_MONTHLY_V1",
+      "top_n": 20,
+      "universe_version": "TWSE_DAILY_ELIGIBLE_V1",
+      "weights": [
+        [
+          "breakout",
+          "1"
+        ],
+        [
+          "liquidity",
+          "1"
+        ],
+        [
+          "low_volatility",
+          "1"
+        ],
+        [
+          "momentum",
+          "2"
+        ],
+        [
+          "relative_strength",
+          "1"
+        ],
+        [
+          "trend",
+          "2"
+        ]
+      ]
+    },
+    {
+      "cost_model_version": "TWSE_NET_V1",
+      "factor_version": "V10_OHLCV_FACTORS_V1",
+      "hypothesis": "H3_RISK_ADJUSTED",
+      "labels": [
+        "RESEARCH_ONLY",
+        "UNPROMOTED",
+        "SHADOW_PAPER"
+      ],
+      "rebalance_frequency": "WEEKLY",
+      "risk_version": "V10_LONG_ONLY_RISK_V1",
+      "spec_fingerprint": "bce7e7e17d6d850d8008f0508a1dd0ddc556093048e31a08bdbff1ea5434b605",
+      "strategy_id": "V10_SHADOW_H3_RISK_ADJUSTED_TOP5_WEEKLY_V1",
+      "top_n": 5,
+      "universe_version": "TWSE_DAILY_ELIGIBLE_V1",
+      "weights": [
+        [
+          "breakout",
+          "1"
+        ],
+        [
+          "liquidity",
+          "1"
+        ],
+        [
+          "low_volatility",
+          "3"
+        ],
+        [
+          "momentum",
+          "1"
+        ],
+        [
+          "relative_strength",
+          "1"
+        ],
+        [
+          "trend",
+          "1"
+        ]
+      ]
+    },
+    {
+      "cost_model_version": "TWSE_NET_V1",
+      "factor_version": "V10_OHLCV_FACTORS_V1",
+      "hypothesis": "H3_RISK_ADJUSTED",
+      "labels": [
+        "RESEARCH_ONLY",
+        "UNPROMOTED",
+        "SHADOW_PAPER"
+      ],
+      "rebalance_frequency": "MONTHLY",
+      "risk_version": "V10_LONG_ONLY_RISK_V1",
+      "spec_fingerprint": "ad8d694c928576090cbc3b52657900cdedf0c86ac7c6cc796034ec98f12f38d4",
+      "strategy_id": "V10_SHADOW_H3_RISK_ADJUSTED_TOP5_MONTHLY_V1",
+      "top_n": 5,
+      "universe_version": "TWSE_DAILY_ELIGIBLE_V1",
+      "weights": [
+        [
+          "breakout",
+          "1"
+        ],
+        [
+          "liquidity",
+          "1"
+        ],
+        [
+          "low_volatility",
+          "3"
+        ],
+        [
+          "momentum",
+          "1"
+        ],
+        [
+          "relative_strength",
+          "1"
+        ],
+        [
+          "trend",
+          "1"
+        ]
+      ]
+    },
+    {
+      "cost_model_version": "TWSE_NET_V1",
+      "factor_version": "V10_OHLCV_FACTORS_V1",
+      "hypothesis": "H3_RISK_ADJUSTED",
+      "labels": [
+        "RESEARCH_ONLY",
+        "UNPROMOTED",
+        "SHADOW_PAPER"
+      ],
+      "rebalance_frequency": "WEEKLY",
+      "risk_version": "V10_LONG_ONLY_RISK_V1",
+      "spec_fingerprint": "0cfffda3840a1657151fcae7f23324bcaa32c82c36b64b0c7eb885ac0ce57291",
+      "strategy_id": "V10_SHADOW_H3_RISK_ADJUSTED_TOP10_WEEKLY_V1",
+      "top_n": 10,
+      "universe_version": "TWSE_DAILY_ELIGIBLE_V1",
+      "weights": [
+        [
+          "breakout",
+          "1"
+        ],
+        [
+          "liquidity",
+          "1"
+        ],
+        [
+          "low_volatility",
+          "3"
+        ],
+        [
+          "momentum",
+          "1"
+        ],
+        [
+          "relative_strength",
+          "1"
+        ],
+        [
+          "trend",
+          "1"
+        ]
+      ]
+    },
+    {
+      "cost_model_version": "TWSE_NET_V1",
+      "factor_version": "V10_OHLCV_FACTORS_V1",
+      "hypothesis": "H3_RISK_ADJUSTED",
+      "labels": [
+        "RESEARCH_ONLY",
+        "UNPROMOTED",
+        "SHADOW_PAPER"
+      ],
+      "rebalance_frequency": "MONTHLY",
+      "risk_version": "V10_LONG_ONLY_RISK_V1",
+      "spec_fingerprint": "1214882c81e9286134c1815cc1879fe33f3ed31f56a32f6b83ab8a6ec1a49e35",
+      "strategy_id": "V10_SHADOW_H3_RISK_ADJUSTED_TOP10_MONTHLY_V1",
+      "top_n": 10,
+      "universe_version": "TWSE_DAILY_ELIGIBLE_V1",
+      "weights": [
+        [
+          "breakout",
+          "1"
+        ],
+        [
+          "liquidity",
+          "1"
+        ],
+        [
+          "low_volatility",
+          "3"
+        ],
+        [
+          "momentum",
+          "1"
+        ],
+        [
+          "relative_strength",
+          "1"
+        ],
+        [
+          "trend",
+          "1"
+        ]
+      ]
+    },
+    {
+      "cost_model_version": "TWSE_NET_V1",
+      "factor_version": "V10_OHLCV_FACTORS_V1",
+      "hypothesis": "H3_RISK_ADJUSTED",
+      "labels": [
+        "RESEARCH_ONLY",
+        "UNPROMOTED",
+        "SHADOW_PAPER"
+      ],
+      "rebalance_frequency": "WEEKLY",
+      "risk_version": "V10_LONG_ONLY_RISK_V1",
+      "spec_fingerprint": "bc3267127be88303929d11d55102c642d645dad88087c9a1f77423556656099f",
+      "strategy_id": "V10_SHADOW_H3_RISK_ADJUSTED_TOP20_WEEKLY_V1",
+      "top_n": 20,
+      "universe_version": "TWSE_DAILY_ELIGIBLE_V1",
+      "weights": [
+        [
+          "breakout",
+          "1"
+        ],
+        [
+          "liquidity",
+          "1"
+        ],
+        [
+          "low_volatility",
+          "3"
+        ],
+        [
+          "momentum",
+          "1"
+        ],
+        [
+          "relative_strength",
+          "1"
+        ],
+        [
+          "trend",
+          "1"
+        ]
+      ]
+    },
+    {
+      "cost_model_version": "TWSE_NET_V1",
+      "factor_version": "V10_OHLCV_FACTORS_V1",
+      "hypothesis": "H3_RISK_ADJUSTED",
+      "labels": [
+        "RESEARCH_ONLY",
+        "UNPROMOTED",
+        "SHADOW_PAPER"
+      ],
+      "rebalance_frequency": "MONTHLY",
+      "risk_version": "V10_LONG_ONLY_RISK_V1",
+      "spec_fingerprint": "a31c92b43db5df9858e801e6cd978cce7db2111eb7c6c8b29fa7e10e63bbf566",
+      "strategy_id": "V10_SHADOW_H3_RISK_ADJUSTED_TOP20_MONTHLY_V1",
+      "top_n": 20,
+      "universe_version": "TWSE_DAILY_ELIGIBLE_V1",
+      "weights": [
+        [
+          "breakout",
+          "1"
+        ],
+        [
+          "liquidity",
+          "1"
+        ],
+        [
+          "low_volatility",
+          "3"
+        ],
+        [
+          "momentum",
+          "1"
+        ],
+        [
+          "relative_strength",
+          "1"
+        ],
+        [
+          "trend",
+          "1"
+        ]
+      ]
+    }
+  ]
+}
+
