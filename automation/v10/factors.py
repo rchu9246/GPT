@@ -10,6 +10,21 @@ from .universe import UniverseSnapshot
 
 
 FACTOR_NAMES = ("trend", "momentum", "relative_strength", "liquidity", "low_volatility", "breakout")
+FACTOR_VERSION = "V10_OHLCV_FACTORS_V1"
+
+HYPOTHESIS_WEIGHTS = {
+    "H1_EQUAL_FACTOR": {name: Decimal("1") for name in FACTOR_NAMES},
+    "H2_TREND_MOMENTUM": {
+        "trend": Decimal("2"), "momentum": Decimal("2"),
+        "relative_strength": Decimal("1"), "liquidity": Decimal("1"),
+        "low_volatility": Decimal("1"), "breakout": Decimal("1"),
+    },
+    "H3_RISK_ADJUSTED": {
+        "trend": Decimal("1"), "momentum": Decimal("1"),
+        "relative_strength": Decimal("1"), "liquidity": Decimal("1"),
+        "low_volatility": Decimal("3"), "breakout": Decimal("1"),
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -50,7 +65,10 @@ class MultiFactorRankingEngine:
             "breakout": closes[-1] / max(closes[:-1]) - 1,
         }
 
-    def rank(self, universe: UniverseSnapshot) -> tuple[RankedCandidate, ...]:
+    def rank(self, universe: UniverseSnapshot,
+             hypothesis: str = "H1_EQUAL_FACTOR") -> tuple[RankedCandidate, ...]:
+        if hypothesis not in HYPOTHESIS_WEIGHTS:
+            raise ValueError("unknown pre-registered hypothesis")
         raw = {symbol: self._raw(symbol, universe.as_of) for symbol in universe.symbols}
         if not raw:
             return ()
@@ -62,7 +80,9 @@ class MultiFactorRankingEngine:
                 normalized[symbol][factor] = Decimal(index) / Decimal(denominator)
         scored = []
         for symbol in sorted(raw):
-            composite = sum(normalized[symbol].values(), Decimal("0")) / len(FACTOR_NAMES)
+            weights = HYPOTHESIS_WEIGHTS[hypothesis]
+            composite = (sum((normalized[symbol][name] * weights[name] for name in FACTOR_NAMES),
+                             Decimal("0")) / sum(weights.values(), Decimal("0")))
             scored.append((symbol, composite))
         scored.sort(key=lambda item: (-item[1], item[0]))
         return tuple(RankedCandidate(
