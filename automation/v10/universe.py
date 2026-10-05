@@ -1,0 +1,52 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal
+
+from .market_data import TrustedMarketData
+
+
+@dataclass(frozen=True)
+class UniverseEligibility:
+    symbol: str
+    eligible: bool
+    observations: int
+    median_turnover: Decimal
+    reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class UniverseSnapshot:
+    as_of: date
+    symbols: tuple[str, ...]
+    eligibility: tuple[UniverseEligibility, ...]
+    point_in_time_safe: bool = True
+    survivorship_bias_limitation: str = (
+        "Constituent history is unavailable; candidates come only from symbols with trusted data as of the research date."
+    )
+
+
+class UniverseProvider:
+    def __init__(self, market: TrustedMarketData, minimum_observations: int = 60,
+                 minimum_median_turnover: Decimal = Decimal("1000000")):
+        if minimum_observations < 2 or minimum_median_turnover < 0:
+            raise ValueError("invalid universe policy")
+        self._market = market
+        self._minimum_observations = minimum_observations
+        self._minimum_turnover = minimum_median_turnover
+
+    def snapshot(self, as_of: date) -> UniverseSnapshot:
+        decisions = []
+        for symbol in self._market.symbols:
+            history = self._market.history(symbol, as_of)
+            reasons = []
+            if len(history) < self._minimum_observations:
+                reasons.append("INSUFFICIENT_HISTORY")
+            turnovers = sorted(bar.close * bar.volume for bar in history)
+            median = (turnovers[(len(turnovers) - 1) // 2] if turnovers else Decimal("0"))
+            if median < self._minimum_turnover:
+                reasons.append("INSUFFICIENT_LIQUIDITY")
+            decisions.append(UniverseEligibility(symbol, not reasons, len(history), median, tuple(reasons)))
+        eligible = tuple(sorted(d.symbol for d in decisions if d.eligible))
+        return UniverseSnapshot(as_of, eligible, tuple(sorted(decisions, key=lambda d: d.symbol)))
