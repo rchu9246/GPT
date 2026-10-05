@@ -1,0 +1,35 @@
+name: V10 Forward Shadow Paper Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      enable_forward_validation:
+        description: "User approval gate for a paper-only forward run"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  forward-shadow:
+    if: inputs.enable_forward_validation == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify V10 safety and tests
+        run: |
+          python -m unittest discover -s tests/v10 -p "test_v10_*.py"
+          python -m automation.v10.forward_daily_run --cache "$RUNNER_TEMP/v10_twse_cache" --store "$RUNNER_TEMP/v10_forward_store"
+      - name: Preserve shadow evidence for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: v10-forward-shadow-${{ github.run_id }}
+          path: ${{ runner.temp }}/v10_forward_store
+          if-no-files-found: error
+
