@@ -6,7 +6,7 @@ from pathlib import Path
 from automation.v10.forward_validation import (
     LABELS, MINIMUM_QUALIFICATION_DAYS, REGISTRY_FINGERPRINT, SHADOW_STRATEGY_REGISTRY,
     ForwardMarketData, ForwardStore, ForwardValidationStatus, account_id,
-    run_forward_day, validation_status,
+    latest_complete_session, run_forward_day, validation_status,
 )
 from automation.v10.research import PROMOTED_PAPER_STRATEGIES
 
@@ -137,6 +137,31 @@ class ForwardValidationTests(unittest.TestCase):
             ledger,_=self.store.ledger(spec)
             self.assertEqual(1,sum(e.event_type=="TARGET_EXECUTED" for e in ledger.events))
             self.assertTrue(all(e.event_date>self.first for e in ledger.events if e.event_type=="PAPER_FILL"))
+    def test_non_trading_day_resolves_without_new_forward_day(self):
+        complete=fixture_days(1)[0]
+        complete["date"]="2026-10-02"
+        class Provider:
+            def day(self, session):
+                return complete if session==date(2026,10,2) else {"date":session.isoformat(),"bars":[],"benchmark":None}
+        self.assertEqual(date(2026,10,2),latest_complete_session(Provider(),date(2026,10,4)))
+
+    def test_automation_schedule_and_seed_are_fail_closed(self):
+        workflow=(Path(__file__).resolve().parents[2]/".github/workflows/v10-forward-shadow-paper.yml").read_text()
+        self.assertIn('cron: "0 8 * * 1-5"',workflow)
+        self.assertIn("cp -a artifacts/v10_forward_store/.",workflow)
+        self.assertIn("github.event_name == 'schedule'",workflow)
+        self.assertIn("if: always()",workflow)
+        self.assertNotIn("automation.v9",workflow.lower())
+        self.assertNotIn("broker",workflow.lower())
+
+    def test_committed_boundary_and_registry_are_preserved(self):
+        root=Path(__file__).resolve().parents[2]/"artifacts/v10_forward_store"
+        boundary=json.loads((root/"forward_boundary.json").read_text())
+        registry=json.loads((root/"strategy_registry.json").read_text())
+        self.assertEqual("2026-10-05",boundary["forward_validation_start_date"])
+        self.assertFalse(boundary["historical_backfill_allowed"])
+        self.assertEqual(REGISTRY_FINGERPRINT,registry["registry_fingerprint"])
+        self.assertEqual(18,len(registry["strategies"]))
     def test_no_v9_or_broker_dependency(self):
         source=inspect.getsource(__import__("automation.v10.forward_validation",fromlist=["run_forward_day"]))
         imports={node.module for node in ast.walk(ast.parse(source)) if isinstance(node,ast.ImportFrom)}
