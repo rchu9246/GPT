@@ -15,7 +15,7 @@ The research source is the official Taiwan Stock Exchange `MI_INDEX` daily compl
 - Distinct symbols observed: 1100
 - Source fingerprint: `00db3524caadeebabd045ee15028225484ec5fff3bc7f4c3b7f2b836e068afbb`
 
-Each research date starts from four-digit common stocks with a valid actual TWSE observation on that date. Eligibility requires 60 historical observations, a valid price of at least NT$5, and trailing 20-observation median turnover of at least NT$50,000,000. Monthly research snapshots contained 327 to 498 eligible symbols, with median 397. The preceding 60 trading sessions are lookback warm-up and are excluded from every performance window.
+Each research date starts from four-digit TWSE listed-equity observations with a valid actual TWSE observation on that date. Eligibility requires 60 historical observations, a valid price of at least NT$5, and trailing 20-observation median turnover of at least NT$50,000,000. Monthly research snapshots contained 327 to 498 eligible symbols, with median 397. The preceding 60 trading sessions are lookback warm-up and are excluded from every performance window.
 
 Raw daily responses are cached outside the repository. Each parsed observation retains the response hash and official provider identity. The committed research artifact contains the aggregate source fingerprint and complete result matrix.
 
@@ -147,7 +147,7 @@ There is no authorized manual paper run. The manual command intentionally fails 
 
 ## Known limitations
 
-- Research covers TWSE listed common stocks, not TPEx or foreign markets.
+- Research covers four-digit TWSE listed-equity observations, not TPEx or foreign markets.
 - An absent daily row is treated as non-tradable and excluded; detailed historical halt reason classification is not provided by this table.
 - Factor research is limited to OHLCV-derived signals and 18 pre-registered configurations.
 - Market regimes differ sharply between train and validation.
