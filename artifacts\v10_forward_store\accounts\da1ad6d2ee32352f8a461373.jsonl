@@ -1,2 +1,0 @@
-{"event_date":"2026-10-05","event_hash":"7a9097d02feed2175c444fc27ce49d31f34f022c326f354525acdeeb8f8585e0","event_id":"73c28d298f3a4f0ee32a19fb8eaaa5c7db974ced4b63253c7b5481c4fdbd3b90","event_type":"TARGETS","payload":[["signal_date","2026-10-05"],["spec_fingerprint","5264cb3e3aa69bedf192c94ab117e5b9781d57ae9a3d2b24f782d5557b7d77e5"],["targets","{\"1303\":\"0.18\",\"3037\":\"0.18\",\"3189\":\"0.18\",\"3443\":\"0.18\",\"6213\":\"0.18\"}"]],"previous_hash":"GENESIS","sequence":1}
-
