@@ -68,7 +68,7 @@ class MarketUniverseFactorTests(unittest.TestCase):
         self.assertEqual(provider.snapshot(self.as_of), provider.snapshot(self.as_of))
 
     def test_universe_documents_survivorship_limit(self):
-        self.assertIn("unavailable", UniverseProvider(self.market).snapshot(self.as_of).survivorship_bias_limitation)
+        self.assertIn("not established", UniverseProvider(self.market).snapshot(self.as_of).survivorship_bias_limitation)
 
     def test_insufficient_history_rejected(self):
         snap = UniverseProvider(self.market, minimum_observations=100).snapshot(self.as_of)
