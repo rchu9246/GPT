@@ -1,0 +1,15 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
+import {validateReport,sortedStrategies,tableHtml,curveHtml} from '../../dashboard/v10-forward/dashboard.js';
+const report=JSON.parse(fs.readFileSync(new URL('../../dashboard/v10-forward/report.json',import.meta.url),'utf8'));
+test('actual report contract with all 18 strategies',()=>assert.equal(validateReport(report).strategies.length,18));
+test('sorting leaves sealed input order and specs unchanged',()=>{const before=JSON.stringify(report);for(const key of ['return','excess_return','sharpe','drawdown'])assert.equal(sortedStrategies(report.strategies,key).length,18);assert.equal(JSON.stringify(report),before);});
+test('candidate renderer escapes arbitrary symbols and scores',()=>{const html=tableHtml([{symbol:'<script>unsafe</script>',composite_score:'.4'}],[['Symbol','symbol'],['Score','composite_score']]);assert.ok(html.includes('&lt;script&gt;'));assert.ok(!html.includes('<script>'));assert.ok(html.includes('.4'));});
+test('pending rendering never produces a filled price',()=>{const html=tableHtml([{status:'PENDING_NEXT_TRADABLE_OPEN',fill_price:null}],[['Status','status'],['Fill Price','fill_price']]);assert.ok(html.includes('PENDING_NEXT_TRADABLE_OPEN'));assert.ok(html.includes('—'));});
+test('fill rendering shows execution evidence',()=>{const html=tableHtml(report.fills.slice(0,1),[['Status','status'],['Date','execution_date'],['Price','fill_price']]);assert.ok(html.includes('FILLED'));assert.ok(html.includes(report.fills[0].execution_date));});
+test('equity chart starts at forward boundary and uses benchmark',()=>{const html=curveHtml(report.strategies[0].curve);assert.ok(html.includes('2026-10-05'));assert.ok(html.includes('TWSE Benchmark'));assert.ok(!html.includes('2026-10-04'));});
+test('V9 report rejected',()=>assert.throws(()=>validateReport({...report,source:'V9_SUPABASE'})));
+test('pre-boundary curve rejected',()=>{const r=structuredClone(report);r.strategies[0].curve[0].date='2026-10-04';assert.throws(()=>validateReport(r));});
+test('duplicate fill rejected',()=>assert.throws(()=>validateReport({...report,fills:[...report.fills,report.fills[0]]})));
+test('benchmark strategy dates must align',()=>{const r=structuredClone(report);r.strategies[1].curve[0].date='2026-10-06';assert.throws(()=>validateReport(r));});
+test('pre-gate qualified claim rejected',()=>{const r=structuredClone(report);r.strategies[0].forward_days=1;r.strategies[0].validation_status='QUALIFIED';assert.throws(()=>validateReport(r));});
+test('pending disguised as filled rejected',()=>assert.throws(()=>validateReport({...report,orders:[{status:'PENDING_NEXT_TRADABLE_OPEN',fill_price:'99',execution_date:'2026-10-06'}]})));

@@ -132,7 +132,9 @@ class TwseDailyTableProvider:
         path = self._path(session_date)
         if path.exists():
             with gzip.open(path, "rt", encoding="utf-8") as handle:
-                return json.load(handle)
+                cached = json.load(handle)
+            if cached.get("bars") and cached.get("benchmark") is not None:
+                return cached
         query = urllib.parse.urlencode({"response": "json", "date": f"{session_date:%Y%m%d}",
                                         "type": "ALLBUT0999"})
         request = urllib.request.Request(f"{self.URL}?{query}", headers={"User-Agent": "GPT-V10-Research/1.0"})

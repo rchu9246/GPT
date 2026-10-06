@@ -99,6 +99,8 @@ class AppendOnlyLedger:
     def load(cls, path: Path) -> "AppendOnlyLedger":
         events = []
         for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
             row = json.loads(line)
             row["event_date"] = date.fromisoformat(row["event_date"])
             row["payload"] = tuple(tuple(item) for item in row["payload"])

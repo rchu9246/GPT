@@ -74,7 +74,7 @@ class ForwardStore:
     def _write_once(path: Path, value: object) -> None:
         text = json.dumps(value, indent=2, default=str, sort_keys=True) + "\n"
         if path.exists():
-            if path.read_text(encoding="utf-8") != text:
+            if json.loads(path.read_text(encoding="utf-8")) != json.loads(text):
                 raise RuntimeError(f"immutable artifact conflict: {path.name}")
             return
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -199,6 +199,9 @@ def run_forward_day(data: ForwardMarketData, business_date: date, store: Forward
     if business_date not in data.days or len(data.bars_by_date[business_date]) < 500:
         raise RuntimeError("complete authoritative market day unavailable")
     store.initialize(business_date)
+    evidence_path=store.root/"market_evidence"/f"{business_date}.json"
+    if not evidence_path.exists():
+        ForwardStore._write_once(evidence_path, data.days[business_date])
     existing_manifest = store.runs/f"{business_date.isoformat()}.json"
     if existing_manifest.exists():
         existing=json.loads(existing_manifest.read_text(encoding="utf-8"))
@@ -216,6 +219,8 @@ def run_forward_day(data: ForwardMarketData, business_date: date, store: Forward
         raise RuntimeError("eligible universe is empty")
     normalized=data.normalized_factors(business_date,eligible)
     prior=completed[-1] if completed else None
+    if prior and any(prior < d < business_date and len(data.bars_by_date[d]) >= 500 for d in data.days):
+        raise RuntimeError("intermediate tradable sessions must be processed first")
     accounts=[]; top_output=[]; total_fills=total_events=0
     for spec in SHADOW_STRATEGY_REGISTRY:
         ledger,path=store.ledger(spec)
@@ -223,29 +228,40 @@ def run_forward_day(data: ForwardMarketData, business_date: date, store: Forward
         fills=[]
         consumed={dict(e.payload)["target_event_id"] for e in ledger.events if e.event_type=="TARGET_EXECUTED"}
         target_events=[e for e in ledger.events if e.event_type=="TARGETS" and e.event_id not in consumed]
-        executing_target = target_events[-1] if target_events else None
+        executing_target = target_events[0] if target_events else None
         if executing_target and date.fromisoformat(dict(executing_target.payload)["signal_date"]) < business_date:
             payload=dict(executing_target.payload)
             signal_date=date.fromisoformat(payload["signal_date"])
             targets=json.loads(payload["targets"])
+            executed_symbols={dict(e.payload)["symbol"] for e in ledger.events
+                if e.event_type=="TARGET_SYMBOL_EXECUTED" and dict(e.payload)["target_event_id"]==executing_target.event_id}
             day=data.bars_by_date[business_date]
             current=dict(state.positions)
             equity=state.cash+sum((day[s].open*q for s,q in current.items() if s in day),Decimal("0"))
             for symbol in sorted(set(current)|set(targets)):
-                if symbol not in day:
+                if symbol not in day or symbol in executed_symbols:
                     continue
+                next_dates=sorted(d for d in data.days if d>signal_date and symbol in data.bars_by_date[d])
+                if not next_dates or next_dates[0]!=business_date:
+                    raise RuntimeError("next actual symbol tradable open cannot be proven")
                 target_qty=int((equity*Decimal(targets.get(symbol,"0"))/day[symbol].open).to_integral_value(rounding=ROUND_DOWN))
                 quantity=target_qty-current.get(symbol,0)
                 if quantity>0:
                     affordable=int((state.cash/(day[symbol].open*(1+BASELINE_COST.buy_commission))).to_integral_value(rounding=ROUND_DOWN))
                     quantity=min(quantity,affordable)
                 if not quantity:
+                    ledger.append(f"{executing_target.event_id}|{symbol}","TARGET_SYMBOL_EXECUTED",business_date,
+                        {"target_event_id":executing_target.event_id,"symbol":symbol})
                     continue
                 notional=day[symbol].open*abs(quantity)
                 fee=notional*(BASELINE_COST.buy_commission if quantity>0 else BASELINE_COST.sell_commission+BASELINE_COST.sell_tax)
                 fill_id=hashlib.sha256(f"{spec.strategy_id}|{signal_date}|{business_date}|{symbol}|{quantity}|{day[symbol].open}".encode()).hexdigest()
                 ledger.append(fill_id,"PAPER_FILL",business_date,{"fill_id":fill_id,"symbol":symbol,
-                    "quantity":quantity,"price":day[symbol].open,"fee":fee,"lineage":spec.spec_fingerprint})
+                    "quantity":quantity,"price":day[symbol].open,"fee":fee,"lineage":spec.spec_fingerprint,
+                    "signal_date":signal_date.isoformat(),"target_event_id":executing_target.event_id,
+                    "reference":"TWSE_ACTUAL_NEXT_TRADABLE_OPEN","observation_id":day[symbol].provider_observation_id})
+                ledger.append(f"{executing_target.event_id}|{symbol}","TARGET_SYMBOL_EXECUTED",business_date,
+                    {"target_event_id":executing_target.event_id,"symbol":symbol})
                 fills.append(fill_id)
                 state=replay_account(ledger.events,INITIAL_CASH)
             if all(symbol in day for symbol in set(current)|set(targets)):
@@ -267,8 +283,10 @@ def run_forward_day(data: ForwardMarketData, business_date: date, store: Forward
             event_id=hashlib.sha256(f"TARGETS|{spec.strategy_id}|{business_date}".encode()).hexdigest()
             ledger.append(event_id,"TARGETS",business_date,{"signal_date":business_date.isoformat(),
                 "targets":json.dumps(targets,separators=(",",":"),sort_keys=True),
+                "signal_scores":json.dumps({s:str(scores[s]) for s in targets},sort_keys=True),
                 "spec_fingerprint":spec.spec_fingerprint})
         ledger.persist(path)
+        fills=[dict(e.payload)["fill_id"] for e in ledger.events if e.event_type=="PAPER_FILL" and e.event_date==business_date]
         state=replay_account(ledger.events,INITIAL_CASH)
         closes={s:b.close for s,b in data.bars_by_date[business_date].items()}
         market_value,equity=mark_to_market(state,closes)
@@ -332,8 +350,9 @@ def run_forward_day(data: ForwardMarketData, business_date: date, store: Forward
         if spec==SHADOW_STRATEGY_REGISTRY[0]:
             top_output=[{"rank":i,"symbol":s,"factor_scores":{f:str(normalized[s][f]) for f in FACTOR_NAMES},
                 "composite_score":str(scores[s]),"eligibility":"ELIGIBLE","target_weight":targets.get(s,"0"),
-                "risk_decision":risk_decisions.get(s,"REJECT"),"order_intent":"TARGET",
-                "execution_status":"PENDING_NEXT_TRADABLE_OPEN"} for i,s in enumerate(ranked[:20],1)]
+                "strategy_id":spec.strategy_id,"risk_decision":risk_decisions.get(s,"NOT_SELECTED"),
+                "order_intent":"TARGET" if s in targets and _rebalance(spec,business_date,prior) else "NONE",
+                "execution_status":"PENDING_NEXT_TRADABLE_OPEN" if s in targets and _rebalance(spec,business_date,prior) else "NO_NEW_INTENT"} for i,s in enumerate(ranked[:20],1)]
     benchmark=Decimal(data.days[business_date]["benchmark"])
     first=benchmark
     if completed:
@@ -344,6 +363,7 @@ def run_forward_day(data: ForwardMarketData, business_date: date, store: Forward
         account["excess_return"]=str(Decimal(account["return"])-benchmark_return)
         account["forward_metrics"]["benchmark_return"]=str(benchmark_return)
         account["forward_metrics"]["excess_return"]=account["excess_return"]
+        account["validation_status"]=validation_status(len(completed)+1,account["forward_metrics"]).value
     benchmark_ledger_path=store.root/"benchmark.jsonl"
     benchmark_ledger=AppendOnlyLedger.load(benchmark_ledger_path) if benchmark_ledger_path.exists() else AppendOnlyLedger()
     benchmark_event_id=hashlib.sha256(f"BENCHMARK|{business_date}|{benchmark}".encode()).hexdigest()

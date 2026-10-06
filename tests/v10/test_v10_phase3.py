@@ -148,7 +148,7 @@ class ForwardValidationTests(unittest.TestCase):
     def test_automation_schedule_and_seed_are_fail_closed(self):
         workflow=(Path(__file__).resolve().parents[2]/".github/workflows/v10-forward-shadow-paper.yml").read_text()
         self.assertIn('cron: "0 8 * * 1-5"',workflow)
-        self.assertIn("cp -a artifacts/v10_forward_store/.",workflow)
+        self.assertIn("automation.v10.restore_forward_store --seed artifacts/v10_forward_store",workflow)
         self.assertIn("github.event_name == 'schedule'",workflow)
         self.assertIn("if: always()",workflow)
         self.assertNotIn("automation.v9",workflow.lower())

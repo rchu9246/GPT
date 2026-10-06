@@ -1,2 +1,3 @@
 {"event_date":"2026-10-05","event_hash":"8ca845e35b004e94414fb91d4e6ea3fad7046e6e490177a5fcc46e856c50bd02","event_id":"b9fc50567da7586aad3e0df87c0825552cbe56ac54d0ad67d62baec101972301","event_type":"BENCHMARK_MARK","payload":[["cash_return","0"],["twse_index","49712.04"]],"previous_hash":"GENESIS","sequence":1}
 
+{"event_date":"2026-10-06","event_hash":"a4bfaca6b96e866d903c9ca229f46f1311f8437a7258f51082d35fc496a322e4","event_id":"7274f2630d0e2590c1f17cbb772f21e443f6004e63019377ecb42c96d3f9db3c","event_type":"BENCHMARK_MARK","payload":[["cash_return","0"],["twse_index","49822.55"]],"previous_hash":"8ca845e35b004e94414fb91d4e6ea3fad7046e6e490177a5fcc46e856c50bd02","sequence":2}
