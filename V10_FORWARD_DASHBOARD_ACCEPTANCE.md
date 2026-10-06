@@ -14,7 +14,7 @@ The primary Pages entry redirects to `v10-forward/`. The existing V9 dashboard r
 
 ## Automation
 
-The existing `V10 Forward Shadow Paper Validation` schedule remains `0 8 * * 1-5` (16:00 Asia/Taipei). Daily runs append evidence and produce a validated dashboard report. Successful completion triggers the Pages workflow, which restores compatible evidence and regenerates the public report automatically. The browser refreshes every five minutes and separately reads the latest public GitHub automation status.
+The existing `V10 Forward Shadow Paper Validation` schedule remains `0 8 * * 1-5` (16:00 Asia/Taipei). Daily runs append evidence and produce a validated dashboard report. Successful completion triggers the Pages workflow, which restores compatible evidence and regenerates the public report automatically. Completed-date replay verifies sealed evidence without refetching historical data; new-day runs retain the full scan with an official market cache. The browser refreshes every five minutes and separately reads the latest public GitHub automation status.
 
 The previous run failed because insignificant trailing whitespace was treated as a changed registry. JSON comparison now checks content without rewriting the original file. Blank JSONL lines no longer invalidate intact event hash chains. Restoration accepts old nested and new flat artifact layouts, verifies hash-chain prefixes, and keeps the richer compatible committed seed rather than resetting cash from a stale artifact. Conflicting evidence fails closed.
 
@@ -22,7 +22,7 @@ First fills retain target lineage, signal dates, observation IDs, and actual-ope
 
 ## Validation
 
-223 Python V10 tests and 12 JavaScript report/rendering tests pass. The 23 existing regression tests pass. Tests cover V9/V10 isolation, forward boundary, all strategies, candidates, pending/fill distinction, next-open evidence, duplicate fills, cash resets, account contamination, benchmark alignment, equity reconciliation, day gates, immutable provider revisions, and compatible artifact restoration.
+224 Python V10 tests and 12 JavaScript report/rendering tests pass. The 23 existing regression tests pass. Tests cover V9/V10 isolation, forward boundary, all strategies, candidates, pending/fill distinction, next-open evidence, duplicate fills, cash resets, account contamination, benchmark alignment, equity reconciliation, day gates, immutable provider revisions, and compatible artifact restoration.
 
 Adversarial review: V9 PnL and pre-boundary curves are rejected; pending orders cannot carry execution dates or fill prices; duplicate fills and mismatched dates fail; rankings use only completed manifests; qualification claims before the required gate fail. Current status is COLLECTING, with 2/20 preliminary and 2/60 qualification days. Current profitability remains insufficient evidence.
 

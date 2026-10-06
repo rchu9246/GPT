@@ -1,4 +1,5 @@
 import json, shutil, tempfile, unittest
+from unittest.mock import patch
 from datetime import date, timedelta
 from pathlib import Path
 from automation.v10.dashboard_report import build_report
@@ -90,5 +91,15 @@ class DashboardEvidenceTests(unittest.TestCase):
         paths=[Path("automation/v10/dashboard_report.py"),Path("dashboard/v10-forward/dashboard.js")]
         for p in paths:
             text=p.read_text(encoding="utf-8");self.assertNotIn("supabase",text.lower());self.assertNotIn("v9Data",text)
+    def test_daily_completed_replay_does_not_refetch_history_or_duplicate_fills(self):
+        from automation.v10.forward_daily_run import main
+        before=build_report(self.store)
+        with patch("sys.argv",["forward_daily_run","--cache",str(Path(self.temp.name)/"cache"),"--store",str(self.root),"--as-of","2026-10-06"]), \
+             patch("automation.v10.forward_daily_run.TwseDailyTableProvider") as provider, \
+             patch("automation.v10.forward_daily_run.latest_complete_session",return_value=date(2026,10,6)), \
+             patch("automation.v10.forward_daily_run.load_cached_market",side_effect=AssertionError("unnecessary historical fetch")):
+            provider.return_value.day.return_value=self.market.days[date(2026,10,6)]
+            self.assertEqual(0,main())
+        after=build_report(self.store);self.assertEqual(before["fills"],after["fills"]);self.assertEqual(before["strategies"],after["strategies"])
 
 if __name__=="__main__":unittest.main()

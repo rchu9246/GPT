@@ -3,7 +3,7 @@ import argparse, json
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 from pathlib import Path
-from .forward_validation import ForwardStore, latest_complete_session, load_cached_market, run_forward_day
+from .forward_validation import ForwardMarketData, ForwardStore, latest_complete_session, load_cached_market, run_forward_day
 from .phase2_research import TwseDailyTableProvider
 
 def main() -> int:
@@ -15,15 +15,18 @@ def main() -> int:
     provider=TwseDailyTableProvider(args.cache)
     session=latest_complete_session(provider,args.as_of)
     store=ForwardStore(args.store)
-    data=load_cached_market(provider,session)
     completed=store.completed_dates()
-    for existing in completed:
-        if existing in data.days:
-            run_forward_day(data,existing,store)
-    last=completed[-1] if completed else store.boundary()
-    for trading_day in sorted(d for d in data.days if (last < d or (not completed and last==d)) and d<=session and len(data.bars_by_date[d])>=500):
-        run_forward_day(data,trading_day,store)
-    result=run_forward_day(data,session,store)
+    if completed and session==completed[-1]:
+        result=run_forward_day(ForwardMarketData([provider.day(session)]),session,store)
+    else:
+        data=load_cached_market(provider,session)
+        for existing in completed:
+            if existing in data.days:
+                run_forward_day(data,existing,store)
+        last=completed[-1] if completed else store.boundary()
+        for trading_day in sorted(d for d in data.days if (last < d or (not completed and last==d)) and d<=session and len(data.bars_by_date[d])>=500):
+            run_forward_day(data,trading_day,store)
+        result=run_forward_day(data,session,store)
     print(json.dumps({"run_id":result["run_id"],"business_date":result["business_date"],
         "total_symbols":result["total_symbols"],"eligible_symbols":result["eligible_symbols"],
         "strategies":len(result["strategies"]),"execution_status":result["execution_status"]},sort_keys=True))
