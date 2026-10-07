@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import requests
+import gptq_accounting_runtime_v1 as accounting
 
 TIMEOUT = 60
 SUPABASE_URL = os.environ["SUPABASE_URL"].rstrip("/")
@@ -71,6 +72,9 @@ def fetch_all(table: str, params: dict[str, str], page_size: int = 1000) -> list
 
 
 def insert(table: str, payload: dict[str, Any]) -> dict[str, Any]:
+    if table == "gptq_paper_orders" and accounting.enabled():
+        order, closing_cash = accounting.post_order(payload)
+        return {**order, "_accounting_cash": float(closing_cash)}
     r = session.post(
         api_url(table),
         headers={"Prefer": "return=representation"},
@@ -280,7 +284,9 @@ def main() -> int:
         "order": "run_date.desc",
         "limit": "1",
     })
-    cash = fnum(snapshots[0]["cash"]) if snapshots else INITIAL_CAPITAL
+    cash = (float(accounting.opening_cash(STRATEGY_VERSION, RUN_DATE))
+            if accounting.enabled() else
+            fnum(snapshots[0]["cash"]) if snapshots else INITIAL_CAPITAL)
 
     realized_pnl_today = 0.0
     exits = []
@@ -337,12 +343,16 @@ def main() -> int:
                 "status": "FILLED",
                 "reason": "SHADOW_EXIT",
                 "realized_pnl": round(pnl, 2),
+                "accounting_cost_basis": round(cost_basis, 2),
                 "holding_days": holding_days,
                 "exit_reason": exit_reason,
             })
+            if accounting.enabled():
+                cash = order.pop("_accounting_cash")
             exits.append(order)
             realized_pnl_today += pnl
-            cash += net_proceeds
+            if not accounting.enabled():
+                cash += net_proceeds
             delete_where("gptq_paper_positions", {
                 "strategy_version": f"eq.{STRATEGY_VERSION}",
                 "stock_id": f"eq.{sid}",
@@ -456,7 +466,8 @@ def main() -> int:
         if total_cost > cash:
             continue
 
-        cash -= total_cost
+        if not accounting.enabled():
+            cash -= total_cost
         order = insert("gptq_paper_orders", {
             "run_id": run_id,
             "run_date": RUN_DATE,
@@ -475,6 +486,8 @@ def main() -> int:
             "realized_pnl": 0,
             "holding_days": 0,
         })
+        if accounting.enabled():
+            cash = order.pop("_accounting_cash")
         orders.append(order)
 
         upsert("gptq_paper_positions", {
@@ -530,7 +543,8 @@ def main() -> int:
 
     total_equity = cash + market_value
 
-    upsert("gptq_paper_equity_snapshots", {
+    if not accounting.enabled():
+        upsert("gptq_paper_equity_snapshots", {
         "run_date": RUN_DATE,
         "strategy_version": STRATEGY_VERSION,
         "cash": round(cash, 2),
@@ -539,7 +553,7 @@ def main() -> int:
         "realized_pnl": round(realized_pnl_today, 2),
         "unrealized_pnl": round(unrealized, 2),
         "open_positions": len(positions),
-    }, "run_date,strategy_version")
+        }, "run_date,strategy_version")
 
     if run_id is not None:
         patch_where("gptq_paper_runs", {"id": f"eq.{run_id}"}, {

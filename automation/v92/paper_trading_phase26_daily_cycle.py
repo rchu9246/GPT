@@ -20,6 +20,8 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
+import gptq_accounting_runtime_v1 as accounting
+
 ROOT = Path(__file__).resolve().parents[2]
 SUPABASE_URL = os.environ["SUPABASE_URL"].rstrip("/")
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
@@ -69,35 +71,16 @@ def rest(method, table, query="", payload=None, prefer=None):
         ) from e
 
 
-def last_json_object(path: Path):
-    """
-    Return the last valid JSON OBJECT found in a log.
-
-    Phase 2.6 v1.0 incorrectly accepted both dict and list:
-        isinstance(x, (dict, list))
-
-    This hotfix intentionally accepts dict only.
-    """
-    if not path.exists():
-        return {}
-
-    text = path.read_text(encoding="utf-8", errors="replace")
-    decoder = json.JSONDecoder()
-    objects = []
-
-    for index, char in enumerate(text):
-        if char != "{":
-            continue
-
-        try:
-            obj, _ = decoder.raw_decode(text[index:])
-        except Exception:
-            continue
-
-        if isinstance(obj, dict):
-            objects.append(obj)
-
-    return objects[-1] if objects else {}
+def load_phase_report(path: Path, required_fields: set[str]) -> dict:
+    """Read the producer's complete report, never a nested log fragment."""
+    if not path.is_file():
+        raise RuntimeError(f"Missing phase report: {path}")
+    report = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(report, dict) or not required_fields.issubset(report):
+        raise RuntimeError(f"Invalid top-level phase report: {path}")
+    if report.get("run_date") != RUN_DATE or report.get("strategy_version") != STRATEGY_VERSION:
+        raise RuntimeError(f"Phase report identity mismatch: {path}")
+    return report
 
 
 
@@ -236,19 +219,18 @@ def main():
         phase25_result_path.read_text(encoding="utf-8")
     )
 
-    phase21 = require_dict(
-        "Phase 2.1",
-        last_json_object(ROOT / "phase25_logs/phase2_1.log"),
+    phase21 = load_phase_report(
+        ROOT / "artifacts/paper_trading_phase21/phase21_signal_report.json",
+        {"run_date", "strategy_version", "market_data", "signal_engine"},
     )
-
-    phase23 = require_dict(
-        "Phase 2.3",
-        last_json_object(ROOT / "phase25_logs/phase2_3.log"),
+    phase23 = load_phase_report(
+        ROOT / "artifacts/paper_trading_phase23/phase23_execution_report.json",
+        {"run_date", "strategy_version", "ending_cash", "market_value", "ending_equity"},
     )
-
-    phase24 = require_dict(
-        "Phase 2.4",
-        last_json_object(ROOT / "phase25_logs/phase2_4.log"),
+    phase24 = load_phase_report(
+        ROOT / "artifacts/paper_trading_phase24/phase24_position_management_report.json",
+        {"run_date", "strategy_version", "ending_cash", "ending_market_value",
+         "ending_equity", "realized_pnl_today", "unrealized_pnl", "positions_open"},
     )
 
     phase_status = {
@@ -294,35 +276,12 @@ def main():
         "top_score": signal_engine.get("top_score"),
 
         "orders_created": phase23.get("orders_created", 0),
-        "positions_open": phase24.get(
-            "positions_open",
-            phase23.get("positions_open", 0),
-        ),
-
-        "cash": phase24.get(
-            "ending_cash",
-            phase23.get("ending_cash", 0),
-        ),
-
-        "market_value": phase24.get(
-            "ending_market_value",
-            phase23.get("market_value", 0),
-        ),
-
-        "equity": phase24.get(
-            "ending_equity",
-            phase23.get("ending_equity", 0),
-        ),
-
-        "realized_pnl": phase24.get(
-            "realized_pnl_today",
-            0,
-        ),
-
-        "unrealized_pnl": phase24.get(
-            "unrealized_pnl",
-            phase23.get("unrealized_pnl", 0),
-        ),
+        "positions_open": phase24["positions_open"],
+        "cash": phase24["ending_cash"],
+        "market_value": phase24["ending_market_value"],
+        "equity": phase24["ending_equity"],
+        "realized_pnl": phase24["realized_pnl_today"],
+        "unrealized_pnl": phase24["unrealized_pnl"],
 
         "positions": phase24.get("decisions", []),
         "top_candidates": phase21.get("top_candidates", []),
@@ -337,6 +296,17 @@ def main():
         "completed_at": datetime.now(timezone.utc).isoformat(),
     }
 
+    if accounting.enabled():
+        state = accounting.finalize_from_phase24(STRATEGY_VERSION, RUN_DATE, phase24)
+        authoritative = {
+            "cash": state["closing_cash"],
+            "market_value": state["market_value"],
+            "equity": state["total_equity"],
+            "realized_pnl": state["daily_realized_pnl"],
+            "unrealized_pnl": state["unrealized_pnl"],
+        }
+        for field, value in authoritative.items():
+            snapshot[field] = value
     upsert_snapshot(snapshot)
 
     result_path = ROOT / "phase26_result.json"
