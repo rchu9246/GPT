@@ -17,9 +17,9 @@ from tests.v101.test_challenger import fixture
 
 class ReviewTests(unittest.TestCase):
     def source(self,rows=None):
-        body=json.dumps(dict(stat='OK',fields=['資料日期','股票代號','名稱','前收','參考','權值+息值','權/息'],
+        body=json.dumps(dict(stat='OK',strDate='20240101',endDate='20240301',fields=['資料日期','股票代號','名稱','前收','參考','權值+息值','權/息'],
             data=rows or [['113年02月01日','1100','TEST','10','9','1','息']])).encode()
-        return Snapshot('https://www.twse.com.tw/rwd/zh/exRight/TWT49U?response=json',
+        return Snapshot('https://www.twse.com.tw/rwd/zh/exRight/TWT49U?response=json&startDate=20240101&endDate=20240301',
             '2024-03-01T00:00:00+00:00',body,sha256(body).hexdigest())
 
     def event(self,kind='CASH_DIVIDEND',**kwargs):
@@ -29,6 +29,7 @@ class ReviewTests(unittest.TestCase):
         values.update(kwargs);return Entitlement(**values)
 
     def test_reference_is_not_fabricated_dividend_or_historical_announcement(self):
+        self.assertEqual(self.source().reference_range(),(date(2024,1,1),date(2024,3,1)))
         row=self.source().reference_inventory()[0]
         self.assertIsNone(row['announced_at']);self.assertIsNone(row['payment_date'])
         self.assertFalse(row['entitlement_verified']);self.assertNotIn('cash_per_share',row)
@@ -46,6 +47,8 @@ class ReviewTests(unittest.TestCase):
         source=self.source();p=json.loads(source.body);p['fields'][5]='OTHER'
         body=json.dumps(p).encode()
         with self.assertRaisesRegex(DataBlocked,'SCHEMA'):replace(source,body=body,digest=sha256(body).hexdigest()).reference_inventory()
+        with self.assertRaisesRegex(DataBlocked,'COVERAGE_MISMATCH'):
+            replace(source,url=source.url.replace('startDate=20240101','startDate=20240201')).reference_range()
         r=['113年02月01日','1100','TEST','10','9','1','息']
         with self.assertRaisesRegex(DataBlocked,'DUPLICATE'):self.source([r,r]).reference_inventory()
 

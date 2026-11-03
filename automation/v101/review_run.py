@@ -47,7 +47,7 @@ def main():
     # newly simulated paired control holdings, not duplicate challenger scenarios.
     scenarios=original['results']+[r for r in paired if '_EXPOSURE_CONTROL_' in r['strategy_id']]
     scenarios+=baseline_holding_scenarios(source)
-    coverage=holding_coverage(scenarios,inventory,date(2025,10,1),date(2026,11,2))
+    coverage=holding_coverage(scenarios,inventory,*snapshot.reference_range())
     write_once(output/'exposure_comparison.json',result)
     write_once(output/'private_holding_coverage.json',coverage)
     write_once(output/'private_paired_ledgers.json',paired)

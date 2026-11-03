@@ -8,7 +8,7 @@ from datetime import date,datetime,timezone,timedelta
 from decimal import Decimal
 from hashlib import sha256
 import json,re
-from urllib.parse import urlparse
+from urllib.parse import urlparse,parse_qs
 from .research import DataBlocked
 
 OFFICIAL_HOSTS={'www.twse.com.tw','wwwc.twse.com.tw','mops.twse.com.tw'}
@@ -37,6 +37,18 @@ class Snapshot:
             raise DataBlocked('UNTRUSTED_CORPORATE_ACTION_SOURCE')
         if sha256(self.body).hexdigest()!=self.digest:raise DataBlocked('SOURCE_DIGEST_MISMATCH')
         if aware(self.retrieved_at)>datetime.now(timezone.utc):raise DataBlocked('FUTURE_SOURCE_CAPTURE')
+
+    def reference_range(self):
+        self.verify()
+        payload=json.loads(self.body);query=parse_qs(urlparse(self.url).query)
+        try:
+            first=datetime.strptime(payload['strDate'],'%Y%m%d').date()
+            last=datetime.strptime(payload['endDate'],'%Y%m%d').date()
+        except (KeyError,TypeError,ValueError) as error:
+            raise DataBlocked('OFFICIAL_DATE_COVERAGE_MISSING') from error
+        if first>last or query.get('startDate')!=[payload['strDate']] or query.get('endDate')!=[payload['endDate']]:
+            raise DataBlocked('OFFICIAL_DATE_COVERAGE_MISMATCH')
+        return first,last
 
     def reference_inventory(self):
         self.verify()
