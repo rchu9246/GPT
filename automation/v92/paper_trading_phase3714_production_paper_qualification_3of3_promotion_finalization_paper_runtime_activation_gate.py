@@ -151,7 +151,7 @@ def main() -> int:
     readiness_ready = truthy(r.get("promotion_ready", False))
     readiness_state = str(r.get("promotion_readiness_state", "NOT_AVAILABLE")).upper()
 
-    readiness_consistent = True
+    readiness_consistent = False
     if readiness_present:
         readiness_consistent = (
             int(r.get("observed_cycles", observed) or 0) == observed
@@ -159,12 +159,16 @@ def main() -> int:
             and int(r.get("blocked_cycles", blocked) or 0) == blocked
         )
 
-    broker_locked = not truthy(r.get("broker_order_submission_enabled", False)) if readiness_present else True
-    real_money_locked = not truthy(r.get("real_money_trading_enabled", False)) if readiness_present else True
-    historical_rewrite_locked = not truthy(r.get("historical_rewrite_allowed", False)) if readiness_present else True
+    broker_locked = r.get("broker_order_submission_enabled") is False
+    real_money_locked = r.get("real_money_trading_enabled") is False
+    historical_rewrite_locked = r.get("historical_rewrite_allowed") is False
 
     blockers = []
 
+    if not readiness_present:
+        blockers.append("READINESS_EVIDENCE_MISSING")
+    if readiness_present and not (r.get("runtime_supervision_pass") is True and r.get("paper_only_boundary_pass") is True):
+        blockers.append("READINESS_SAFETY_NOT_PASS")
     if duplicate_rows > 0:
         blockers.append("DUPLICATE_CYCLE_DATE_DETECTED")
     if blocked > 0:

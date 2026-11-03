@@ -419,6 +419,46 @@ def extract_state(row: Dict[str, Any]) -> str:
             return s
     return ""
 
+def canonical_qualification_counts() -> Dict[str, int]:
+    """Read persisted cycles; never synthesize dates or rewrite qualification rows."""
+    from datetime import date
+    rows = []
+    offset = 0
+    while True:
+        params = urllib.parse.urlencode({
+            "select": "cycle_date,valid_cycle,blocked_cycle,runtime_supervision_pass,paper_only_boundary_pass",
+            "portfolio_id": f"eq.{PORTFOLIO_ID}",
+            "strategy_version": f"eq.{STRATEGY_VERSION}",
+            "order": "cycle_date.asc", "limit": "1000", "offset": str(offset),
+        })
+        req = urllib.request.Request(
+            f"{SUPABASE_URL}/rest/v1/paper_production_qualification_evidence_v92?{params}",
+            headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"},
+        )
+        with urllib.request.urlopen(req, timeout=30) as response:
+            page = json.loads(response.read().decode("utf-8"))
+        if not isinstance(page, list):
+            raise ValueError("CANONICAL_LEDGER_INVALID_RESPONSE")
+        rows.extend(page)
+        if not page:
+            break
+        offset += len(page)
+    dates = []
+    for row in rows:
+        cycle_date = date.fromisoformat(row["cycle_date"])
+        if cycle_date > datetime.now(timezone.utc).date():
+            raise ValueError("CANONICAL_LEDGER_FUTURE_DATE")
+        dates.append(cycle_date)
+        for key in ("valid_cycle", "blocked_cycle", "runtime_supervision_pass", "paper_only_boundary_pass"):
+            if type(row.get(key)) is not bool:
+                raise ValueError("CANONICAL_LEDGER_INVALID_SAFETY_FIELD:" + key)
+    if len(set(dates)) != len(dates):
+        raise ValueError("CANONICAL_LEDGER_DUPLICATE_DATE")
+    unsafe = sum(r["blocked_cycle"] or not r["runtime_supervision_pass"] or not r["paper_only_boundary_pass"] for r in rows)
+    return {"observed": len(rows), "valid": sum(r["valid_cycle"] and not r["blocked_cycle"] for r in rows),
+            "blocked": unsafe, "unknown": sum(not r["valid_cycle"] and not r["blocked_cycle"] for r in rows)}
+
+
 def count_evidence_states(rows: List[Dict[str, Any]]) -> Dict[str, int]:
     valid = blocked_count = unknown = 0
     operational = no_trade = 0
@@ -688,7 +728,13 @@ def main() -> int:
                 "PHASE3719319_V3_RUNTIME_SUPERVISION_CANONICAL_DAILY_EVIDENCE_ADAPTER"
             ]
 
-    evidence_counts = count_evidence_states(ev_rows)
+    daily_counts = count_evidence_states(ev_rows)
+    evidence_counts = canonical_qualification_counts()
+    # Current activation/master/runtime checks below remain mandatory.
+    # Retain an unsafe daily source even when the persisted ledger is healthy.
+    evidence_counts["blocked"] = max(evidence_counts["blocked"], daily_counts["blocked"])
+    ev_table = "paper_production_qualification_evidence_v92"
+
 
     # Compatibility mode: if no dedicated daily-evidence table exists yet,
     # the phase remains OBSERVING instead of falsely failing. This keeps

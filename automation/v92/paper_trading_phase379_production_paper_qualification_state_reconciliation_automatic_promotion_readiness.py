@@ -155,6 +155,11 @@ def main() -> int:
     if observed > 0 and not paper_only_pass:
         blockers.append("CANONICAL_PAPER_ONLY_BOUNDARY_NOT_PASS")
 
+    if p375.get("evidence_counts", {}) != {}:
+        source_counts = p375["evidence_counts"]
+        if any(source_counts.get(k) != canonical[k] for k in ("observed", "valid", "blocked")):
+            blockers.append("PHASE375_CANONICAL_SNAPSHOT_DIVERGED")
+
     qualification_ready = (
         p375_present
         and p375_state == "MULTI_CYCLE_STABILITY_QUALIFIED"

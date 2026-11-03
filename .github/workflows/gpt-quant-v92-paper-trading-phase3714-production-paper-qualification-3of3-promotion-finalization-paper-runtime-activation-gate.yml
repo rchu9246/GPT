@@ -11,7 +11,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: phase3714-paper-runtime-activation-gate
+  group: production-paper-readiness-reconciliation
   cancel-in-progress: false
 
 jobs:
@@ -77,6 +77,15 @@ jobs:
 
           check_success "$WF3713" "Phase 3.7.13"
           check_success "$WF37131" "Phase 3.7.13.1"
+
+      - name: Recompute readiness from current persisted evidence
+        env:
+          PHASE375_RESULT_PATH: artifacts/phase375/phase375_result.json
+          PHASE376_RESULT_PATH: artifacts/phase376/phase376_result.json
+        run: |
+          python automation/v92/paper_trading_phase375_production_paper_multi_cycle_stability_evidence_qualification.py
+          python automation/v92/paper_trading_phase376_production_paper_multi_cycle_qualification_promotion_gate.py
+          python automation/v92/paper_trading_phase379_production_paper_qualification_state_reconciliation_automatic_promotion_readiness.py
 
       - name: Evaluate 3of3 promotion finalization and paper runtime activation gate
         id: phase3714

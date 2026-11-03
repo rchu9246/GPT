@@ -1,0 +1,16 @@
+name: Phase 3.7.15 readiness regression
+on:
+  pull_request:
+  push:
+    branches: [codex/phase3715-safety-repair]
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s tests/v92 -p test_phase3715_readiness_sync.py -v
