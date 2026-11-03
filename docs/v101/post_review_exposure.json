@@ -1,0 +1,969 @@
+{
+  "contract": "V101_POST_REVIEW_EXPOSURE_V1",
+  "rows": [
+    {
+      "attribution": {
+        "active_sessions": 0,
+        "benchmark_gross_return": 0.18532557986786236,
+        "cash_opportunity_gap": 0.18532557986786236,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": 0.0,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.0,
+        "mean_observed_exposure": 0.0,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": true,
+        "strategy_cost": 0.0,
+        "strategy_gross_return": 0.0,
+        "strategy_net_return": 0.0,
+        "zero_exposure_sessions": 30
+      },
+      "fold": "WF_1",
+      "paired_control": {
+        "active_sessions": 0,
+        "control_fees": 0.0,
+        "control_max_drawdown": 0,
+        "control_net_return": 0.0,
+        "max_absolute_exposure_gap": 0.0,
+        "mean_absolute_exposure_gap": 0.0,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.0,
+        "promotion_eligible": false,
+        "status": "CASH_ONLY_OR_TOO_FEW_ACTIVE_SESSIONS",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_VOL_MOMENTUM_V1",
+      "stress": 1.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 0,
+        "benchmark_gross_return": 0.18532557986786236,
+        "cash_opportunity_gap": 0.18532557986786236,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": 0.0,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.0,
+        "mean_observed_exposure": 0.0,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": true,
+        "strategy_cost": 0.0,
+        "strategy_gross_return": 0.0,
+        "strategy_net_return": 0.0,
+        "zero_exposure_sessions": 30
+      },
+      "fold": "WF_1",
+      "paired_control": {
+        "active_sessions": 0,
+        "control_fees": 0.0,
+        "control_max_drawdown": 0,
+        "control_net_return": 0.0,
+        "max_absolute_exposure_gap": 0.0,
+        "mean_absolute_exposure_gap": 0.0,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.0,
+        "promotion_eligible": false,
+        "status": "CASH_ONLY_OR_TOO_FEW_ACTIVE_SESSIONS",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_VOL_MOMENTUM_V1",
+      "stress": 2.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 0,
+        "benchmark_gross_return": 0.18532557986786236,
+        "cash_opportunity_gap": 0.18532557986786236,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": 0.0,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.0,
+        "mean_observed_exposure": 0.0,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": true,
+        "strategy_cost": 0.0,
+        "strategy_gross_return": 0.0,
+        "strategy_net_return": 0.0,
+        "zero_exposure_sessions": 30
+      },
+      "fold": "WF_1",
+      "paired_control": {
+        "active_sessions": 0,
+        "control_fees": 0.0,
+        "control_max_drawdown": 0,
+        "control_net_return": 0.0,
+        "max_absolute_exposure_gap": 0.0,
+        "mean_absolute_exposure_gap": 0.0,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.0,
+        "promotion_eligible": false,
+        "status": "CASH_ONLY_OR_TOO_FEW_ACTIVE_SESSIONS",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_REGIME_VOL_V1",
+      "stress": 1.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 0,
+        "benchmark_gross_return": 0.18532557986786236,
+        "cash_opportunity_gap": 0.18532557986786236,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": 0.0,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.0,
+        "mean_observed_exposure": 0.0,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": true,
+        "strategy_cost": 0.0,
+        "strategy_gross_return": 0.0,
+        "strategy_net_return": 0.0,
+        "zero_exposure_sessions": 30
+      },
+      "fold": "WF_1",
+      "paired_control": {
+        "active_sessions": 0,
+        "control_fees": 0.0,
+        "control_max_drawdown": 0,
+        "control_net_return": 0.0,
+        "max_absolute_exposure_gap": 0.0,
+        "mean_absolute_exposure_gap": 0.0,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.0,
+        "promotion_eligible": false,
+        "status": "CASH_ONLY_OR_TOO_FEW_ACTIVE_SESSIONS",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_REGIME_VOL_V1",
+      "stress": 2.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 0,
+        "benchmark_gross_return": 0.18532557986786236,
+        "cash_opportunity_gap": 0.18532557986786236,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": 0.0,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.0,
+        "mean_observed_exposure": 0.0,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": true,
+        "strategy_cost": 0.0,
+        "strategy_gross_return": 0.0,
+        "strategy_net_return": 0.0,
+        "zero_exposure_sessions": 30
+      },
+      "fold": "WF_1",
+      "paired_control": {
+        "active_sessions": 0,
+        "control_fees": 0.0,
+        "control_max_drawdown": 0,
+        "control_net_return": 0.0,
+        "max_absolute_exposure_gap": 0.0,
+        "mean_absolute_exposure_gap": 0.0,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.0,
+        "promotion_eligible": false,
+        "status": "CASH_ONLY_OR_TOO_FEW_ACTIVE_SESSIONS",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_REGIME_VOL_BAND_V1",
+      "stress": 1.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 0,
+        "benchmark_gross_return": 0.18532557986786236,
+        "cash_opportunity_gap": 0.18532557986786236,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": 0.0,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.0,
+        "mean_observed_exposure": 0.0,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": true,
+        "strategy_cost": 0.0,
+        "strategy_gross_return": 0.0,
+        "strategy_net_return": 0.0,
+        "zero_exposure_sessions": 30
+      },
+      "fold": "WF_1",
+      "paired_control": {
+        "active_sessions": 0,
+        "control_fees": 0.0,
+        "control_max_drawdown": 0,
+        "control_net_return": 0.0,
+        "max_absolute_exposure_gap": 0.0,
+        "mean_absolute_exposure_gap": 0.0,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.0,
+        "promotion_eligible": false,
+        "status": "CASH_ONLY_OR_TOO_FEW_ACTIVE_SESSIONS",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_REGIME_VOL_BAND_V1",
+      "stress": 2.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 0,
+        "benchmark_gross_return": 0.09404375183920899,
+        "cash_opportunity_gap": 0.09404375183920899,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": 0.0,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.0,
+        "mean_observed_exposure": 0.0,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": true,
+        "strategy_cost": 0.0,
+        "strategy_gross_return": 0.0,
+        "strategy_net_return": 0.0,
+        "zero_exposure_sessions": 30
+      },
+      "fold": "WF_2",
+      "paired_control": {
+        "active_sessions": 0,
+        "control_fees": 0.0,
+        "control_max_drawdown": 0,
+        "control_net_return": 0.0,
+        "max_absolute_exposure_gap": 0.0,
+        "mean_absolute_exposure_gap": 0.0,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.0,
+        "promotion_eligible": false,
+        "status": "CASH_ONLY_OR_TOO_FEW_ACTIVE_SESSIONS",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_VOL_MOMENTUM_V1",
+      "stress": 1.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 0,
+        "benchmark_gross_return": 0.09404375183920899,
+        "cash_opportunity_gap": 0.09404375183920899,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": 0.0,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.0,
+        "mean_observed_exposure": 0.0,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": true,
+        "strategy_cost": 0.0,
+        "strategy_gross_return": 0.0,
+        "strategy_net_return": 0.0,
+        "zero_exposure_sessions": 30
+      },
+      "fold": "WF_2",
+      "paired_control": {
+        "active_sessions": 0,
+        "control_fees": 0.0,
+        "control_max_drawdown": 0,
+        "control_net_return": 0.0,
+        "max_absolute_exposure_gap": 0.0,
+        "mean_absolute_exposure_gap": 0.0,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.0,
+        "promotion_eligible": false,
+        "status": "CASH_ONLY_OR_TOO_FEW_ACTIVE_SESSIONS",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_VOL_MOMENTUM_V1",
+      "stress": 2.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 0,
+        "benchmark_gross_return": 0.09404375183920899,
+        "cash_opportunity_gap": 0.09404375183920899,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": 0.0,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.0,
+        "mean_observed_exposure": 0.0,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": true,
+        "strategy_cost": 0.0,
+        "strategy_gross_return": 0.0,
+        "strategy_net_return": 0.0,
+        "zero_exposure_sessions": 30
+      },
+      "fold": "WF_2",
+      "paired_control": {
+        "active_sessions": 0,
+        "control_fees": 0.0,
+        "control_max_drawdown": 0,
+        "control_net_return": 0.0,
+        "max_absolute_exposure_gap": 0.0,
+        "mean_absolute_exposure_gap": 0.0,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.0,
+        "promotion_eligible": false,
+        "status": "CASH_ONLY_OR_TOO_FEW_ACTIVE_SESSIONS",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_REGIME_VOL_V1",
+      "stress": 1.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 0,
+        "benchmark_gross_return": 0.09404375183920899,
+        "cash_opportunity_gap": 0.09404375183920899,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": 0.0,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.0,
+        "mean_observed_exposure": 0.0,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": true,
+        "strategy_cost": 0.0,
+        "strategy_gross_return": 0.0,
+        "strategy_net_return": 0.0,
+        "zero_exposure_sessions": 30
+      },
+      "fold": "WF_2",
+      "paired_control": {
+        "active_sessions": 0,
+        "control_fees": 0.0,
+        "control_max_drawdown": 0,
+        "control_net_return": 0.0,
+        "max_absolute_exposure_gap": 0.0,
+        "mean_absolute_exposure_gap": 0.0,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.0,
+        "promotion_eligible": false,
+        "status": "CASH_ONLY_OR_TOO_FEW_ACTIVE_SESSIONS",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_REGIME_VOL_V1",
+      "stress": 2.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 0,
+        "benchmark_gross_return": 0.09404375183920899,
+        "cash_opportunity_gap": 0.09404375183920899,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": 0.0,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.0,
+        "mean_observed_exposure": 0.0,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": true,
+        "strategy_cost": 0.0,
+        "strategy_gross_return": 0.0,
+        "strategy_net_return": 0.0,
+        "zero_exposure_sessions": 30
+      },
+      "fold": "WF_2",
+      "paired_control": {
+        "active_sessions": 0,
+        "control_fees": 0.0,
+        "control_max_drawdown": 0,
+        "control_net_return": 0.0,
+        "max_absolute_exposure_gap": 0.0,
+        "mean_absolute_exposure_gap": 0.0,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.0,
+        "promotion_eligible": false,
+        "status": "CASH_ONLY_OR_TOO_FEW_ACTIVE_SESSIONS",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_REGIME_VOL_BAND_V1",
+      "stress": 1.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 0,
+        "benchmark_gross_return": 0.09404375183920899,
+        "cash_opportunity_gap": 0.09404375183920899,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": 0.0,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.0,
+        "mean_observed_exposure": 0.0,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": true,
+        "strategy_cost": 0.0,
+        "strategy_gross_return": 0.0,
+        "strategy_net_return": 0.0,
+        "zero_exposure_sessions": 30
+      },
+      "fold": "WF_2",
+      "paired_control": {
+        "active_sessions": 0,
+        "control_fees": 0.0,
+        "control_max_drawdown": 0,
+        "control_net_return": 0.0,
+        "max_absolute_exposure_gap": 0.0,
+        "mean_absolute_exposure_gap": 0.0,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.0,
+        "promotion_eligible": false,
+        "status": "CASH_ONLY_OR_TOO_FEW_ACTIVE_SESSIONS",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_REGIME_VOL_BAND_V1",
+      "stress": 2.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 4,
+        "benchmark_gross_return": -0.007759397430121662,
+        "cash_opportunity_gap": -0.008283014556609847,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": -0.002673742919410027,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.000523617126488185,
+        "mean_observed_exposure": 0.003176574071405902,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": false,
+        "strategy_cost": 61.352500000000006,
+        "strategy_gross_return": -0.002150125792921842,
+        "strategy_net_return": -0.002211352500000041,
+        "zero_exposure_sessions": 26
+      },
+      "fold": "WF_3",
+      "paired_control": {
+        "active_sessions": 4,
+        "control_fees": 0.0,
+        "control_max_drawdown": 0,
+        "control_net_return": 0.0,
+        "max_absolute_exposure_gap": 0.02520406673917852,
+        "mean_absolute_exposure_gap": 0.003176574071405902,
+        "minimum_active_sessions": 10,
+        "net_return_difference": -0.002211352500000041,
+        "promotion_eligible": false,
+        "status": "CASH_ONLY_OR_TOO_FEW_ACTIVE_SESSIONS",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_VOL_MOMENTUM_V1",
+      "stress": 1.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 4,
+        "benchmark_gross_return": -0.007759397430121662,
+        "cash_opportunity_gap": -0.008283046658394633,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": -0.0026739008295557642,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.000523649228272971,
+        "mean_observed_exposure": 0.003176769275851554,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": false,
+        "strategy_cost": 122.70500000000001,
+        "strategy_gross_return": -0.0021502516012827932,
+        "strategy_net_return": -0.002272704999999986,
+        "zero_exposure_sessions": 26
+      },
+      "fold": "WF_3",
+      "paired_control": {
+        "active_sessions": 4,
+        "control_fees": 0.0,
+        "control_max_drawdown": 0,
+        "control_net_return": 0.0,
+        "max_absolute_exposure_gap": 0.025205613416135808,
+        "mean_absolute_exposure_gap": 0.003176769275851554,
+        "minimum_active_sessions": 10,
+        "net_return_difference": -0.002272704999999986,
+        "promotion_eligible": false,
+        "status": "CASH_ONLY_OR_TOO_FEW_ACTIVE_SESSIONS",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_VOL_MOMENTUM_V1",
+      "stress": 2.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 0,
+        "benchmark_gross_return": -0.007759397430121662,
+        "cash_opportunity_gap": -0.007759397430121662,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": 0.0,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.0,
+        "mean_observed_exposure": 0.0,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": false,
+        "strategy_cost": 0.0,
+        "strategy_gross_return": 0.0,
+        "strategy_net_return": 0.0,
+        "zero_exposure_sessions": 30
+      },
+      "fold": "WF_3",
+      "paired_control": {
+        "active_sessions": 0,
+        "control_fees": 0.0,
+        "control_max_drawdown": 0,
+        "control_net_return": 0.0,
+        "max_absolute_exposure_gap": 0.0,
+        "mean_absolute_exposure_gap": 0.0,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.0,
+        "promotion_eligible": false,
+        "status": "CASH_ONLY_OR_TOO_FEW_ACTIVE_SESSIONS",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_REGIME_VOL_V1",
+      "stress": 1.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 0,
+        "benchmark_gross_return": -0.007759397430121662,
+        "cash_opportunity_gap": -0.007759397430121662,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": 0.0,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.0,
+        "mean_observed_exposure": 0.0,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": false,
+        "strategy_cost": 0.0,
+        "strategy_gross_return": 0.0,
+        "strategy_net_return": 0.0,
+        "zero_exposure_sessions": 30
+      },
+      "fold": "WF_3",
+      "paired_control": {
+        "active_sessions": 0,
+        "control_fees": 0.0,
+        "control_max_drawdown": 0,
+        "control_net_return": 0.0,
+        "max_absolute_exposure_gap": 0.0,
+        "mean_absolute_exposure_gap": 0.0,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.0,
+        "promotion_eligible": false,
+        "status": "CASH_ONLY_OR_TOO_FEW_ACTIVE_SESSIONS",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_REGIME_VOL_V1",
+      "stress": 2.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 0,
+        "benchmark_gross_return": -0.007759397430121662,
+        "cash_opportunity_gap": -0.007759397430121662,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": 0.0,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.0,
+        "mean_observed_exposure": 0.0,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": false,
+        "strategy_cost": 0.0,
+        "strategy_gross_return": 0.0,
+        "strategy_net_return": 0.0,
+        "zero_exposure_sessions": 30
+      },
+      "fold": "WF_3",
+      "paired_control": {
+        "active_sessions": 0,
+        "control_fees": 0.0,
+        "control_max_drawdown": 0,
+        "control_net_return": 0.0,
+        "max_absolute_exposure_gap": 0.0,
+        "mean_absolute_exposure_gap": 0.0,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.0,
+        "promotion_eligible": false,
+        "status": "CASH_ONLY_OR_TOO_FEW_ACTIVE_SESSIONS",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_REGIME_VOL_BAND_V1",
+      "stress": 1.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 0,
+        "benchmark_gross_return": -0.007759397430121662,
+        "cash_opportunity_gap": -0.007759397430121662,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": 0.0,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.0,
+        "mean_observed_exposure": 0.0,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": false,
+        "strategy_cost": 0.0,
+        "strategy_gross_return": 0.0,
+        "strategy_net_return": 0.0,
+        "zero_exposure_sessions": 30
+      },
+      "fold": "WF_3",
+      "paired_control": {
+        "active_sessions": 0,
+        "control_fees": 0.0,
+        "control_max_drawdown": 0,
+        "control_net_return": 0.0,
+        "max_absolute_exposure_gap": 0.0,
+        "mean_absolute_exposure_gap": 0.0,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.0,
+        "promotion_eligible": false,
+        "status": "CASH_ONLY_OR_TOO_FEW_ACTIVE_SESSIONS",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_REGIME_VOL_BAND_V1",
+      "stress": 2.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 29,
+        "benchmark_gross_return": -0.012993422100660457,
+        "cash_opportunity_gap": -0.01945008241861257,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": -0.013809710716424783,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.006456660317952112,
+        "mean_observed_exposure": 0.18209352189375558,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": false,
+        "strategy_cost": 2546.3,
+        "strategy_gross_return": -0.007353050398472671,
+        "strategy_net_return": -0.009896299999999969,
+        "zero_exposure_sessions": 1
+      },
+      "fold": "FINAL_HOLDOUT",
+      "paired_control": {
+        "active_sessions": 29,
+        "control_fees": 3023.5237500000007,
+        "control_max_drawdown": 0.04053290027493106,
+        "control_net_return": -0.03212352374999983,
+        "max_absolute_exposure_gap": 0.07538915034230464,
+        "mean_absolute_exposure_gap": 0.05042600683623758,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.022227223749999858,
+        "promotion_eligible": false,
+        "status": "EXPOSURE_NOT_MATCHED",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_VOL_MOMENTUM_V1",
+      "stress": 1.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 29,
+        "benchmark_gross_return": -0.012993422100660457,
+        "cash_opportunity_gap": -0.019444216562665373,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": -0.013809014162515676,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.006450794462004916,
+        "mean_observed_exposure": 0.18230991539275326,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": false,
+        "strategy_cost": 4253.5,
+        "strategy_gross_return": -0.00735821970051076,
+        "strategy_net_return": -0.011603499999999989,
+        "zero_exposure_sessions": 1
+      },
+      "fold": "FINAL_HOLDOUT",
+      "paired_control": {
+        "active_sessions": 29,
+        "control_fees": 4991.047500000001,
+        "control_max_drawdown": 0.04164220255091777,
+        "control_net_return": -0.03409104750000014,
+        "max_absolute_exposure_gap": 0.07550743371987667,
+        "mean_absolute_exposure_gap": 0.05049381409396928,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.02248754750000015,
+        "promotion_eligible": false,
+        "status": "EXPOSURE_NOT_MATCHED",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_VOL_MOMENTUM_V1",
+      "stress": 2.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 29,
+        "benchmark_gross_return": -0.012993422100660457,
+        "cash_opportunity_gap": -0.01945008241861257,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": -0.013809710716424783,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.006456660317952112,
+        "mean_observed_exposure": 0.18209352189375558,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": false,
+        "strategy_cost": 2546.3,
+        "strategy_gross_return": -0.007353050398472671,
+        "strategy_net_return": -0.009896299999999969,
+        "zero_exposure_sessions": 1
+      },
+      "fold": "FINAL_HOLDOUT",
+      "paired_control": {
+        "active_sessions": 29,
+        "control_fees": 3023.5237500000007,
+        "control_max_drawdown": 0.04053290027493106,
+        "control_net_return": -0.03212352374999983,
+        "max_absolute_exposure_gap": 0.07538915034230464,
+        "mean_absolute_exposure_gap": 0.05042600683623758,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.022227223749999858,
+        "promotion_eligible": false,
+        "status": "EXPOSURE_NOT_MATCHED",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_REGIME_VOL_V1",
+      "stress": 1.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 29,
+        "benchmark_gross_return": -0.012993422100660457,
+        "cash_opportunity_gap": -0.019444216562665373,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": -0.013809014162515676,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.006450794462004916,
+        "mean_observed_exposure": 0.18230991539275326,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": false,
+        "strategy_cost": 4253.5,
+        "strategy_gross_return": -0.00735821970051076,
+        "strategy_net_return": -0.011603499999999989,
+        "zero_exposure_sessions": 1
+      },
+      "fold": "FINAL_HOLDOUT",
+      "paired_control": {
+        "active_sessions": 29,
+        "control_fees": 4991.047500000001,
+        "control_max_drawdown": 0.04164220255091777,
+        "control_net_return": -0.03409104750000014,
+        "max_absolute_exposure_gap": 0.07550743371987667,
+        "mean_absolute_exposure_gap": 0.05049381409396928,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.02248754750000015,
+        "promotion_eligible": false,
+        "status": "EXPOSURE_NOT_MATCHED",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_REGIME_VOL_V1",
+      "stress": 2.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 29,
+        "benchmark_gross_return": -0.012993422100660457,
+        "cash_opportunity_gap": -0.017851784628516665,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": -0.011410003944308356,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.004858362527856208,
+        "mean_observed_exposure": 0.17258755008725066,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": false,
+        "strategy_cost": 2330.4475,
+        "strategy_gross_return": -0.0065516414164521475,
+        "strategy_net_return": -0.008880447499999944,
+        "zero_exposure_sessions": 1
+      },
+      "fold": "FINAL_HOLDOUT",
+      "paired_control": {
+        "active_sessions": 29,
+        "control_fees": 3023.5237500000007,
+        "control_max_drawdown": 0.04053290027493106,
+        "control_net_return": -0.03212352374999983,
+        "max_absolute_exposure_gap": 0.10442224280432144,
+        "mean_absolute_exposure_gap": 0.059756609236642874,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.023243076249999883,
+        "promotion_eligible": false,
+        "status": "EXPOSURE_NOT_MATCHED",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_REGIME_VOL_BAND_V1",
+      "stress": 1.0
+    },
+    {
+      "attribution": {
+        "active_sessions": 29,
+        "benchmark_gross_return": -0.012993422100660457,
+        "cash_opportunity_gap": -0.017845203091726658,
+        "cash_return": 0.0,
+        "control_cost_assumption": "Index attribution has no executable trade cost; never compare as a certified net-cost traded control.",
+        "gross_residual_not_alpha": -0.011406972926856551,
+        "limitations": [
+          "Index has no certified tradable opening price",
+          "Prior-close risk budget differs from intraday/open exposure",
+          "Unadjusted prices and corporate actions remain unverified",
+          "No statistical alpha inference"
+        ],
+        "matched_index_gross_return": 0.004851780991066201,
+        "mean_observed_exposure": 0.17277940703205627,
+        "mode": "NON_TRADABLE_LAGGED_CLOSE_EXPOSURE_ATTRIBUTION",
+        "rising_market": false,
+        "strategy_cost": 3903.545,
+        "strategy_gross_return": -0.00655519193579035,
+        "strategy_net_return": -0.010453545000000175,
+        "zero_exposure_sessions": 1
+      },
+      "fold": "FINAL_HOLDOUT",
+      "paired_control": {
+        "active_sessions": 29,
+        "control_fees": 4991.047500000001,
+        "control_max_drawdown": 0.04164220255091777,
+        "control_net_return": -0.03409104750000014,
+        "max_absolute_exposure_gap": 0.10457875981153442,
+        "mean_absolute_exposure_gap": 0.05982514036117508,
+        "minimum_active_sessions": 10,
+        "net_return_difference": 0.023637502499999963,
+        "promotion_eligible": false,
+        "status": "EXPOSURE_NOT_MATCHED",
+        "tolerance": 0.01
+      },
+      "strategy_id": "V101_REGIME_VOL_BAND_V1",
+      "stress": 2.0
+    }
+  ],
+  "forward_sessions": 0,
+  "promotion_enabled": false,
+  "original_source_unchanged": true,
+  "source_v1_registry_unchanged": true
+}
