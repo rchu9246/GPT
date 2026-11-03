@@ -1,0 +1,53 @@
+name: V10.1 isolated paper research checks
+on:
+  pull_request:
+  push:
+    branches: [codex/v101-paper-challenger]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  python-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Existing and challenger tests
+        env:
+          PYTHONPATH: .:tests/v10
+        run: |
+          python scripts/check_v101.py
+      - name: Reproduce immutable 18-account baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/rchu9246/GPT/actions/artifacts/13164239769/zip > "$RUNNER_TEMP/v10-original.zip"
+          python - <<'PY'
+          import os, hashlib
+          from pathlib import Path
+          from zipfile import ZipFile
+          from automation.v101.baseline import audit, ARTIFACT_SHA256
+          archive=Path(os.environ['RUNNER_TEMP'])/'v10-original.zip'
+          assert hashlib.sha256(archive.read_bytes()).hexdigest()==ARTIFACT_SHA256
+          root=Path(os.environ['RUNNER_TEMP'])/'v10-original-readonly'
+          with ZipFile(archive) as z:
+              assert all(not Path(i.filename).is_absolute() and '..' not in Path(i.filename).parts for i in z.infolist())
+              z.extractall(root)
+          result=audit(root,archive)
+          assert result['account_count']==18 and result['sealed_source_unchanged']
+          print('Verified immutable artifact digest, 18 hash-chain accounts, daily equity and final accounting.')
+          PY
+      - name: Frozen research registry and safety
+        run: |
+          python -c "import json; from automation.v101.specs import registry; assert json.load(open('config/v101_frozen_specs.json')) == registry(); assert registry()['promotion_enabled'] is False"
+  dashboard-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts --no-package-lock --no-audit --no-fund
+      - run: npm run build

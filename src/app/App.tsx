@@ -38,6 +38,7 @@ import StockIntelligenceV9 from "../pages/StockIntelligenceV9";
 import PortfolioOSV11 from "../pages/PortfolioOSV11";
 import RiskAnalyticsV12 from "../pages/RiskAnalyticsV12";
 import MultiStrategyV10 from "../pages/MultiStrategyV10";
+import ChallengerV101 from "../pages/ChallengerV101";
 import StrategyLabV9 from "../pages/StrategyLabV9";
 import SystemOpsV9 from "../pages/SystemOpsV9";
 
@@ -79,6 +80,7 @@ type Page =
   | "screener"
   | "portfolio"
   | "risk"
+  | "challenger101"
   | "multistrategy"
   | "strategy"
   | "system";
@@ -121,6 +123,7 @@ const nav: Array<[Page, string]> = [
   ["screener", "AI 選股"],
   ["portfolio", "舊版投組"],
   ["risk", "進階風險"],
+  ["challenger101", "V10.1 模擬研究"],
   ["multistrategy", "多策略"],
   ["strategy", "策略實驗室"],
   ["system", "系統管線"],
@@ -218,6 +221,8 @@ export default function App() {
     content = <PortfolioOSV11 />;
   } else if (page === "risk") {
     content = <RiskAnalyticsV12 />;
+  } else if (page === "challenger101") {
+    content = <ChallengerV101 />;
   } else if (page === "multistrategy") {
     content = <MultiStrategyV10 />;
   } else if (page === "strategy") {
