@@ -10,7 +10,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: phase3715-first-live-paper-session-safety-validation
+  group: production-paper-readiness-reconciliation
   cancel-in-progress: false
 
 jobs:
@@ -58,6 +58,15 @@ jobs:
             "/repos/${GITHUB_REPOSITORY}/actions/workflows/${WF3714}/runs?branch=main&per_page=20" \
             --jq '[.workflow_runs[] | select(.conclusion == "success")][0].conclusion // empty')"
           [ "$result" = "success" ] || { echo "::error::No successful Phase 3.7.14 run found."; exit 1; }
+
+      - name: Recompute readiness from current persisted evidence
+        env:
+          PHASE375_RESULT_PATH: artifacts/phase375/phase375_result.json
+          PHASE376_RESULT_PATH: artifacts/phase376/phase376_result.json
+        run: |
+          python automation/v92/paper_trading_phase375_production_paper_multi_cycle_stability_evidence_qualification.py
+          python automation/v92/paper_trading_phase376_production_paper_multi_cycle_qualification_promotion_gate.py
+          python automation/v92/paper_trading_phase379_production_paper_qualification_state_reconciliation_automatic_promotion_readiness.py
 
       - name: Evaluate runtime activation and first live paper session safety
         id: phase3715
