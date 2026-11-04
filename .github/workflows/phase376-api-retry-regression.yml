@@ -1,0 +1,34 @@
+name: Phase 3.7.6 API retry regression (no promotion)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/gpt-quant-v92-paper-trading-phase376-production-paper-multi-cycle-qualification-promotion-gate.yml'
+      - '.github/workflows/phase376-api-retry-regression.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate-api-retry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate resolver shell syntax and safety constraints
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          p=Path('.github/workflows/gpt-quant-v92-paper-trading-phase376-production-paper-multi-cycle-qualification-promotion-gate.yml')
+          s=p.read_text()
+          start=s.index('      - name: Resolve latest Phase 3.7.5 evidence')
+          end=s.index('      - name: Execute Phase 3.7.6', start)
+          block=s[start:end]
+          script=block.split('        run: |',1)[1]
+          lines=script.splitlines()
+          script='\n'.join(line[10:] if line.startswith('          ') else line for line in lines)
+          subprocess.run(['bash','-n'],input=script,text=True,check=True)
+          for token in ('gh_read()', 'attempt * 3', 'unzip -t', 'exit 1', 'phase375_result.json'):
+              assert token in script, token
+          assert '|| true' not in script.split('run_json=')[1].split('artifact_id=')[0], 'API errors must not be swallowed'
+          print('Phase 3.7.6 resolver syntax and fail-closed contract: PASS')
+          PY
