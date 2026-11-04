@@ -55,34 +55,54 @@ jobs:
           mkdir -p artifacts/phase376/input /tmp/phase375
           workflow="gpt-quant-v92-paper-trading-phase375-production-paper-multi-cycle-stability-evidence-qualification.yml"
 
-          run_id="$(gh api \
-            -H "Accept: application/vnd.github+json" \
-            "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?branch=main&status=success&per_page=20" \
-            --jq '.workflow_runs[0].id // empty' || true)"
+          # Retry only transient API/service failures; never treat an API failure as missing evidence.
+          gh_read() {
+            local endpoint="$1" attempt=1
+            while [ "$attempt" -le 4 ]; do
+              if gh api -H "Accept: application/vnd.github+json" "$endpoint" > /tmp/phase375/api-response.json; then
+                cat /tmp/phase375/api-response.json
+                return 0
+              fi
+              echo "::warning::GitHub API request failed (attempt $attempt/4): $endpoint" >&2
+              if [ "$attempt" -eq 4 ]; then
+                echo "::error::GitHub API unavailable; promotion remains blocked." >&2
+                return 1
+              fi
+              sleep $((attempt * 3))
+              attempt=$((attempt + 1))
+            done
+          }
 
+          run_json="$(gh_read "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?branch=main&status=success&per_page=20")"
+          run_id="$(printf '%s' "$run_json" | jq -r '.workflow_runs[0].id // empty')"
           if [ -z "$run_id" ]; then
             echo "No successful Phase 3.7.5 run found; gate will remain WAITING."
             exit 0
           fi
 
-          artifact_id="$(gh api \
-            -H "Accept: application/vnd.github+json" \
-            "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" \
-            --jq '.artifacts[] | select(.name=="phase375-production-paper-multi-cycle-stability-evidence") | .id' \
-            | head -n 1 || true)"
-
+          artifacts_json="$(gh_read "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts")"
+          artifact_id="$(printf '%s' "$artifacts_json" | jq -r '[.artifacts[] | select(.name=="phase375-production-paper-multi-cycle-stability-evidence" and (.expired | not))][0].id // empty')"
           if [ -z "$artifact_id" ]; then
-            echo "No Phase 3.7.5 evidence artifact found; gate will remain WAITING."
+            echo "No unexpired Phase 3.7.5 evidence artifact found; gate will remain WAITING."
             exit 0
           fi
 
-          gh api \
-            -H "Accept: application/vnd.github+json" \
-            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \
-            > /tmp/phase375/evidence.zip
+          # Never accept a partial archive. A failed download is a blocked gate.
+          for attempt in 1 2 3 4; do
+            if gh api -H "Accept: application/vnd.github+json" \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \
+              > /tmp/phase375/evidence.zip && unzip -t /tmp/phase375/evidence.zip >/dev/null; then
+              break
+            fi
+            rm -f /tmp/phase375/evidence.zip
+            if [ "$attempt" -eq 4 ]; then
+              echo "::error::Evidence download failed; promotion remains blocked."
+              exit 1
+            fi
+            sleep $((attempt * 3))
+          done
 
           unzip -o /tmp/phase375/evidence.zip -d /tmp/phase375/unpacked >/dev/null
-
           result="$(find /tmp/phase375/unpacked -type f -name 'phase375_result.json' | head -n 1 || true)"
           if [ -n "$result" ]; then
             cp "$result" artifacts/phase376/input/phase375_result.json

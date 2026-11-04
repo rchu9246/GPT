@@ -1,0 +1,135 @@
+name: Phase 3.7.6 API retry regression (no promotion)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/gpt-quant-v92-paper-trading-phase376-production-paper-multi-cycle-qualification-promotion-gate.yml'
+      - '.github/workflows/phase376-api-retry-regression.yml'
+      - 'tests/phase376/test_api_retry_faults.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate-api-retry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate resolver shell syntax and safety constraints
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          p=Path('.github/workflows/gpt-quant-v92-paper-trading-phase376-production-paper-multi-cycle-qualification-promotion-gate.yml')
+          s=p.read_text()
+          start=s.index('      - name: Resolve latest Phase 3.7.5 evidence')
+          end=s.index('      - name: Execute Phase 3.7.6', start)
+          block=s[start:end]
+          script=block.split('        run: |',1)[1]
+          lines=script.splitlines()
+          script='\n'.join(line[10:] if line.startswith('          ') else line for line in lines)
+          subprocess.run(['bash','-n'],input=script,text=True,check=True)
+          for token in ('gh_read()', 'attempt * 3', 'unzip -t', 'exit 1', 'phase375_result.json'):
+              assert token in script, token
+          assert '|| true' not in script.split('run_json=')[1].split('artifact_id=')[0], 'API errors must not be swallowed'
+          print('Phase 3.7.6 resolver syntax and fail-closed contract: PASS')
+          PY
+      - name: Fault-injection regression tests (mocked GitHub API, no promotion)
+        run: python -m unittest discover -s tests/phase376 -p 'test_api_retry_faults.py' -v
+      - name: Read-only live GitHub API smoke test (no gate dispatch)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          workflow="gpt-quant-v92-paper-trading-phase375-production-paper-multi-cycle-stability-evidence-qualification.yml"
+          endpoint="/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?branch=main&status=success&per_page=20"
+          ok=0
+          for attempt in 1 2 3 4; do
+            if gh api -H "Accept: application/vnd.github+json" "$endpoint" > /tmp/phase375-runs.json; then
+              ok=1
+              break
+            fi
+            if [ "$attempt" -eq 4 ]; then
+              echo "::error::Live GitHub API remained unavailable; fail closed."
+              exit 1
+            fi
+            sleep $((attempt * 3))
+          done
+          test "$ok" -eq 1
+          jq -e '.workflow_runs | type == "array"' /tmp/phase375-runs.json >/dev/null
+          run_id="$(jq -r '.workflow_runs[0].id // empty' /tmp/phase375-runs.json)"
+          if [ -z "$run_id" ]; then
+            echo "No successful Phase 3.7.5 run; no promotion attempted."
+            exit 0
+          fi
+          for attempt in 1 2 3 4; do
+            if gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" > /tmp/phase375-artifacts.json; then
+              jq -e '.artifacts | type == "array"' /tmp/phase375-artifacts.json >/dev/null
+              jq -r '[.artifacts[] | select(.name == "phase375-production-paper-multi-cycle-stability-evidence" and (.expired | not))] | length | "Available evidence artifacts: \(.)"' /tmp/phase375-artifacts.json
+              exit 0
+            fi
+            if [ "$attempt" -eq 4 ]; then
+              echo "::error::Live artifact API remained unavailable; fail closed."
+              exit 1
+            fi
+            sleep $((attempt * 3))
+          done
+      - name: Verify real evidence archive read-only (no promotion)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          runs=json.loads(Path('/tmp/phase375-runs.json').read_text())
+          artifacts=json.loads(Path('/tmp/phase375-artifacts.json').read_text()) if Path('/tmp/phase375-artifacts.json').exists() else {'artifacts':[]}
+          matches=[a for a in artifacts['artifacts'] if a.get('name')=='phase375-production-paper-multi-cycle-stability-evidence' and not a.get('expired', True)]
+          Path('/tmp/phase375-evidence-id').write_text(str(matches[0]['id']) if matches else '')
+          print('Unexpired evidence archive found:',bool(matches))
+          PY
+          artifact_id="$(cat /tmp/phase375-evidence-id)"
+          if [ -z "$artifact_id" ]; then
+            echo "No available evidence; safe read-only verification skipped."
+            exit 0
+          fi
+          for attempt in 1 2 3 4; do
+            if gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > /tmp/phase375-evidence.zip && unzip -t /tmp/phase375-evidence.zip >/dev/null; then
+              break
+            fi
+            rm -f /tmp/phase375-evidence.zip
+            if [ "$attempt" -eq 4 ]; then
+              echo "::error::Evidence download or archive validation failed."
+              exit 1
+            fi
+            sleep $((attempt * 3))
+          done
+          if ! unzip -Z1 /tmp/phase375-evidence.zip | grep -Eq '(^|/)phase375_result[.]json$'; then
+            echo "::error::Archive missing phase375_result.json"
+            exit 1
+          fi
+          echo "Real Phase 3.7.5 evidence archive integrity PASS; no gate or promotion executed."
+      - name: Evaluate Phase 3.7.6 gate locally without promotion or persistence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/phase376-readonly/input
+          unzip -oq /tmp/phase375-evidence.zip -d /tmp/phase376-readonly/input
+          evidence="$(find /tmp/phase376-readonly/input -type f -name phase375_result.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/phase376-readonly/phase375_result.json
+          cd /tmp/phase376-readonly
+          PHASE375_RESULT_PATH=/tmp/phase376-readonly/phase375_result.json python "$GITHUB_WORKSPACE/automation/v92/paper_trading_phase376_production_paper_multi_cycle_qualification_promotion_gate.py"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          result=json.loads(Path('artifacts/phase376/phase376_result.json').read_text())
+          assert result['safety']['paper_only'] is True
+          assert result['safety']['broker_order_submission_enabled'] is False
+          assert result['safety']['real_money_trading_enabled'] is False
+          assert result['safety']['historical_rewrite_allowed'] is False
+          assert result['state'] in ('PROMOTION_WAITING_FOR_QUALIFICATION','PRODUCTION_PAPER_PROMOTION_AUTHORIZED','PRODUCTION_PAPER_PROMOTION_BLOCKED')
+          print('Read-only local gate evaluation:', result['state'])
+          print('This CI job does not dispatch or apply promotion.')
+          PY
