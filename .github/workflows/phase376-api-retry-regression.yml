@@ -110,3 +110,26 @@ jobs:
             exit 1
           fi
           echo "Real Phase 3.7.5 evidence archive integrity PASS; no gate or promotion executed."
+      - name: Evaluate Phase 3.7.6 gate locally without promotion or persistence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/phase376-readonly/input
+          unzip -oq /tmp/phase375-evidence.zip -d /tmp/phase376-readonly/input
+          evidence="$(find /tmp/phase376-readonly/input -type f -name phase375_result.json -print -quit)"
+          test -n "$evidence"
+          cp "$evidence" /tmp/phase376-readonly/phase375_result.json
+          cd /tmp/phase376-readonly
+          PHASE375_RESULT_PATH=/tmp/phase376-readonly/phase375_result.json python "$GITHUB_WORKSPACE/automation/v92/paper_trading_phase376_production_paper_multi_cycle_qualification_promotion_gate.py"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          result=json.loads(Path('artifacts/phase376/phase376_result.json').read_text())
+          assert result['safety']['paper_only'] is True
+          assert result['safety']['broker_order_submission_enabled'] is False
+          assert result['safety']['real_money_trading_enabled'] is False
+          assert result['safety']['historical_rewrite_allowed'] is False
+          assert result['state'] in ('PROMOTION_WAITING_FOR_QUALIFICATION','PRODUCTION_PAPER_PROMOTION_AUTHORIZED','PRODUCTION_PAPER_PROMOTION_BLOCKED')
+          print('Read-only local gate evaluation:', result['state'])
+          print('This CI job does not dispatch or apply promotion.')
+          PY
