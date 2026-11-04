@@ -65,7 +65,7 @@ jobs:
           for attempt in 1 2 3 4; do
             if gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" > /tmp/phase375-artifacts.json; then
               jq -e '.artifacts | type == "array"' /tmp/phase375-artifacts.json >/dev/null
-              jq -r '[.artifacts[] | select(.name == "phase375-production-paper-multi-cycle-stability-evidence" and (.expired | not))] | length | "Available evidence artifacts: \\(.)"' /tmp/phase375-artifacts.json
+              jq -r '[.artifacts[] | select(.name == "phase375-production-paper-multi-cycle-stability-evidence" and (.expired | not))] | length | "Available evidence artifacts: \(.)"' /tmp/phase375-artifacts.json
               exit 0
             fi
             if [ "$attempt" -eq 4 ]; then
