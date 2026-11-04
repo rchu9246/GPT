@@ -74,3 +74,39 @@ jobs:
             fi
             sleep $((attempt * 3))
           done
+      - name: Verify real evidence archive read-only (no promotion)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          runs=json.loads(Path('/tmp/phase375-runs.json').read_text())
+          artifacts=json.loads(Path('/tmp/phase375-artifacts.json').read_text()) if Path('/tmp/phase375-artifacts.json').exists() else {'artifacts':[]}
+          matches=[a for a in artifacts['artifacts'] if a.get('name')=='phase375-production-paper-multi-cycle-stability-evidence' and not a.get('expired', True)]
+          Path('/tmp/phase375-evidence-id').write_text(str(matches[0]['id']) if matches else '')
+          print('Unexpired evidence archive found:',bool(matches))
+          PY
+          artifact_id="$(cat /tmp/phase375-evidence-id)"
+          if [ -z "$artifact_id" ]; then
+            echo "No available evidence; safe read-only verification skipped."
+            exit 0
+          fi
+          for attempt in 1 2 3 4; do
+            if gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > /tmp/phase375-evidence.zip && unzip -t /tmp/phase375-evidence.zip >/dev/null; then
+              break
+            fi
+            rm -f /tmp/phase375-evidence.zip
+            if [ "$attempt" -eq 4 ]; then
+              echo "::error::Evidence download or archive validation failed."
+              exit 1
+            fi
+            sleep $((attempt * 3))
+          done
+          if ! unzip -Z1 /tmp/phase375-evidence.zip | grep -Eq '(^|/)phase375_result[.]json$'; then
+            echo "::error::Archive missing phase375_result.json"
+            exit 1
+          fi
+          echo "Real Phase 3.7.5 evidence archive integrity PASS; no gate or promotion executed."
