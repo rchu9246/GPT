@@ -4,6 +4,7 @@ on:
     paths:
       - '.github/workflows/gpt-quant-v92-paper-trading-phase376-production-paper-multi-cycle-qualification-promotion-gate.yml'
       - '.github/workflows/phase376-api-retry-regression.yml'
+      - 'tests/phase376/test_api_retry_faults.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -32,3 +33,5 @@ jobs:
           assert '|| true' not in script.split('run_json=')[1].split('artifact_id=')[0], 'API errors must not be swallowed'
           print('Phase 3.7.6 resolver syntax and fail-closed contract: PASS')
           PY
+      - name: Fault-injection regression tests (mocked GitHub API, no promotion)
+        run: python -m unittest discover -s tests/phase376 -p 'test_api_retry_faults.py' -v
