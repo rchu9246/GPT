@@ -35,3 +35,42 @@ jobs:
           PY
       - name: Fault-injection regression tests (mocked GitHub API, no promotion)
         run: python -m unittest discover -s tests/phase376 -p 'test_api_retry_faults.py' -v
+      - name: Read-only live GitHub API smoke test (no gate dispatch)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          workflow="gpt-quant-v92-paper-trading-phase375-production-paper-multi-cycle-stability-evidence-qualification.yml"
+          endpoint="/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?branch=main&status=success&per_page=20"
+          ok=0
+          for attempt in 1 2 3 4; do
+            if gh api -H "Accept: application/vnd.github+json" "$endpoint" > /tmp/phase375-runs.json; then
+              ok=1
+              break
+            fi
+            if [ "$attempt" -eq 4 ]; then
+              echo "::error::Live GitHub API remained unavailable; fail closed."
+              exit 1
+            fi
+            sleep $((attempt * 3))
+          done
+          test "$ok" -eq 1
+          jq -e '.workflow_runs | type == "array"' /tmp/phase375-runs.json >/dev/null
+          run_id="$(jq -r '.workflow_runs[0].id // empty' /tmp/phase375-runs.json)"
+          if [ -z "$run_id" ]; then
+            echo "No successful Phase 3.7.5 run; no promotion attempted."
+            exit 0
+          fi
+          for attempt in 1 2 3 4; do
+            if gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" > /tmp/phase375-artifacts.json; then
+              jq -e '.artifacts | type == "array"' /tmp/phase375-artifacts.json >/dev/null
+              jq -r '[.artifacts[] | select(.name == "phase375-production-paper-multi-cycle-stability-evidence" and (.expired | not))] | length | "Available evidence artifacts: \\(.)"' /tmp/phase375-artifacts.json
+              exit 0
+            fi
+            if [ "$attempt" -eq 4 ]; then
+              echo "::error::Live artifact API remained unavailable; fail closed."
+              exit 1
+            fi
+            sleep $((attempt * 3))
+          done
