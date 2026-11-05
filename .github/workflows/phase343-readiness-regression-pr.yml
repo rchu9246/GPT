@@ -1,0 +1,22 @@
+name: Phase 3.4.3 Readiness Regression (PR)
+on:
+  pull_request:
+    paths:
+      - 'automation/v92/paper_trading_phase343_approval_readiness.py'
+      - 'tests/phase343/**'
+      - '.github/workflows/phase343-readiness-regression-pr.yml'
+permissions:
+  contents: read
+jobs:
+  phase343-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile changed module and test
+        run: python -m compileall -q automation/v92/paper_trading_phase343_approval_readiness.py tests/phase343/test_readiness_state_regression.py
+      - name: Run six fail-closed regression tests
+        run: python -m unittest discover -s tests/phase343 -p 'test_readiness_state_regression.py' -v
