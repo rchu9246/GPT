@@ -1,0 +1,22 @@
+name: Phase 3.6.9 Upstream Freshness Diagnostic (PR)
+on:
+  pull_request:
+    paths:
+      - 'automation/v92/phase369_upstream_freshness_diagnostic.py'
+      - 'tests/phase369/**'
+      - '.github/workflows/phase369-upstream-freshness-pr.yml'
+permissions:
+  contents: read
+jobs:
+  phase369-diagnostic-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile
+        run: python -m compileall -q automation/v92/phase369_upstream_freshness_diagnostic.py tests/phase369/test_upstream_freshness.py
+      - name: Test fail-closed upstream diagnostic
+        run: python -m unittest discover -s tests/phase369 -p 'test_upstream_freshness.py' -v
