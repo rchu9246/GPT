@@ -131,7 +131,14 @@ def validate_source(data):
     if stale_days < 0:
         errors.append("negative_market_stale_days")
 
-    if str(data.get("release_state")).upper() != "LOCKED":
+    # Phase 3.4 evaluate returns AWAITING_HUMAN_APPROVAL when qualified.
+    # This is a pre-approval state, never a release authorization.
+    release_state = str(data.get("release_state")).upper()
+    qualification_state = str(data.get("qualification_state")).upper()
+    if release_state == "AWAITING_HUMAN_APPROVAL":
+        if qualification_state != "QUALIFIED" or str(data.get("requested_action")) != "evaluate":
+            errors.append("preapproval_state_inconsistent")
+    elif release_state != "LOCKED":
         errors.append("release_not_locked_before_human_approval")
 
     return len(errors) == 0, errors
