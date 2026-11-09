@@ -131,7 +131,46 @@ def validate_source(data):
     if stale_days < 0:
         errors.append("negative_market_stale_days")
 
-    if str(data.get("release_state")).upper() != "LOCKED":
+    # Phase 3.4's canonical evaluator reports AWAITING_HUMAN_APPROVAL
+    # after qualification, while keeping release locked until explicit approval.
+    # Accept that non-released state only with the complete safety contract.
+    release_state = str(data.get("release_state")).upper()
+    if release_state == "AWAITING_HUMAN_APPROVAL":
+        if (
+            str(data.get("status")).upper() != "PASS"
+            or str(data.get("qualification_state")).upper() != "QUALIFIED"
+            or pass_days < REQUIRED_PASS_DAYS
+        ):
+            errors.append("awaiting_human_approval_without_qualification")
+        if data.get("requested_action") != "evaluate":
+            errors.append("unexpected_approval_action")
+        checks = data.get("checks")
+        if (
+            not isinstance(checks, dict)
+            or not checks
+            or not all(value is True for value in checks.values())
+        ):
+            errors.append("qualification_checks_incomplete")
+        approval = data.get("approval")
+        if (
+            not isinstance(approval, dict)
+            or approval.get("required") is not True
+            or approval.get("approver_present") is not False
+            or approval.get("approval_phrase_valid") is not False
+        ):
+            errors.append("human_approval_gate_invalid")
+        safety = data.get("safety")
+        if (
+            not isinstance(safety, dict)
+            or safety.get("broker_execution_enabled") is not False
+            or safety.get("real_money_enabled") is not False
+            or safety.get("automatic_live_switch_enabled") is not False
+            or safety.get("paper_release_only") is not True
+            or safety.get("kill_switch") != "ARMED"
+            or safety.get("fail_closed") is not True
+        ):
+            errors.append("paper_trading_safety_lock_invalid")
+    elif release_state != "LOCKED":
         errors.append("release_not_locked_before_human_approval")
 
     return len(errors) == 0, errors
