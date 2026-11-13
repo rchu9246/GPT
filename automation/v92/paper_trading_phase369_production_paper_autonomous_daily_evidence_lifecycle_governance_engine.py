@@ -257,6 +257,15 @@ def main() -> int:
         "cycle_date",
     )
 
+    # Never attach a different day's master evidence to this lifecycle record.
+    if master is None:
+        raise RuntimeError("Canonical master cycle evidence missing")
+    master_date = str(master.get("cycle_date") or "")
+    if master_date != args.evidence_date:
+        raise RuntimeError(
+            f"Latest master cycle date mismatch: expected={args.evidence_date}, actual={master_date}"
+        )
+
     previous = latest_before(
         sb,
         "paper_daily_lifecycle_evidence_v92",
