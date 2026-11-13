@@ -101,6 +101,18 @@ def load_phase34_result():
     return data
 
 
+REQUIRED_QUALIFICATION_CHECKS = frozenset({
+    "latest_snapshot_pass",
+    "latest_market_date_present",
+    "market_data_fresh",
+    "equity_non_negative",
+    "positions_within_limit",
+    "drawdown_within_limit",
+    "safety_mode_locked",
+    "consecutive_pass_requirement",
+})
+
+
 def validate_source(data):
     errors = []
 
@@ -147,7 +159,7 @@ def validate_source(data):
         checks = data.get("checks")
         if (
             not isinstance(checks, dict)
-            or not checks
+            or checks.keys() != REQUIRED_QUALIFICATION_CHECKS
             or not all(value is True for value in checks.values())
         ):
             errors.append("qualification_checks_incomplete")
@@ -172,6 +184,9 @@ def validate_source(data):
             errors.append("paper_trading_safety_lock_invalid")
     elif release_state != "LOCKED":
         errors.append("release_not_locked_before_human_approval")
+
+    elif str(data.get("status")).upper() == "PASS" and pass_days >= REQUIRED_PASS_DAYS:
+        errors.append("locked_source_claims_completed_qualification")
 
     return len(errors) == 0, errors
 
