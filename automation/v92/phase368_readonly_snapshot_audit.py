@@ -57,6 +57,13 @@ def audit(snapshot, business_date, portfolio=PORTFOLIO, strategy=STRATEGY):
                 errors.append("SUPERVISION_NOT_CONTINUABLE")
             if not isinstance(row.get("reason_codes"), list):
                 missing.append("SUPERVISION_REASONS_MISSING")
+            elif any(isinstance(reason, str) and reason.upper().startswith("CRITICAL_") for reason in row["reason_codes"]):
+                errors.append("SUPERVISION_CRITICAL_REASON_PRESENT")
+            critical = row.get("critical_failures")
+            if not isinstance(critical, list):
+                missing.append("SUPERVISION_CRITICAL_FAILURES_UNVERIFIED")
+            elif critical:
+                errors.append("SUPERVISION_CRITICAL_FAILURES_PRESENT")
         if source == "activation" and (row.get("activation_state") not in ("ACTIVE", "ACTIVE_WITH_OBSERVATION") or row.get("autonomous_paper_operations_active") is not True):
             errors.append("ACTIVATION_NOT_ACTIVE")
         if source == "qualification" and (row.get("qualification_state") not in ("QUALIFIED", "QUALIFIED_WITH_OBSERVATION") or row.get("autonomous_paper_operations_authorized") is not True):
