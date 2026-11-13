@@ -8,7 +8,7 @@ def fixture():
     rows = {k: {"portfolio_id": PORTFOLIO, "strategy_version": STRATEGY, date_field: DAY,
                 "updated_at": DAY + "T12:00:00+00:00"}
             for k, (_, date_field) in SOURCES.items()}
-    rows["supervision"].update(supervision_state="CONTINUE", safety_revocation_triggered=False,
+    rows["supervision"].update(supervision_state="CONTINUE_ACTIVE", safety_revocation_triggered=False,
                                 autonomous_paper_operations_continued=True, reason_codes=[])
     rows["activation"].update(activation_state="ACTIVE", autonomous_paper_operations_active=True)
     rows["qualification"].update(qualification_state="QUALIFIED", autonomous_paper_operations_authorized=True)
@@ -38,6 +38,10 @@ class ReadonlyAuditTests(unittest.TestCase):
     def test_missing_source(self):
         row = fixture(); del row["sla"]
         self.assertEqual(audit(row, DAY)["status"], "INSUFFICIENT_EVIDENCE")
+
+    def test_noncanonical_supervision_state_fails_closed(self):
+        row = fixture(); row["supervision"]["supervision_state"] = "CONTINUE"
+        self.assertEqual(audit(row, DAY)["status"], "BLOCKED")
 
     def test_revoked(self):
         row = fixture(); row["supervision"]["safety_revocation_triggered"] = True
