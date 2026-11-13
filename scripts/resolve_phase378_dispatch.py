@@ -11,8 +11,9 @@ def resolve(workflow, repository, parent_id, attempt, *, run=subprocess.run, sle
     query = f"{endpoint}?branch=main&event=workflow_dispatch&per_page=100"
 
     def lookup():
-        response = run(["gh", "api", query], check=True, capture_output=True, text=True)
-        matches = [row["id"] for row in json.loads(response.stdout)["workflow_runs"]
+        response = run(["gh", "api", query, "--paginate", "--slurp"], check=True, capture_output=True, text=True, timeout=15)
+        matches = [row["id"] for page in json.loads(response.stdout)
+                   for row in page["workflow_runs"]
                    if row["display_title"] == correlation]
         if len(matches) > 1:
             raise ValueError("Multiple correlated Phase 3.7.8 runs")
@@ -23,14 +24,19 @@ def resolve(workflow, repository, parent_id, attempt, *, run=subprocess.run, sle
         return existing
     if attempt != "1":
         raise ValueError("Previous attempt has no verifiable child")
-    response = run(["gh", "workflow", "run", workflow, "--ref", "main",
-                    "-f", f"dispatch_correlation={correlation}"], stdout=sys.stderr)
-    if response.returncode:
+    try:
+        response = run(["gh", "workflow", "run", workflow, "--ref", "main",
+                        "-f", f"dispatch_correlation={correlation}"],
+                       stdout=sys.stderr, timeout=30)
+        uncertain = response.returncode != 0
+    except subprocess.TimeoutExpired:
+        uncertain = True
+    if uncertain:
         print("Dispatch outcome uncertain. Checking correlation.", file=sys.stderr)
     for _ in range(30):
         try:
             child = lookup()
-        except subprocess.CalledProcessError:
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
             child = None
         if child is not None:
             return child
