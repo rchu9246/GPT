@@ -9,7 +9,13 @@ def fixture():
                 "updated_at": DAY + "T12:00:00+00:00"}
             for k, (_, date_field) in SOURCES.items()}
     rows["supervision"].update(supervision_state="CONTINUE_ACTIVE", safety_revocation_triggered=False,
-                                autonomous_paper_operations_continued=True, reason_codes=[], critical_failures=[])
+                                autonomous_paper_operations_continued=True, reason_codes=[], critical_failures=[],
+                                paper_only=True, fail_closed_policy=True,
+                                broker_api_used=False, broker_credentials_used=False,
+                                broker_order_submission_enabled=False, real_money_trading_enabled=False,
+                                live_money_release_authorized=False,
+                                canonical_dates={source: DAY for source in
+                                                 ("activation", "qualification", "readiness", "health", "sla", "master")})
     rows["activation"].update(activation_state="ACTIVE", autonomous_paper_operations_active=True)
     rows["qualification"].update(qualification_state="QUALIFIED", autonomous_paper_operations_authorized=True)
     rows["readiness"].update(readiness_status="READY", promotion_gate_open=True)
@@ -85,6 +91,26 @@ class ReadonlyAuditTests(unittest.TestCase):
             source: DAY for source in ("activation", "qualification", "readiness", "health", "sla", "master")
         }
         self.assertEqual(audit(row, DAY)["status"], "READY")
+
+    def test_supervision_level_broker_flag_blocks(self):
+        row = fixture(); row["supervision"]["broker_order_submission_enabled"] = True
+        result = audit(row, DAY)
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertIn("UNSAFE_SUPERVISION_BROKER_ORDER_SUBMISSION_ENABLED", result["reasons"])
+
+    def test_supervision_level_real_money_flag_blocks(self):
+        row = fixture(); row["supervision"]["real_money_trading_enabled"] = True
+        self.assertEqual(audit(row, DAY)["status"], "BLOCKED")
+
+    def test_missing_supervision_paper_only_is_insufficient(self):
+        row = fixture(); del row["supervision"]["paper_only"]
+        self.assertEqual(audit(row, DAY)["status"], "INSUFFICIENT_EVIDENCE")
+
+    def test_missing_supervision_canonical_dates_is_insufficient(self):
+        row = fixture(); del row["supervision"]["canonical_dates"]
+        result = audit(row, DAY)
+        self.assertEqual(result["status"], "INSUFFICIENT_EVIDENCE")
+        self.assertIn("SUPERVISION_CANONICAL_DATES_MISSING", result["reasons"])
 
     def test_revoked(self):
         row = fixture(); row["supervision"]["safety_revocation_triggered"] = True
