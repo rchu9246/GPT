@@ -23,6 +23,10 @@ def fixture():
     rows["sla"]["sla_status"] = "SLA_PASS"
     rows["master"]["master_status"] = "PASS"
     rows["incident"]["incident_state"] = "CLOSED"
+    rows["supervision"].update(activation_state="ACTIVE", qualification_state="QUALIFIED",
+                               readiness_state="READY", health_state="HEALTHY", sla_state="SLA_PASS",
+                               master_cycle_state="PASS", open_incident=False,
+                               incident_severity="UNKNOWN")
     rows.update(portfolio_id=PORTFOLIO, strategy_version=STRATEGY, business_date=DAY,
                 producer={"run_id": 999999, "attempt": 1, "canonical_sizing_authority": True,
                           "business_date": DAY, "portfolio_id": PORTFOLIO, "strategy_version": STRATEGY,
@@ -111,6 +115,34 @@ class ReadonlyAuditTests(unittest.TestCase):
         result = audit(row, DAY)
         self.assertEqual(result["status"], "INSUFFICIENT_EVIDENCE")
         self.assertIn("SUPERVISION_CANONICAL_DATES_MISSING", result["reasons"])
+
+    def test_supervision_activation_claim_conflict(self):
+        row = fixture(); row["supervision"]["activation_state"] = "BLOCKED"
+        result = audit(row, DAY)
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertIn("SUPERVISION_CLAIM_CONFLICT_ACTIVATION_STATE", result["reasons"])
+
+    def test_supervision_readiness_claim_conflict(self):
+        row = fixture(); row["supervision"]["readiness_state"] = "NOT_READY"
+        self.assertEqual(audit(row, DAY)["status"], "BLOCKED")
+
+    def test_supervision_master_claim_conflict(self):
+        row = fixture(); row["supervision"]["master_cycle_state"] = "FAILED"
+        self.assertEqual(audit(row, DAY)["status"], "BLOCKED")
+
+    def test_missing_supervision_qualification_claim_is_insufficient(self):
+        row = fixture(); del row["supervision"]["qualification_state"]
+        result = audit(row, DAY)
+        self.assertEqual(result["status"], "INSUFFICIENT_EVIDENCE")
+        self.assertIn("SUPERVISION_CLAIM_MISSING_QUALIFICATION_STATE", result["reasons"])
+
+    def test_supervision_open_incident_claim_conflict(self):
+        row = fixture(); row["supervision"]["open_incident"] = True
+        self.assertEqual(audit(row, DAY)["status"], "BLOCKED")
+
+    def test_supervision_incident_severity_claim_conflict(self):
+        row = fixture(); row["supervision"]["incident_severity"] = "CRITICAL"
+        self.assertEqual(audit(row, DAY)["status"], "BLOCKED")
 
     def test_revoked(self):
         row = fixture(); row["supervision"]["safety_revocation_triggered"] = True

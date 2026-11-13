@@ -116,6 +116,58 @@ def audit(snapshot, business_date, portfolio=PORTFOLIO, strategy=STRATEGY):
             errors.append("MASTER_NOT_PASS")
         if source == "incident" and (row.get("incident_state") or row.get("incident_status") or row.get("status")) not in ("CLOSED", "RESOLVED", "CLEAR", "NONE", "OBSERVED"):
             errors.append("INCIDENT_NOT_CLEAR")
+    # The Phase 3.6.7 supervision row persists a copy of canonical source states.
+    # Cross-check those claims: a healthy source row cannot override a contradictory
+    # supervision claim, and a healthy supervision claim cannot override its source.
+    supervision = snapshot.get("supervision")
+    if isinstance(supervision, dict):
+        for claim, source, source_field in (
+            ("activation_state", "activation", "activation_state"),
+            ("qualification_state", "qualification", "qualification_state"),
+            ("readiness_state", "readiness", "readiness_status"),
+            ("health_state", "health", "health_status"),
+            ("sla_state", "sla", "sla_status"),
+        ):
+            source_row = snapshot.get(source)
+            if not isinstance(source_row, dict):
+                continue
+            expected = source_row.get(source_field)
+            if expected is None:
+                missing.append("CANONICAL_STATE_MISSING_" + source.upper())
+            elif claim not in supervision:
+                missing.append("SUPERVISION_CLAIM_MISSING_" + claim.upper())
+            elif str(supervision[claim]).upper() != str(expected).upper():
+                errors.append("SUPERVISION_CLAIM_CONFLICT_" + claim.upper())
+
+        master = snapshot.get("master")
+        if isinstance(master, dict):
+            expected = master.get("cycle_status") or master.get("master_status") or master.get("status")
+            if expected is None:
+                missing.append("CANONICAL_STATE_MISSING_MASTER")
+            elif "master_cycle_state" not in supervision:
+                missing.append("SUPERVISION_CLAIM_MISSING_MASTER_CYCLE_STATE")
+            elif str(supervision["master_cycle_state"]).upper() != str(expected).upper():
+                errors.append("SUPERVISION_CLAIM_CONFLICT_MASTER_CYCLE_STATE")
+
+        incident = snapshot.get("incident")
+        if isinstance(incident, dict):
+            incident_state = incident.get("incident_state") or incident.get("incident_status") or incident.get("status")
+            if incident_state is None:
+                missing.append("CANONICAL_STATE_MISSING_INCIDENT")
+            else:
+                expected_open = str(incident_state).upper() not in (
+                    "CLOSED", "RESOLVED", "CLEAR", "NONE", "OBSERVED"
+                )
+                if "open_incident" not in supervision:
+                    missing.append("SUPERVISION_CLAIM_MISSING_OPEN_INCIDENT")
+                elif supervision["open_incident"] is not expected_open:
+                    errors.append("SUPERVISION_CLAIM_CONFLICT_OPEN_INCIDENT")
+                expected_severity = str(incident.get("severity") or "UNKNOWN").upper()
+                if "incident_severity" not in supervision:
+                    missing.append("SUPERVISION_CLAIM_MISSING_INCIDENT_SEVERITY")
+                elif str(supervision["incident_severity"]).upper() != expected_severity:
+                    errors.append("SUPERVISION_CLAIM_CONFLICT_INCIDENT_SEVERITY")
+
     producer = snapshot.get("producer")
     if not isinstance(producer, dict):
         missing.append("PRODUCER_MISSING")
