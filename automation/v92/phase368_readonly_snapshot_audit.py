@@ -60,6 +60,22 @@ def audit(snapshot, business_date, portfolio=PORTFOLIO, strategy=STRATEGY):
             if "fail_closed_policy" in row and row["fail_closed_policy"] is not True:
                 errors.append("FAIL_CLOSED_DISABLED_" + source.upper())
         if source == "supervision":
+            # Phase 3.6.7 persists these safety fields on the supervision row itself.
+            # Missing or contradictory supervision-level claims cannot be READY.
+            for key in (
+                "broker_api_used", "broker_credentials_used",
+                "broker_order_submission_enabled", "real_money_trading_enabled",
+                "live_money_release_authorized",
+            ):
+                if key not in row:
+                    missing.append("SUPERVISION_SAFETY_FLAG_MISSING_" + key.upper())
+                elif row[key] is not False:
+                    errors.append("UNSAFE_SUPERVISION_" + key.upper())
+            for key in ("paper_only", "fail_closed_policy"):
+                if key not in row:
+                    missing.append("SUPERVISION_SAFETY_FLAG_MISSING_" + key.upper())
+                elif row[key] is not True:
+                    errors.append("UNSAFE_SUPERVISION_" + key.upper())
             if row.get("safety_revocation_triggered") is True:
                 errors.append("SAFETY_REVOCATION_TRIGGERED")
             if row.get("safety_revocation_triggered") is not False:
@@ -73,13 +89,14 @@ def audit(snapshot, business_date, portfolio=PORTFOLIO, strategy=STRATEGY):
             elif any(isinstance(reason, str) and reason.upper().startswith("CRITICAL_") for reason in row["reason_codes"]):
                 errors.append("SUPERVISION_CRITICAL_REASON_PRESENT")
             canonical_dates = row.get("canonical_dates")
-            if canonical_dates is not None:
-                if not isinstance(canonical_dates, dict):
-                    missing.append("SUPERVISION_CANONICAL_DATES_MALFORMED")
-                else:
-                    for canonical_source in ("activation", "qualification", "readiness", "health", "sla", "master"):
-                        if canonical_dates.get(canonical_source) != business_date:
-                            errors.append("SUPERVISION_CANONICAL_DATE_MISMATCH_" + canonical_source.upper())
+            if canonical_dates is None:
+                missing.append("SUPERVISION_CANONICAL_DATES_MISSING")
+            elif not isinstance(canonical_dates, dict):
+                missing.append("SUPERVISION_CANONICAL_DATES_MALFORMED")
+            else:
+                for canonical_source in ("activation", "qualification", "readiness", "health", "sla", "master"):
+                    if canonical_dates.get(canonical_source) != business_date:
+                        errors.append("SUPERVISION_CANONICAL_DATE_MISMATCH_" + canonical_source.upper())
             critical = row.get("critical_failures")
             if not isinstance(critical, list):
                 missing.append("SUPERVISION_CRITICAL_FAILURES_UNVERIFIED")
