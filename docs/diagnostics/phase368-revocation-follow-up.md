@@ -1,0 +1,58 @@
+# PR #27 follow-up: controller revocation, PR #26 coverage, and rollover status
+
+Reviewed 2026-11-13 Asia/Taipei. Main remained e87c21c5727d311a33a80b20f99a376ccaaa8098; PR #26 head 81f427c79da712c7a87df6126442a8bf46cd12a5. Both PRs were open drafts. No workflow dispatch/retry, database mutation, release, schedule restoration, Promotion modification, or merge was performed.
+
+## Phase 3.6.8: observed reason chain
+
+1. [Phase 3.6.7 run 34623133120, attempt 1](https://github.com/rchu9246/GPT/actions/runs/34623133120), job 103341689687, reported supervision date 2026-09-11, activation ACTIVE_WITH_OBSERVATION, qualification QUALIFIED_WITH_OBSERVATION, score 94.1176, supervision SUSPENDED, continuation NO, and safety revocation YES. Its four reasons were CRITICAL_FRESHNESS_READINESS, CRITICAL_FRESHNESS_HEALTH, CRITICAL_FRESHNESS_SLA, and CRITICAL_FRESHNESS_MASTER. A successful Actions conclusion here means the safety decision was persisted, not that continued operation was authorized.
+2. Current `paper_trading_phase367_...supervision...py::supervise` classifies critical freshness failures as SUSPENDED, `continue_active=False`, `revoked=True` (default freshness limit 2 days). Revocation also causes its main path to upsert activation to BLOCKED/inactive. Thus freshness suspension can set the same revocation flag used for other safety failures; the flag alone does not prove broker or real-money misuse.
+3. [Phase 3.6.8 run 34623848264, attempt 1](https://github.com/rchu9246/GPT/actions/runs/34623848264), job 103344053484, subsequently reported PRECHECK_BLOCKED with SUPERVISION_NOT_CONTINUABLE, AUTONOMOUS_CONTINUATION_NOT_AUTHORIZED, SAFETY_REVOCATION_ALREADY_TRIGGERED. Its preflight reads the selected supervision row's flag; it does not diagnose the underlying failure or accept an approver name as an override.
+4. Earlier on the same historical date, [3.6.2 run 34611409386](https://github.com/rchu9246/GPT/actions/runs/34611409386), job 103302546443, logged `NO_REAL_CANONICAL_MARKET_PRICE: 2454`, missing Phase 3.5.3 output, and Phase 3.6.0 master failure. [3.6.3 run 34613388805](https://github.com/rchu9246/GPT/actions/runs/34613388805), job 103309210171, likewise recorded master failure; [3.6.4 run 34614260022](https://github.com/rchu9246/GPT/actions/runs/34614260022), job 103312125065, failed because 3.6.3 failed. These failures support the stale-evidence chain. Missing optional discovery tables also appear, but the explicit fatal price failure is more specific than the discovery 404s.
+
+Limits: these are historical logs, not a fresh database snapshot. The 3.6.7 artifact listing was empty, so individual historical source dates/rows were not recovered. We have not proven the first-ever revocation event, the current database state, or whether the old price defect still exists on today's main. The latest listed 3.6.7/3.6.8 runs remain September 11. Current 3.6.8 is dispatch-only, with exact producer inputs; no schedule was restored.
+
+## Producer reference: successful job is insufficient
+
+The latest listed Phase 3.4.8.4.5.1 producer was [43272218054 / attempt 1](https://github.com/rchu9246/GPT/actions/runs/43272218054), workflow_dispatch on main, commit e87c21c5727d311a33a80b20f99a376ccaaa8098. Its artifact 13968133116, `phase348451-market-source-discovery-43272218054-attempt-1`, was unexpired. Downloaded ZIP SHA256 matched GitHub's digest:
+
+`84f117dcc667b598b35451f00ee69cb3d3b0c5a7c5fe2f8e00f2a21b85433d58`
+
+The result's own evidence hash also verified, but execution_state was NO_CANONICAL_SIGNAL_ZERO_ORDERS and it did not contain canonical_authority/canonical_authority_evidence. Offline replay through the actual `load_explicit_producer_result`, with HTTP responses mocked from the inspected metadata and ZIP, rejected it with **PRODUCER_DID_NOT_EMIT_SIZING_AUTHORITY**. This tuple is **not eligible for recovery**. No replacement tuple has been validated; do not guess attempt 1, use a workflow success as authority, or relabel zero-signal evidence.
+
+The current consumer requires positive exact PHASE353_PRODUCER_RUN_ID/PHASE353_PRODUCER_RUN_ATTEMPT, repository rchu9246/GPT, the exact Phase 3.4.8.4.5.1 workflow, a completed successful attempt, matching producer commit, one exact unexpired attempt-named artifact, artifact provenance/digest, result schema/hash, and rebuilt canonical authority. The accepted authority bridge states are REAL_CANONICAL_EVIDENCE_EXECUTED or REAL_EVIDENCE_BUT_ZERO_SIZED_ORDERS. Downstream authority must match strategy V9.1, canonical batch, trade date, symbols/prices and adapters. The standard completion handoff also requires main/workflow_dispatch; preserve that provenance. Zero eligible signals are not interchangeable with valid authority that sizes zero orders.
+
+## PR #26: tests pass, coverage is incomplete
+
+Re-ran its nine release-contract tests on its exact head: all passed. No PR-triggered workflow runs were returned for that head; this is not evidence of full CI or controlled end-to-end success.
+
+Concrete safety-contract gap in the proposed validate_source implementation: it requires `checks` to be a nonempty dict whose **present** values are True, but never requires the canonical check names. Replacing the canonical fixture's checks with either `{"unrelated": true}` or `{"safety_mode_locked": true}` still returns `(True, [])`. The existing test named incomplete_qualification_checks sets a present value False; it does not remove required checks. Even the positive fixture contains only two checks, whereas Phase 3.4 emits latest_snapshot_pass, latest_market_date_present, market_data_fresh, equity_non_negative, positions_within_limit, drawdown_within_limit, safety_mode_locked, and consecutive_pass_requirement.
+
+Before calling coverage complete, require removal tests for every canonical check, missing/non-dict/empty checks, non-bool values, each approval/safety field missing or unsafe, invalid canonical status/source/mode/date/numeric fields, and integration with the real Phase 3.4 evaluate result shape. Keep output release_state LOCKED and automatic approval/broker/real-money flags false. No gate implementation was modified in this follow-up; changing acceptance criteria is left for a separately scoped review under the user's prohibition on Promotion changes. PR #26 remains draft and is not recommended for approval on the existing nine tests alone.
+
+## Phase 3.7.11.1: latest result is still failure
+
+The latest listed run remains [43318453703 / attempt 1](https://github.com/rchu9246/GPT/actions/runs/43318453703), created 2026-11-13 06:16:56 Asia/Taipei (2026-11-12T22:16:56Z). It called [3.7.10 run 43318472710](https://github.com/rchu9246/GPT/actions/runs/43318472710). Job 131532585293 then received HTTP 504 while creating the Phase 3.7.8 workflow dispatch; its ordered-pipeline step exited 1. The 3.7.11.1 waiting-state validator was skipped and enforcement blocked. Earlier successful wrapper runs 43114594539 and 42908890890 do not establish recovery after this latest failure.
+
+A dispatch timeout is ambiguous: it does not prove the server created no child run. Do not automatically retry a pipeline that can perform promotion transition. Reconcile run provenance first. This review did not dispatch it or change the wrapper/Promotion logic.
+
+## Required human decisions and safe recovery sequence (NOT EXECUTED)
+
+The current request authorizes investigation/offline work only and explicitly prohibits unlocking. Stop at the following boundary. An approver username or a fabricated authorization row is not formal permission.
+
+1. An authorized operator must review the historical failure and a **fresh read-only** snapshot/export of supervision, activation, qualification, readiness, health, SLA, master, incident and forensic evidence for portfolio V92_PRODUCTION_PAPER_V91 / strategy V9.1. Preserve row identities, business dates, hashes, producer metadata, current flags and reason codes. Resolve any real current violation first; do not label it legacy based on these old logs.
+2. Record a specific approval of the recovery plan, operator identity, portfolio/strategy, business date/window, approved code SHA, evidence hashes, exact actions, and stop/rollback conditions. Separately authorize any production evidence/market-data refresh and paper simulation writes; existing workflows can recursively run upstream stages. Promotion, formal schedules, historical edits and real trading remain excluded unless independently and explicitly authorized later.
+3. Produce or select an exact successful producer run/attempt whose artifact passes the complete authority validator and whose genuine market/trade date matches the intended cycle. The inspected 43272218054/1 fails this requirement. New producer execution itself needs the above scoped operational approval; no empty or invented tuple is acceptable.
+4. Only after fresh facts and provenance pass, seek explicit approval for the particular safety suspension/activation recovery. Do **not** blindly run Phase 3.7.2.5: it clears revocation flags in a cloned row, requires fresh eligible forensic classification, and currently accepts previous states REVOKED/FAIL_CLOSED/STOP/BLOCKED, not the observed SUSPENDED. Its workflow exposes no approver or confirmation input and its authorization row is generated by code. Those are not substitutes for signed operator approval, and no claim is made that this path is safe for the observed state.
+5. A reviewed, append-only recovery plan must preserve historical rows, avoid fabricating evidence, re-establish active/qualified/continuable current facts through their legitimate producers, and leave all broker/real-money locks intact. Any need to alter a Promotion gate is outside this authorization. Do not simply set a boolean false or lower the freshness threshold.
+6. After that separate approval, validate the exact producer tuple read-only, run one explicitly approved paper-only controller session (specified approver, portfolio, strategy, date and producer run/attempt), and stop immediately on any failed authority/preflight/source date/incident check. The current controller invokes the master pipeline and can write paper orders/evidence, so this is not part of a diagnostic run.
+7. Verify controller/master/lifecycle dates and hashes agree and safety flags remain false. The 3.7.11.1 workflow invokes an automatic-promotion-capable dependency; validate its guard offline first, and use an independently approved, bounded verification plan rather than blindly rerunning it. Keep all formal schedules disabled and both PRs unmerged.
+
+These items describe the required authorization boundary and proposed review order, not an approved executable recovery command.
+
+## Offline verification performed
+
+- PR #27 revised suite: 11 passing tests, including freshness suspension and no master launch on revoked/suspended supervision.
+- PR #26 original suite: 9 passing tests, with the omitted-check counterexample above reproduced separately.
+- Local combined checkout of PR #26 plus PR #27 changes: 111 tests matching `test_phase3*.py` passed using a work-local requests virtualenv. An initial system-Python attempt lacked requests; rerunning in the prepared virtualenv resolved the four import errors. This is a selected offline suite, not all repository CI or production validation.
+- Relaxed PR #27's assertion on the exact Phase 3.4.3 error wording so it tests rejection of an incomplete contract on both heads, rather than depending on the pre-PR #26 error string. No acceptance gate changed.
+- Producer artifact digest/result hash verified; actual authority loader rejected the tuple offline as described above.
