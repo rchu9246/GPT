@@ -53,7 +53,7 @@ def audit(snapshot, business_date, portfolio=PORTFOLIO, strategy=STRATEGY):
                 missing.append("REVOCATION_NOT_VERIFIED_FALSE")
             if row.get("autonomous_paper_operations_continued") is not True:
                 errors.append("AUTONOMOUS_CONTINUATION_NOT_AUTHORIZED")
-            if row.get("supervision_state") not in ("CONTINUE", "CONTINUE_WITH_OBSERVATION"):
+            if row.get("supervision_state") not in ("CONTINUE_ACTIVE", "CONTINUE_WITH_OBSERVATION"):
                 errors.append("SUPERVISION_NOT_CONTINUABLE")
             if not isinstance(row.get("reason_codes"), list):
                 missing.append("SUPERVISION_REASONS_MISSING")
