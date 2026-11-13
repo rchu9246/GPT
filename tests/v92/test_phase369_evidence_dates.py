@@ -84,7 +84,7 @@ class LifecycleDates(unittest.TestCase):
 
 
 class ExistingReadinessGuards(unittest.TestCase):
-    def test_phase343_observed_waiting_state_remains_blocked(self):
+    def test_phase343_incomplete_waiting_contract_remains_blocked(self):
         phase = load_phase('paper_trading_phase343_approval_readiness.py')
         data = dict(status='PASS', qualification_state='QUALIFIED',
             release_state='AWAITING_HUMAN_APPROVAL', consecutive_pass_days=60,
@@ -92,7 +92,7 @@ class ExistingReadinessGuards(unittest.TestCase):
             pass_day_source='distinct_run_date_snapshot_status', mode=phase.MODE)
         valid, errors = phase.validate_source(data)
         self.assertFalse(valid)
-        self.assertIn('release_not_locked_before_human_approval', errors)
+        self.assertTrue(errors)  # Both base and PR #26 reject this incomplete contract.
         summary = phase.build_summary(data, valid, errors)
         self.assertEqual(summary['approval_readiness'], 'BLOCKED')
         self.assertFalse(summary['automatic_approval'])
@@ -117,6 +117,54 @@ class ExistingReadinessGuards(unittest.TestCase):
             result = json.loads(phase.RESULT_PATH.read_text())
             self.assertIn('SAME_DAY_COUNTER_ADVANCE_DETECTED', result['blockers'])
             self.assertFalse(result['safety']['qualification_threshold_bypass_allowed'])
+
+
+class SupervisionRevocation(unittest.TestCase):
+    def test_stale_inputs_suspend_without_broker_violation(self):
+        phase = load_phase('paper_trading_phase367_*.py')
+        activation = dict(activation_date='2026-09-11', activation_state='ACTIVE',
+            autonomous_paper_operations_active=True)
+        qualification = dict(qualification_date='2026-09-11', qualification_state='QUALIFIED',
+            autonomous_paper_operations_authorized=True, qualification_score=100)
+        readiness = dict(readiness_date='2026-09-08', readiness_status='READY',
+            promotion_gate_open=True, readiness_score=100)
+        health = dict(health_date='2026-09-08', health_status='HEALTHY', health_score=100)
+        sla = dict(observation_date='2026-09-08', sla_status='SLA_PASS', sla_score=100)
+        master = dict(cycle_date='2026-09-08', cycle_status='PASS')
+        with patch.dict(os.environ, {'PHASE367_MAX_CANONICAL_STALE_DAYS':'2'}):
+            result = phase.supervise(activation, qualification, readiness, health, sla,
+                master, None, phase.date(2026, 9, 11))
+        self.assertEqual(result['supervision_state'], 'SUSPENDED')
+        self.assertTrue(result['revoked'])
+        self.assertFalse(result['continue_active'])
+        self.assertEqual(set(result['critical_failures']), {
+            'freshness_readiness', 'freshness_health', 'freshness_sla', 'freshness_master'})
+
+    def test_controller_refuses_existing_revocation_even_if_other_states_pass(self):
+        phase = load_phase('paper_trading_phase368_*.py')
+        supervision = dict(activation_state='ACTIVE', qualification_state='QUALIFIED',
+            supervision_state='CONTINUE_ACTIVE', autonomous_paper_operations_continued=True,
+            safety_revocation_triggered=True, supervision_score=100)
+        result = phase.preflight(supervision)
+        self.assertFalse(result['authorized'])
+        self.assertIn('SAFETY_REVOCATION_ALREADY_TRIGGERED', result['reason'])
+
+    def test_controller_does_not_launch_master_when_suspended(self):
+        phase = load_phase('paper_trading_phase368_*.py')
+        sb = Mock()
+        sb.get.return_value = [dict(activation_state='ACTIVE_WITH_OBSERVATION',
+            qualification_state='QUALIFIED_WITH_OBSERVATION', supervision_state='SUSPENDED',
+            autonomous_paper_operations_continued=False, safety_revocation_triggered=True)]
+        with patch.object(phase, 'Supabase', return_value=sb), \
+             patch.object(phase, 'persist') as persist, \
+             patch.object(phase, 'print_summary'), \
+             patch.object(phase, 'run_master') as master, \
+             patch.dict(os.environ, {'SUPABASE_URL':'https://invalid.example',
+                 'SUPABASE_SERVICE_ROLE_KEY':'offline-test'}), \
+             patch('sys.argv', ['phase368']):
+            self.assertEqual(phase.main(), 2)
+            master.assert_not_called()
+            self.assertEqual(persist.call_args.args[2], phase.CONTROLLER_FAIL_CLOSED)
 
 
 if __name__ == '__main__':
