@@ -9,7 +9,7 @@ def fixture():
                 "updated_at": DAY + "T12:00:00+00:00"}
             for k, (_, date_field) in SOURCES.items()}
     rows["supervision"].update(supervision_state="CONTINUE_ACTIVE", safety_revocation_triggered=False,
-                                autonomous_paper_operations_continued=True, reason_codes=[])
+                                autonomous_paper_operations_continued=True, reason_codes=[], critical_failures=[])
     rows["activation"].update(activation_state="ACTIVE", autonomous_paper_operations_active=True)
     rows["qualification"].update(qualification_state="QUALIFIED", autonomous_paper_operations_authorized=True)
     rows["readiness"].update(readiness_status="READY", promotion_gate_open=True)
@@ -42,6 +42,20 @@ class ReadonlyAuditTests(unittest.TestCase):
     def test_noncanonical_supervision_state_fails_closed(self):
         row = fixture(); row["supervision"]["supervision_state"] = "CONTINUE"
         self.assertEqual(audit(row, DAY)["status"], "BLOCKED")
+
+    def test_supervision_critical_failure_blocks(self):
+        row = fixture(); row["supervision"]["critical_failures"] = ["readiness_gate"]
+        result = audit(row, DAY)
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertIn("SUPERVISION_CRITICAL_FAILURES_PRESENT", result["reasons"])
+
+    def test_supervision_critical_reason_blocks(self):
+        row = fixture(); row["supervision"]["reason_codes"] = ["CRITICAL_READINESS_GATE"]
+        self.assertEqual(audit(row, DAY)["status"], "BLOCKED")
+
+    def test_missing_supervision_critical_failures_is_insufficient(self):
+        row = fixture(); del row["supervision"]["critical_failures"]
+        self.assertEqual(audit(row, DAY)["status"], "INSUFFICIENT_EVIDENCE")
 
     def test_revoked(self):
         row = fixture(); row["supervision"]["safety_revocation_triggered"] = True
