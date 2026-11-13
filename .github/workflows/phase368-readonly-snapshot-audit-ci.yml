@@ -1,0 +1,34 @@
+name: Phase 3.6.8 Read-only Snapshot Audit Offline CI
+
+on:
+  pull_request:
+    paths:
+      - 'automation/v92/phase368_readonly_snapshot_audit.py'
+      - 'tests/v92/test_phase368_readonly_snapshot_audit.py'
+      - '.github/workflows/phase368-readonly-snapshot-audit-ci.yml'
+  push:
+    branches:
+      - 'audit/phase368-readonly-evidence-20261113'
+    paths:
+      - 'automation/v92/phase368_readonly_snapshot_audit.py'
+      - 'tests/v92/test_phase368_readonly_snapshot_audit.py'
+      - '.github/workflows/phase368-readonly-snapshot-audit-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile isolated audit and test modules
+        run: python -m py_compile automation/v92/phase368_readonly_snapshot_audit.py tests/v92/test_phase368_readonly_snapshot_audit.py
+      - name: Run isolated fail-closed tests (no network, secrets, or production workflow)
+        run: python -m unittest discover -s tests/v92 -p 'test_phase368_readonly_snapshot_audit.py' -v
