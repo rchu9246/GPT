@@ -1,7 +1,14 @@
 name: GPT Quant Phase 3.7.8 - Production Paper Qualification Orchestrator Ordered Daily Evidence Pipeline
 
+run-name: ${{ inputs.dispatch_correlation || github.workflow }}
+
 on:
   workflow_dispatch:
+    inputs:
+      dispatch_correlation:
+        description: Parent workflow run identifier
+        type: string
+        required: false
   schedule:
     # Weekdays 15:20 UTC / 23:20 Asia-Taipei.
     # Runs after the current child schedules and also acts as an ordered reconciliation pipeline.

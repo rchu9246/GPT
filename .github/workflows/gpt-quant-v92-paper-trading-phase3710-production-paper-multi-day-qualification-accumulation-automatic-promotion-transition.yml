@@ -59,27 +59,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          before_id="$(gh api \
-            -H "Accept: application/vnd.github+json" \
-            "/repos/${GITHUB_REPOSITORY}/actions/workflows/${WF378}/runs?branch=main&per_page=1" \
-            --jq '.workflow_runs[0].id // 0' || echo 0)"
-
-          gh workflow run "$WF378" --ref main
-
-          run_id=""
-          for i in $(seq 1 30); do
-            sleep 2
-            run_id="$(gh api \
-              -H "Accept: application/vnd.github+json" \
-              "/repos/${GITHUB_REPOSITORY}/actions/workflows/${WF378}/runs?branch=main&event=workflow_dispatch&per_page=10" \
-              --jq "[.workflow_runs[] | select(.id > ${before_id})][0].id // empty" || true)"
-            [ -n "$run_id" ] && break
-          done
-
-          if [ -z "$run_id" ]; then
-            echo "::error::Could not resolve dispatched Phase 3.7.8 run."
-            exit 1
-          fi
+          run_id="$(python scripts/resolve_phase378_dispatch.py "$WF378")"
 
           for i in $(seq 1 180); do
             status="$(gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status')"
