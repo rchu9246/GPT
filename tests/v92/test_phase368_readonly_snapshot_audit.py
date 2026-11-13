@@ -57,6 +57,35 @@ class ReadonlyAuditTests(unittest.TestCase):
         row = fixture(); del row["supervision"]["critical_failures"]
         self.assertEqual(audit(row, DAY)["status"], "INSUFFICIENT_EVIDENCE")
 
+    def test_broker_submission_flag_blocks_even_when_supervision_claims_safe(self):
+        row = fixture(); row["activation"]["broker_order_submission_enabled"] = True
+        result = audit(row, DAY)
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertIn("UNSAFE_ACTIVATION_BROKER_ORDER_SUBMISSION_ENABLED", result["reasons"])
+
+    def test_synthetic_market_data_blocks(self):
+        row = fixture(); row["health"]["synthetic_market_data"] = True
+        self.assertEqual(audit(row, DAY)["status"], "BLOCKED")
+
+    def test_fail_closed_policy_false_blocks(self):
+        row = fixture(); row["master"]["fail_closed_policy"] = False
+        self.assertEqual(audit(row, DAY)["status"], "BLOCKED")
+
+    def test_canonical_dates_conflict_blocks(self):
+        row = fixture()
+        row["supervision"]["canonical_dates"] = {
+            source: DAY for source in ("activation", "qualification", "readiness", "health", "sla", "master")
+        }
+        row["supervision"]["canonical_dates"]["master"] = "2026-11-12"
+        self.assertIn("SUPERVISION_CANONICAL_DATE_MISMATCH_MASTER", audit(row, DAY)["reasons"])
+
+    def test_valid_canonical_dates_are_reviewable(self):
+        row = fixture()
+        row["supervision"]["canonical_dates"] = {
+            source: DAY for source in ("activation", "qualification", "readiness", "health", "sla", "master")
+        }
+        self.assertEqual(audit(row, DAY)["status"], "READY")
+
     def test_revoked(self):
         row = fixture(); row["supervision"]["safety_revocation_triggered"] = True
         self.assertEqual(audit(row, DAY)["status"], "BLOCKED")
