@@ -168,6 +168,18 @@ class ReadonlyAuditTests(unittest.TestCase):
         row = fixture(); row["health"]["portfolio_id"] = "OTHER"
         self.assertEqual(audit(row, DAY)["status"], "BLOCKED")
 
+    def test_future_readiness_timestamp_blocks(self):
+        row = fixture(); row["readiness"]["updated_at"] = "2099-01-01T12:00:00+00:00"
+        result = audit(row, DAY)
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertIn("FUTURE_TIMESTAMP_READINESS", result["reasons"])
+
+    def test_future_supervision_timestamp_with_offset_blocks(self):
+        row = fixture(); row["supervision"]["updated_at"] = "2099-01-01T12:00:00-12:00"
+        result = audit(row, DAY)
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertIn("FUTURE_TIMESTAMP_SUPERVISION", result["reasons"])
+
     def test_timestamp_required(self):
         row = fixture(); del row["health"]["updated_at"]
         self.assertEqual(audit(row, DAY)["status"], "INSUFFICIENT_EVIDENCE")
