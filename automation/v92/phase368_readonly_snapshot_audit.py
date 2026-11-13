@@ -1,6 +1,6 @@
 """Offline, fail-closed Phase 3.6.8 snapshot audit. Never contacts Supabase."""
 import argparse
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 import json
 from pathlib import Path
 
@@ -44,6 +44,9 @@ def audit(snapshot, business_date, portfolio=PORTFOLIO, strategy=STRATEGY):
             parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
             if parsed.tzinfo is None or parsed.date() < date.fromisoformat(business_date):
                 errors.append("STALE_TIMESTAMP_" + source.upper())
+            elif parsed.astimezone(timezone.utc) > datetime.now(timezone.utc) + timedelta(minutes=5):
+                # A future-dated row cannot establish fresh, trustworthy evidence.
+                errors.append("FUTURE_TIMESTAMP_" + source.upper())
         except (TypeError, ValueError, AttributeError):
             missing.append("MISSING_TIMESTAMP_" + source.upper())
         # Match Phase 3.6.7's critical safety checks for canonical input rows.
