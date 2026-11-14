@@ -1,0 +1,34 @@
+name: Phase 3.7.10 Atomic Polling Offline Regression
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/gpt-quant-v92-paper-trading-phase3710-production-paper-multi-day-qualification-accumulation-automatic-promotion-transition.yml'
+      - 'tests/v92/test_phase3710_workflow_polling.py'
+      - '.github/workflows/phase3710-atomic-polling-offline-ci.yml'
+  push:
+    branches:
+      - 'fix/phase3710-atomic-child-conclusion-poll-20261114'
+    paths:
+      - '.github/workflows/gpt-quant-v92-paper-trading-phase3710-production-paper-multi-day-qualification-accumulation-automatic-promotion-transition.yml'
+      - 'tests/v92/test_phase3710_workflow_polling.py'
+      - '.github/workflows/phase3710-atomic-polling-offline-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline-polling-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout isolated branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run mocked polling regression only
+        run: python -m unittest discover -s tests/v92 -p 'test_phase3710_workflow_polling.py' -v
+      - name: Compile offline test module
+        run: python -m py_compile tests/v92/test_phase3710_workflow_polling.py
