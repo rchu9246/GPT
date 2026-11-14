@@ -82,10 +82,11 @@ jobs:
           fi
 
           for i in $(seq 1 180); do
-            status="$(gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status')"
-            conclusion="$(gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.conclusion // ""')"
+            # Read status and conclusion from one API response to avoid cross-request races.
+            snapshot="$(gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '[.status, (.conclusion // "")] | @tsv')"
+            IFS=$'\t' read -r status conclusion <<< "$snapshot"
             echo "Phase 3.7.8 status=${status} conclusion=${conclusion:-pending}"
-            if [ "$status" = "completed" ]; then
+            if [ "$status" = "completed" ] && [ -n "$conclusion" ]; then
               [ "$conclusion" = "success" ] && exit 0
               echo "::error::Phase 3.7.8 failed with ${conclusion}"
               exit 1
@@ -152,10 +153,11 @@ jobs:
             [ -z "$run_id" ] && echo "::error::Unable to resolve ${label} run." && return 1
 
             for i in $(seq 1 180); do
-              status="$(gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status')"
-              conclusion="$(gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.conclusion // ""')"
+              # Read status and conclusion from one API response to avoid cross-request races.
+              snapshot="$(gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '[.status, (.conclusion // "")] | @tsv')"
+              IFS=$'\t' read -r status conclusion <<< "$snapshot"
               echo "${label}: status=${status} conclusion=${conclusion:-pending}"
-              if [ "$status" = "completed" ]; then
+              if [ "$status" = "completed" ] && [ -n "$conclusion" ]; then
                 [ "$conclusion" = "success" ] && return 0
                 echo "::error::${label} failed with ${conclusion}"
                 return 1
