@@ -38,7 +38,7 @@ SAFETY = {
 RULES = [
     ("CODE_COMPATIBILITY", r"\b(NameError|ImportError|ModuleNotFoundError|AttributeError|TypeError|SyntaxError|KeyError)\b.{0,300}",
      "HIGH", True, "Generate a compatibility-only repair plan. Do not apply source changes automatically."),
-    ("TIMEOUT_POLLING", r"(timed out|timeout|conclusion=pending|status=in_progress|polling|poll limit|exceeded .* timeout).{0,300}",
+    ("TIMEOUT_POLLING", r"(timed out|timeout|poll limit|exceeded .* timeout).{0,300}",
      "HIGH", True, "Inspect child-workflow polling interval, timeout budget, and final conclusion retrieval semantics."),
     ("CHILD_WORKFLOW_FAILURE", r"(Dispatching Phase|child workflow|workflow_dispatch|failed with conclusion=failure|conclusion=failure).{0,300}",
      "HIGH", True, "Trace the dispatched child workflow run and inspect its own failed job/step before changing the orchestrator."),
@@ -87,19 +87,50 @@ def is_target(run):
     text = " ".join(str(run.get(k) or "") for k in ("name","display_title","path","event")).lower()
     return any(h in text for h in TARGET_HINTS)
 
+def runtime_log_lines(logs):
+    """Exclude GitHub Actions' echoed shell source from observed runtime evidence."""
+    return "\n".join(
+        line for line in logs.splitlines()
+        if "\x1b[36;1m" not in line and "\x1b[0m" not in line
+    )
+
+
 def classify(text):
+    """Classify observed errors only, not shell source or routine pending polls."""
+    errors = "\n".join(
+        line for line in text.splitlines()
+        if "##[error]" in line
+        or re.search(r"(?:Traceback|\b\w+(?:Error|Exception):)", line)
+    )
+    if (
+        re.search(r"\bstatus=completed\s+conclusion=pending\b", text, re.I)
+        and re.search(r"##\[error\].*failed with\s*$", errors, re.I | re.M)
+    ):
+        return (
+            "CHILD_CONCLUSION_PENDING",
+            "completed/pending child was treated as failed before conclusion resolved",
+            "HIGH",
+            True,
+            "Poll child status and conclusion atomically; wait a bounded interval and fail closed.",
+        )
     for category, pattern, confidence, eligible, rec in RULES:
-        m = re.search(pattern, text, re.I | re.S)
+        m = re.search(pattern, errors, re.I | re.M)
         if m:
             sig = re.sub(r"\s+", " ", m.group(0)).strip()[:500]
             return category, sig, confidence, eligible, rec
-    return "UNKNOWN", "No known failure signature matched after deep inspection", "LOW", False, "Preserve fail-closed behavior and review captured evidence."
+    return (
+        "UNKNOWN",
+        "No confirmed failure signature in runtime errors",
+        "LOW",
+        False,
+        "Preserve fail-closed behavior and review observed error lines.",
+    )
 
 def excerpt(text, signature):
     if signature and signature in text:
         i = text.find(signature)
         return text[max(0, i-700):min(len(text), i+1100)]
-    m = re.search(r"(Traceback|Error:|ERROR|Exception|failed with conclusion=failure|Process completed with exit code)", text, re.I)
+    m = re.search(r"(##\[error\]|Traceback|Error:|ERROR|Exception|failed with conclusion=failure|Process completed with exit code)", text, re.I)
     if m:
         return text[max(0,m.start()-500):min(len(text),m.start()+1300)]
     return text[:1800]
@@ -160,7 +191,8 @@ def main():
             logs,
         ])
 
-        category, signature, confidence, eligible, rec = classify(combined)
+        runtime = runtime_log_lines(logs)
+        category, signature, confidence, eligible, rec = classify(runtime)
         findings.append({
             "run_id": rid,
             "workflow_name": run.get("name"),
@@ -176,7 +208,7 @@ def main():
             "automatic_patch_applied": False,
             "failed_jobs": failed_jobs,
             "child_workflow_references": child_refs(combined),
-            "log_excerpt": excerpt(combined, signature),
+            "log_excerpt": excerpt(runtime, signature),
             "notes": notes,
         })
 

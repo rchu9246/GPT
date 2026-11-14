@@ -1,0 +1,28 @@
+name: Phase 3.7.19.1 Runtime Error Classification Offline CI
+
+on:
+  push:
+    branches:
+      - audit/phase37191-runtime-log-classification-20261114
+  pull_request:
+    paths:
+      - automation/v92/phase37191_failure_log_evidence_deep_inspection_targeted_workflow_discovery.py
+      - tests/v92/test_phase37191_runtime_classification.py
+      - .github/workflows/phase37191-runtime-classification-offline-ci.yml
+
+permissions:
+  contents: read
+
+jobs:
+  offline-runtime-classification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile diagnostic and tests
+        run: python -m py_compile automation/v92/phase37191_failure_log_evidence_deep_inspection_targeted_workflow_discovery.py tests/v92/test_phase37191_runtime_classification.py
+      - name: Run isolated classification tests
+        run: python -m unittest discover -s tests/v92 -p test_phase37191_runtime_classification.py -v
